@@ -24,3 +24,19 @@ func scanMutables(stmts []ast.Node, muts map[string]bool) {
 		}
 	}
 }
+
+func containsStringExpr(n ast.Node) bool {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return node.ValueType == "String"
+	case *ast.BinaryExpr:
+		if node.Op == "+" {
+			return containsStringExpr(node.Left) || containsStringExpr(node.Right)
+		}
+	case *ast.CallExpr:
+		if node.Callee == "sprintf" {
+			return true
+		}
+	}
+	return false
+}

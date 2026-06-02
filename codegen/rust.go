@@ -240,11 +240,15 @@ func (g *rsGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		isStrConcat := node.Op == "+" && (containsStringExpr(node.Left) || containsStringExpr(node.Right))
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err
 		}
 		g.write(" " + node.Op + " ")
+		if isStrConcat {
+			g.write("&")
+		}
 		if err := g.emitExpr(node.Right); err != nil {
 			return err
 		}
