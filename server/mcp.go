@@ -94,6 +94,11 @@ func (s *MCPServer) ServeStdio() error {
 			continue
 		}
 
+		if req.ID == nil {
+			s.handleNotification(&req)
+			continue
+		}
+
 		resp := s.handleRequest(&req)
 		enc.Encode(resp)
 	}
@@ -135,6 +140,12 @@ func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.ID == nil {
+		s.handleNotification(&req)
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+
 	resp := s.handleRequest(&req)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -144,10 +155,20 @@ func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
 // request dispatch
 // ---------------------------------------------------------------------------
 
+func (s *MCPServer) handleNotification(req *jsonRPCRequest) {
+	// Notifications (no ID) require no response. Log for debugging only.
+	switch req.Method {
+	case "notifications/initialized", "notifications/cancelled":
+		// expected lifecycle notifications — no action needed
+	}
+}
+
 func (s *MCPServer) handleRequest(req *jsonRPCRequest) jsonRPCResponse {
 	switch req.Method {
 	case "initialize":
 		return s.handleInitialize(req)
+	case "ping":
+		return jsonRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{}}
 	case "tools/list":
 		return s.handleToolsList(req)
 	case "tools/call":
