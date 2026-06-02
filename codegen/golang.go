@@ -31,9 +31,27 @@ func GenerateGo(root ast.Node) ([]byte, error) {
 	// Build final output with package header and imports.
 	var out strings.Builder
 	out.WriteString("package main\n")
+
+	var imports []string
 	if g.needFmt {
-		out.WriteString("\nimport \"fmt\"\n")
+		imports = append(imports, `"fmt"`)
 	}
+	if g.needOS {
+		imports = append(imports, `"os"`)
+	}
+	if g.needTime {
+		imports = append(imports, `"time"`)
+	}
+	if len(imports) == 1 {
+		out.WriteString("\nimport " + imports[0] + "\n")
+	} else if len(imports) > 1 {
+		out.WriteString("\nimport (\n")
+		for _, imp := range imports {
+			out.WriteString("\t" + imp + "\n")
+		}
+		out.WriteString(")\n")
+	}
+
 	out.WriteString("\n")
 	out.WriteString(g.buf.String())
 	return []byte(out.String()), nil
@@ -41,9 +59,11 @@ func GenerateGo(root ast.Node) ([]byte, error) {
 
 // goGen holds code-generation state.
 type goGen struct {
-	buf     *strings.Builder
-	indent  int
-	needFmt bool
+	buf      *strings.Builder
+	indent   int
+	needFmt  bool
+	needTime bool
+	needOS   bool
 }
 
 func (g *goGen) write(s string) {
@@ -269,6 +289,12 @@ func (g *goGen) emitExpr(n ast.Node) error {
 	case *ast.Literal:
 		return g.emitLiteral(node)
 	case *ast.Ident:
+		if strings.HasPrefix(node.Name, "time.") {
+			g.needTime = true
+		}
+		if strings.HasPrefix(node.Name, "os.") {
+			g.needOS = true
+		}
 		g.write(node.Name)
 		return nil
 	case *ast.MemberExpr:
@@ -304,6 +330,13 @@ func (g *goGen) emitCallExpr(ce *ast.CallExpr) error {
 	case "sprintf":
 		callee = "fmt.Sprintf"
 		g.needFmt = true
+	}
+
+	if strings.Contains(callee, "time.") {
+		g.needTime = true
+	}
+	if strings.Contains(callee, "os.") {
+		g.needOS = true
 	}
 
 	g.write(callee + "(")
