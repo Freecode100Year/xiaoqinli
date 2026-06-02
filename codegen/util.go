@@ -21,6 +21,10 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateSwift(root)
 	case "py":
 		return GeneratePython(root)
+	case "java":
+		return GenerateJava(root)
+	case "csharp":
+		return GenerateCSharp(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}

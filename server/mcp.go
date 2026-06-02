@@ -231,7 +231,7 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 					},
 					"target": map[string]string{
 						"type":        "string",
-						"description": "Target language: go | rust | ts | kotlin | swift | py (default: go)",
+						"description": "Target language: go | rust | ts | kotlin | swift | py | java | csharp (default: go)",
 					},
 				},
 				"required": []string{"source"},

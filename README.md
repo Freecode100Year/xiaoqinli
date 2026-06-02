@@ -6,7 +6,7 @@ AI agents write structured `.xql.json` (AST) directly — no parser needed, no s
 
 ## Targets
 
-Go | Rust | TypeScript | Kotlin | Swift | Python
+Go | Rust | TypeScript | Kotlin | Swift | Python | Java | C#
 
 ## Quick Start
 
@@ -25,6 +25,8 @@ go build -o xql .
 ./xql compile --file example.xql.json --target kotlin --out main.kt
 ./xql compile --file example.xql.json --target swift --out main.swift
 ./xql compile --file example.xql.json --target py --out main.py
+./xql compile --file example.xql.json --target java --out Main.java
+./xql compile --file example.xql.json --target csharp --out Program.cs
 ```
 
 ## Use with Claude Code (MCP + Skills)
@@ -77,7 +79,7 @@ Available slash commands:
 
 | Tool | Description |
 |------|-------------|
-| `compile` | Compile `.xql.json` AST to target language. Args: `source` (JSON string), `target` (go/rust/ts/kotlin/swift/py) |
+| `compile` | Compile `.xql.json` AST to target language. Args: `source` (JSON string), `target` (go/rust/ts/kotlin/swift/py/java/csharp) |
 | `validate` | Validate `.xql.json` AST without codegen. Args: `source` (JSON string) |
 
 ### MCP Prompts (Skills)
@@ -174,16 +176,16 @@ All checks run at compile time. Code generation only proceeds if all three pass.
 
 ### Type System
 
-| Kind | Go | Rust | TypeScript | Kotlin | Swift | Python |
-|------|-----|------|------------|--------|-------|--------|
-| `Int` | `int` | `i64` | `number` | `Long` | `Int` | `int` |
-| `Float` | `float64` | `f64` | `number` | `Double` | `Double` | `float` |
-| `String` | `string` | `String` | `string` | `String` | `String` | `str` |
-| `Bool` | `bool` | `bool` | `boolean` | `Boolean` | `Bool` | `bool` |
-| `Void` | *(none)* | *(none)* | `void` | `Unit` | *(none)* | `None` |
-| `Array` | `[]T` | `Vec<T>` | `T[]` | `List<T>` | `[T]` | `list[T]` |
-| `Option` | `*T` | `Option<T>` | `T \| null` | `T?` | `T?` | `Optional[T]` |
-| `Result` | `(T, error)` | `Result<T, E>` | — | — | — | — |
+| Kind | Go | Rust | TypeScript | Kotlin | Swift | Python | Java | C# |
+|------|-----|------|------------|--------|-------|--------|------|-----|
+| `Int` | `int` | `i64` | `number` | `Long` | `Int` | `int` | `long` | `long` |
+| `Float` | `float64` | `f64` | `number` | `Double` | `Double` | `float` | `double` | `double` |
+| `String` | `string` | `String` | `string` | `String` | `String` | `str` | `String` | `string` |
+| `Bool` | `bool` | `bool` | `boolean` | `Boolean` | `Bool` | `bool` | `boolean` | `bool` |
+| `Void` | *(none)* | *(none)* | `void` | `Unit` | *(none)* | `None` | `void` | `void` |
+| `Array` | `[]T` | `Vec<T>` | `T[]` | `List<T>` | `[T]` | `list[T]` | `List<T>` | `List<T>` |
+| `Option` | `*T` | `Option<T>` | `T \| null` | `T?` | `T?` | `Optional[T]` | `T` (boxed) | `T?` |
+| `Result` | `(T, error)` | `Result<T, E>` | — | — | — | — | — | — |
 
 ### Node Kinds
 
@@ -249,6 +251,8 @@ xiaoqinli/
     kotlin.go          # Kotlin backend
     swift.go           # Swift backend
     python.go          # Python backend
+    java.go            # Java backend
+    csharp.go          # C# backend
     util.go            # Shared codegen utilities + Generate() dispatcher
   server/
     mcp.go             # MCP server (stdio + HTTP) with panic recovery
