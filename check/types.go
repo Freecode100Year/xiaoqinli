@@ -268,81 +268,108 @@ func (tc *TypeChecker) checkBinaryOp(op, leftT, rightT string) string {
 	}
 }
 
-// InferEffects walks the AST and infers the effects of each function.
+// InferEffects walks the AST and infers the effects of each function,
+// transitively following user-defined function calls.
 func InferEffects(root ast.Node) map[string][]Effect {
+	funcBodies := make(map[string][]ast.Node)
+	collectFuncBodies(root, funcBodies)
+
 	result := make(map[string][]Effect)
-	inferEffectsNode(root, result)
+	resolving := make(map[string]bool)
+	for name := range funcBodies {
+		resolveEffects(name, funcBodies, result, resolving)
+	}
 	return result
 }
 
-func inferEffectsNode(n ast.Node, result map[string][]Effect) {
+func collectFuncBodies(n ast.Node, out map[string][]ast.Node) {
 	switch node := n.(type) {
 	case *ast.Program:
 		for _, d := range node.Decls {
-			inferEffectsNode(d, result)
+			collectFuncBodies(d, out)
 		}
 	case *ast.FunctionDecl:
-		effects := inferBodyEffects(node.Body)
-		result[node.Name] = effects
+		out[node.Name] = node.Body
 	}
 }
 
-func inferBodyEffects(stmts []ast.Node) []Effect {
+func resolveEffects(name string, funcBodies map[string][]ast.Node, result map[string][]Effect, resolving map[string]bool) []Effect {
+	if eff, ok := result[name]; ok {
+		return eff
+	}
+	if resolving[name] {
+		return nil
+	}
+	resolving[name] = true
+
 	seen := make(map[Effect]bool)
-	for _, s := range stmts {
-		collectEffects(s, seen)
+	if body, ok := funcBodies[name]; ok {
+		for _, s := range body {
+			collectEffects(s, seen, funcBodies, result, resolving)
+		}
 	}
+
+	var effects []Effect
 	if len(seen) == 0 {
-		return []Effect{EffectPure}
+		effects = []Effect{EffectPure}
+	} else {
+		effects = make([]Effect, 0, len(seen))
+		for e := range seen {
+			effects = append(effects, e)
+		}
 	}
-	effects := make([]Effect, 0, len(seen))
-	for e := range seen {
-		effects = append(effects, e)
-	}
+	result[name] = effects
+	delete(resolving, name)
 	return effects
 }
 
-func collectEffects(n ast.Node, seen map[Effect]bool) {
+func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]ast.Node, result map[string][]Effect, resolving map[string]bool) {
 	switch node := n.(type) {
 	case *ast.CallExpr:
 		if bi, ok := builtinFuncs[node.Callee]; ok {
 			for _, e := range bi.Effects {
 				seen[e] = true
 			}
+		} else if _, ok := funcBodies[node.Callee]; ok {
+			for _, e := range resolveEffects(node.Callee, funcBodies, result, resolving) {
+				if e != EffectPure {
+					seen[e] = true
+				}
+			}
 		}
 		for _, arg := range node.Args {
-			collectEffects(arg, seen)
+			collectEffects(arg, seen, funcBodies, result, resolving)
 		}
 	case *ast.ExprStmt:
-		collectEffects(node.Expr, seen)
+		collectEffects(node.Expr, seen, funcBodies, result, resolving)
 	case *ast.ReturnStmt:
 		if node.Value != nil {
-			collectEffects(node.Value, seen)
+			collectEffects(node.Value, seen, funcBodies, result, resolving)
 		}
 	case *ast.VarDecl:
 		if node.Value != nil {
-			collectEffects(node.Value, seen)
+			collectEffects(node.Value, seen, funcBodies, result, resolving)
 		}
 	case *ast.AssignStmt:
-		collectEffects(node.Value, seen)
+		collectEffects(node.Value, seen, funcBodies, result, resolving)
 	case *ast.IfStmt:
-		collectEffects(node.Cond, seen)
+		collectEffects(node.Cond, seen, funcBodies, result, resolving)
 		for _, s := range node.Then {
-			collectEffects(s, seen)
+			collectEffects(s, seen, funcBodies, result, resolving)
 		}
 		for _, s := range node.Else {
-			collectEffects(s, seen)
+			collectEffects(s, seen, funcBodies, result, resolving)
 		}
 	case *ast.WhileStmt:
-		collectEffects(node.Cond, seen)
+		collectEffects(node.Cond, seen, funcBodies, result, resolving)
 		for _, s := range node.Body {
-			collectEffects(s, seen)
+			collectEffects(s, seen, funcBodies, result, resolving)
 		}
 	case *ast.BinaryExpr:
-		collectEffects(node.Left, seen)
-		collectEffects(node.Right, seen)
+		collectEffects(node.Left, seen, funcBodies, result, resolving)
+		collectEffects(node.Right, seen, funcBodies, result, resolving)
 	case *ast.UnaryExpr:
-		collectEffects(node.Operand, seen)
+		collectEffects(node.Operand, seen, funcBodies, result, resolving)
 	}
 }
 

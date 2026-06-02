@@ -314,6 +314,44 @@ func TestCapabilityCheckFail(t *testing.T) {
 	}
 }
 
+func TestEffectTransitivePropagation(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [
+			{
+				"kind": "FunctionDecl",
+				"name": "printer",
+				"params": [],
+				"returnType": {"kind": "Void"},
+				"effects": ["state"],
+				"grant": [],
+				"body": [{
+					"kind": "ExprStmt",
+					"expr": {"kind": "CallExpr", "callee": "println", "args": [{"kind": "Literal", "valueType": "String", "value": "hi"}]}
+				}]
+			},
+			{
+				"kind": "FunctionDecl",
+				"name": "wrapper",
+				"params": [],
+				"returnType": {"kind": "Void"},
+				"effects": ["pure"],
+				"grant": [],
+				"body": [{
+					"kind": "ExprStmt",
+					"expr": {"kind": "CallExpr", "callee": "printer", "args": []}
+				}]
+			}
+		]
+	}`
+
+	root := mustParse(t, src)
+	err := CheckEffects(root)
+	if err == nil {
+		t.Fatal("expected effect violation: wrapper calls printer but declares pure")
+	}
+}
+
 // --- RunAll integration test ---
 
 func TestRunAllPass(t *testing.T) {

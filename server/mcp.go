@@ -75,7 +75,7 @@ type rpcError struct {
 // ServeStdio runs the MCP server in stdio mode, reading JSON-RPC from stdin.
 func (s *MCPServer) ServeStdio() error {
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
+	scanner.Buffer(make([]byte, 0, 4*1024*1024), 64*1024*1024)
 	enc := json.NewEncoder(os.Stdout)
 
 	for scanner.Scan() {
@@ -99,10 +99,23 @@ func (s *MCPServer) ServeStdio() error {
 			continue
 		}
 
-		resp := s.handleRequest(&req)
+		resp := s.safeHandleRequest(&req)
 		enc.Encode(resp)
 	}
 	return scanner.Err()
+}
+
+func (s *MCPServer) safeHandleRequest(req *jsonRPCRequest) (resp jsonRPCResponse) {
+	defer func() {
+		if r := recover(); r != nil {
+			resp = jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error:   &rpcError{Code: -32000, Message: fmt.Sprintf("internal error: %v", r)},
+			}
+		}
+	}()
+	return s.handleRequest(req)
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +207,7 @@ func (s *MCPServer) handleInitialize(req *jsonRPCRequest) jsonRPCResponse {
 			"protocolVersion": "2025-03-26",
 			"serverInfo": map[string]string{
 				"name":    "xiaoqinli",
-				"version": "2.0.0",
+				"version": "2.1.0",
 			},
 			"capabilities": map[string]interface{}{
 				"tools":   map[string]interface{}{},
@@ -291,23 +304,7 @@ func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCRe
 		return toolErrorResult(id, err.Error())
 	}
 
-	var output []byte
-	switch target {
-	case "go":
-		output, err = codegen.GenerateGo(root)
-	case "rust":
-		output, err = codegen.GenerateRust(root)
-	case "ts":
-		output, err = codegen.GenerateTypeScript(root)
-	case "kotlin":
-		output, err = codegen.GenerateKotlin(root)
-	case "swift":
-		output, err = codegen.GenerateSwift(root)
-	case "py":
-		output, err = codegen.GeneratePython(root)
-	default:
-		return toolErrorResult(id, "unsupported target: "+target)
-	}
+	output, err := codegen.Generate(root, target)
 	if err != nil {
 		return toolErrorResult(id, err.Error())
 	}

@@ -26,7 +26,7 @@ func (s *RESTServer) Serve(addr string) error {
 	mux.HandleFunc("/skills/", handleSkillsREST)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "2.0.0"})
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "2.1.0"})
 	})
 
 	fmt.Fprintf(os.Stderr, "REST API listening on %s\n", addr)
@@ -77,24 +77,7 @@ func (s *RESTServer) handleCompile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var output []byte
-	switch req.Target {
-	case "go":
-		output, err = codegen.GenerateGo(root)
-	case "rust":
-		output, err = codegen.GenerateRust(root)
-	case "ts":
-		output, err = codegen.GenerateTypeScript(root)
-	case "kotlin":
-		output, err = codegen.GenerateKotlin(root)
-	case "swift":
-		output, err = codegen.GenerateSwift(root)
-	case "py":
-		output, err = codegen.GeneratePython(root)
-	default:
-		writeJSON(w, http.StatusOK, compileResponse{Error: "unsupported target: " + req.Target})
-		return
-	}
+	output, err := codegen.Generate(root, req.Target)
 	if err != nil {
 		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
 		return

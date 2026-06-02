@@ -195,8 +195,8 @@ All checks run at compile time. Code generation only proceeds if all three pass.
 - `VarDecl` — `name`, `type`, `value`
 - `AssignStmt` — `target`, `value`
 - `ReturnStmt` — `value` (optional)
-- `IfStmt` — `condition`, `then[]`, `else[]`
-- `WhileStmt` — `condition`, `body[]`
+- `IfStmt` — `cond` (or `condition`), `then[]`, `else[]`
+- `WhileStmt` — `cond` (or `condition`), `body[]`
 - `ExprStmt` — `expr`
 
 **Expressions:**
@@ -234,12 +234,12 @@ All checks run at compile time. Code generation only proceeds if all three pass.
 
 ```
 xiaoqinli/
-  main.go              # CLI entry point
+  main.go              # CLI entry point + version constant
   ast/
     nodes.go           # AST node definitions + parser
     hash.go            # Content-addressable hashing (SHA-256)
   check/
-    types.go           # Type checker + effect inference
+    types.go           # Type checker + transitive effect inference
     capability.go      # Capability checker (@grant)
     check.go           # RunAll orchestrator
   codegen/
@@ -249,15 +249,20 @@ xiaoqinli/
     kotlin.go          # Kotlin backend
     swift.go           # Swift backend
     python.go          # Python backend
-    util.go            # Shared codegen utilities
+    util.go            # Shared codegen utilities + Generate() dispatcher
   server/
-    mcp.go             # MCP server (stdio + HTTP)
+    mcp.go             # MCP server (stdio + HTTP) with panic recovery
     rest.go            # REST API server
     skills.go          # Skills dispatcher
   vfs/
     workspace.go       # In-memory virtual filesystem
   skills/
     *.md               # Skill documents (embedded via go:embed)
+  examples/
+    hello.xql.json     # Hello world example
+    example.xql.json   # Fibonacci + arithmetic example
+    clock.xql.json     # System clock example
+    clock.go           # Clock Go reference output
 ```
 
 ## Tests

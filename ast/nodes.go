@@ -378,9 +378,18 @@ func parseAssignStmt(raw map[string]interface{}) (*AssignStmt, error) {
 
 func parseIfStmt(raw map[string]interface{}) (*IfStmt, error) {
 	is := &IfStmt{}
-	cond, err := parseChildNode(raw, "condition")
+	cond, err := parseChildNode(raw, "cond")
 	if err != nil {
 		return nil, err
+	}
+	if cond == nil {
+		cond, err = parseChildNode(raw, "condition")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if cond == nil {
+		return nil, fmt.Errorf("XQL_E101: IfStmt missing 'cond'")
 	}
 	is.Cond = cond
 
@@ -403,9 +412,18 @@ func parseIfStmt(raw map[string]interface{}) (*IfStmt, error) {
 
 func parseWhileStmt(raw map[string]interface{}) (*WhileStmt, error) {
 	ws := &WhileStmt{}
-	cond, err := parseChildNode(raw, "condition")
+	cond, err := parseChildNode(raw, "cond")
 	if err != nil {
 		return nil, err
+	}
+	if cond == nil {
+		cond, err = parseChildNode(raw, "condition")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if cond == nil {
+		return nil, fmt.Errorf("XQL_E101: WhileStmt missing 'cond'")
 	}
 	ws.Cond = cond
 

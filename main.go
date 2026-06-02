@@ -10,7 +10,9 @@ import (
 	"xiaoqinli/server"
 )
 
-const usage = `xiaoqinli - AST-First transpiler v2.0
+const Version = "2.1.0"
+
+const usage = `xiaoqinli - AST-First transpiler v` + Version + `
 
 Usage:
   xiaoqinli compile --file <path.xql.json> --target <lang> [--out <output>]
@@ -112,24 +114,7 @@ func cmdCompile(args []string) {
 	}
 
 	// Code generation.
-	var output []byte
-	switch target {
-	case "go":
-		output, err = codegen.GenerateGo(root)
-	case "rust":
-		output, err = codegen.GenerateRust(root)
-	case "ts":
-		output, err = codegen.GenerateTypeScript(root)
-	case "kotlin":
-		output, err = codegen.GenerateKotlin(root)
-	case "swift":
-		output, err = codegen.GenerateSwift(root)
-	case "py":
-		output, err = codegen.GeneratePython(root)
-	default:
-		fmt.Fprintf(os.Stderr, "error: unsupported target '%s'\n", target)
-		os.Exit(3)
-	}
+	output, err := codegen.Generate(root, target)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "XQL_E401: codegen error: %v\n", err)
 		os.Exit(2)

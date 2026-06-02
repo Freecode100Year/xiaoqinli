@@ -1,6 +1,30 @@
 package codegen
 
-import "xiaoqinli/ast"
+import (
+	"fmt"
+
+	"xiaoqinli/ast"
+)
+
+// Generate dispatches code generation to the appropriate backend by target name.
+func Generate(root ast.Node, target string) ([]byte, error) {
+	switch target {
+	case "go":
+		return GenerateGo(root)
+	case "rust":
+		return GenerateRust(root)
+	case "ts":
+		return GenerateTypeScript(root)
+	case "kotlin":
+		return GenerateKotlin(root)
+	case "swift":
+		return GenerateSwift(root)
+	case "py":
+		return GeneratePython(root)
+	default:
+		return nil, fmt.Errorf("unsupported target: %s", target)
+	}
+}
 
 // collectMutables returns the set of variable names that are targets of
 // AssignStmt within the given statement list (recursing into if/while).
