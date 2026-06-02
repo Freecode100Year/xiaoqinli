@@ -141,6 +141,34 @@ const stringConcatProgram = `{
 	}]
 }`
 
+// ifElseProgram tests if/else code generation
+const ifElseProgram = `{
+	"kind": "Program",
+	"declarations": [{
+		"kind": "FunctionDecl",
+		"name": "abs",
+		"params": [{"name": "x", "type": {"kind": "Int"}}],
+		"returnType": {"kind": "Int"},
+		"effects": ["pure"],
+		"grant": [],
+		"body": [{
+			"kind": "IfStmt",
+			"condition": {"kind": "BinaryExpr", "op": "<",
+				"left": {"kind": "Ident", "name": "x"},
+				"right": {"kind": "Literal", "valueType": "Int", "value": 0}},
+			"then": [{
+				"kind": "ReturnStmt",
+				"value": {"kind": "UnaryExpr", "op": "-",
+					"operand": {"kind": "Ident", "name": "x"}}
+			}],
+			"else": [{
+				"kind": "ReturnStmt",
+				"value": {"kind": "Ident", "name": "x"}
+			}]
+		}]
+	}]
+}`
+
 // --- Go codegen ---
 
 func TestGenerateGo(t *testing.T) {
@@ -486,6 +514,27 @@ func TestGenerateCSharpStringConcat(t *testing.T) {
 	}
 }
 
+// --- Generate dispatcher ---
+
+func TestGenerateDispatcher(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia"}
+	for _, tgt := range targets {
+		out, err := Generate(root, tgt)
+		if err != nil {
+			t.Errorf("Generate(%q) error: %v", tgt, err)
+			continue
+		}
+		if len(out) == 0 {
+			t.Errorf("Generate(%q) returned empty output", tgt)
+		}
+	}
+	_, err := Generate(root, "brainfuck")
+	if err == nil {
+		t.Error("Generate should fail for unsupported target")
+	}
+}
+
 // --- Dart codegen ---
 
 func TestGenerateDart(t *testing.T) {
@@ -524,6 +573,18 @@ func TestGenerateDartMutability(t *testing.T) {
 	}
 }
 
+func TestGenerateDartIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GenerateDart(root)
+	if err != nil {
+		t.Fatalf("GenerateDart: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if (") || !strings.Contains(code, "} else {") {
+		t.Errorf("Dart should emit 'if (...) { ... } else { ... }', got:\n%s", code)
+	}
+}
+
 // --- Lua codegen ---
 
 func TestGenerateLua(t *testing.T) {
@@ -559,6 +620,30 @@ func TestGenerateLuaStringConcat(t *testing.T) {
 	code := string(out)
 	if !strings.Contains(code, "..") {
 		t.Errorf("Lua string concat should use '..', got:\n%s", code)
+	}
+}
+
+func TestGenerateLuaIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GenerateLua(root)
+	if err != nil {
+		t.Fatalf("GenerateLua: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if ") || !strings.Contains(code, " then") || !strings.Contains(code, "else") {
+		t.Errorf("Lua should emit 'if...then...else...end', got:\n%s", code)
+	}
+}
+
+func TestGenerateLuaBoolOps(t *testing.T) {
+	root := mustParse(t, boolProgram)
+	out, err := GenerateLua(root)
+	if err != nil {
+		t.Fatalf("GenerateLua: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, " and ") {
+		t.Errorf("Lua should map '&&' to 'and', got:\n%s", code)
 	}
 }
 
@@ -611,6 +696,18 @@ func TestGenerateRubyWhile(t *testing.T) {
 	}
 }
 
+func TestGenerateRubyIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GenerateRuby(root)
+	if err != nil {
+		t.Fatalf("GenerateRuby: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if ") || !strings.Contains(code, "else") || !strings.Contains(code, "end") {
+		t.Errorf("Ruby should emit 'if...else...end', got:\n%s", code)
+	}
+}
+
 // --- PHP codegen ---
 
 func TestGeneratePHP(t *testing.T) {
@@ -649,6 +746,18 @@ func TestGeneratePHPStringConcat(t *testing.T) {
 	}
 }
 
+func TestGeneratePHPIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GeneratePHP(root)
+	if err != nil {
+		t.Fatalf("GeneratePHP: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if (") || !strings.Contains(code, "} else {") {
+		t.Errorf("PHP should emit 'if (...) { ... } else { ... }', got:\n%s", code)
+	}
+}
+
 // --- Zig codegen ---
 
 func TestGenerateZig(t *testing.T) {
@@ -669,6 +778,30 @@ func TestGenerateZig(t *testing.T) {
 		if !strings.Contains(code, c) {
 			t.Errorf("Zig output missing %q\n---\n%s", c, code)
 		}
+	}
+}
+
+func TestGenerateZigIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GenerateZig(root)
+	if err != nil {
+		t.Fatalf("GenerateZig: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if (") || !strings.Contains(code, "} else {") {
+		t.Errorf("Zig should emit 'if (...) { ... } else { ... }', got:\n%s", code)
+	}
+}
+
+func TestGenerateZigBoolOps(t *testing.T) {
+	root := mustParse(t, boolProgram)
+	out, err := GenerateZig(root)
+	if err != nil {
+		t.Fatalf("GenerateZig: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, " and ") {
+		t.Errorf("Zig should map '&&' to 'and', got:\n%s", code)
 	}
 }
 
@@ -722,6 +855,30 @@ func TestGenerateNim(t *testing.T) {
 	}
 }
 
+func TestGenerateNimIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GenerateNim(root)
+	if err != nil {
+		t.Fatalf("GenerateNim: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if ") || !strings.Contains(code, "else:") {
+		t.Errorf("Nim should emit 'if ...:\\n...else:\\n...', got:\n%s", code)
+	}
+}
+
+func TestGenerateNimBoolOps(t *testing.T) {
+	root := mustParse(t, boolProgram)
+	out, err := GenerateNim(root)
+	if err != nil {
+		t.Fatalf("GenerateNim: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, " and ") {
+		t.Errorf("Nim should map '&&' to 'and', got:\n%s", code)
+	}
+}
+
 func TestGenerateNimMutability(t *testing.T) {
 	root := mustParse(t, whileProgram)
 	out, err := GenerateNim(root)
@@ -766,6 +923,18 @@ func TestGenerateJulia(t *testing.T) {
 		if !strings.Contains(code, c) {
 			t.Errorf("Julia output missing %q\n---\n%s", c, code)
 		}
+	}
+}
+
+func TestGenerateJuliaIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GenerateJulia(root)
+	if err != nil {
+		t.Fatalf("GenerateJulia: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if ") || !strings.Contains(code, "else") || !strings.Contains(code, "end") {
+		t.Errorf("Julia should emit 'if...else...end', got:\n%s", code)
 	}
 }
 
