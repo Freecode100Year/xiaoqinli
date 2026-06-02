@@ -197,7 +197,7 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 					},
 					"target": map[string]string{
 						"type":        "string",
-						"description": "Target language: go (default)",
+						"description": "Target language: go | rust | ts | kotlin | swift | py (default: go)",
 					},
 				},
 				"required": []string{"source"},
@@ -274,6 +274,16 @@ func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCRe
 	switch target {
 	case "go":
 		output, err = codegen.GenerateGo(root)
+	case "rust":
+		output, err = codegen.GenerateRust(root)
+	case "ts":
+		output, err = codegen.GenerateTypeScript(root)
+	case "kotlin":
+		output, err = codegen.GenerateKotlin(root)
+	case "swift":
+		output, err = codegen.GenerateSwift(root)
+	case "py":
+		output, err = codegen.GeneratePython(root)
 	default:
 		return toolErrorResult(id, "unsupported target: "+target)
 	}

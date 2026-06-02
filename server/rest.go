@@ -35,7 +35,7 @@ func (s *RESTServer) Serve(addr string) error {
 
 type compileRequest struct {
 	Source string `json:"source"` // raw .xql.json string
-	Target string `json:"target"` // "go" (default)
+	Target string `json:"target"` // go | rust | ts | kotlin | swift | py
 }
 
 type compileResponse struct {
@@ -81,6 +81,16 @@ func (s *RESTServer) handleCompile(w http.ResponseWriter, r *http.Request) {
 	switch req.Target {
 	case "go":
 		output, err = codegen.GenerateGo(root)
+	case "rust":
+		output, err = codegen.GenerateRust(root)
+	case "ts":
+		output, err = codegen.GenerateTypeScript(root)
+	case "kotlin":
+		output, err = codegen.GenerateKotlin(root)
+	case "swift":
+		output, err = codegen.GenerateSwift(root)
+	case "py":
+		output, err = codegen.GeneratePython(root)
 	default:
 		writeJSON(w, http.StatusOK, compileResponse{Error: "unsupported target: " + req.Target})
 		return

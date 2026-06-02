@@ -18,7 +18,7 @@ Usage:
   xiaoqinli stdio                           MCP stdio mode
   xiaoqinli http [<:port>] [--mode rest]    MCP/REST HTTP mode (default :8080)
 
-Targets: go (default) | rust | ts | py (P2)
+Targets: go | rust | ts | kotlin | swift | py (default: go)
 
 Exit codes: 0=success 1=validation failed 2=compilation error 3=argument error`
 
@@ -116,8 +116,18 @@ func cmdCompile(args []string) {
 	switch target {
 	case "go":
 		output, err = codegen.GenerateGo(root)
+	case "rust":
+		output, err = codegen.GenerateRust(root)
+	case "ts":
+		output, err = codegen.GenerateTypeScript(root)
+	case "kotlin":
+		output, err = codegen.GenerateKotlin(root)
+	case "swift":
+		output, err = codegen.GenerateSwift(root)
+	case "py":
+		output, err = codegen.GeneratePython(root)
 	default:
-		fmt.Fprintf(os.Stderr, "error: unsupported target '%s' (only 'go' is implemented in P0)\n", target)
+		fmt.Fprintf(os.Stderr, "error: unsupported target '%s'\n", target)
 		os.Exit(3)
 	}
 	if err != nil {
