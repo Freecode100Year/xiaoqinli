@@ -1,0 +1,142 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "add",
+      "params": [
+        { "name": "a", "type": { "kind": "Int" } },
+        { "name": "b", "type": { "kind": "Int" } }
+      ],
+      "returnType": { "kind": "Int" },
+      "effects": ["pure"],
+      "grant": [],
+      "body": [
+        {
+          "kind": "ReturnStmt",
+          "value": {
+            "kind": "BinaryExpr",
+            "op": "+",
+            "left": { "kind": "Ident", "name": "a" },
+            "right": { "kind": "Ident", "name": "b" }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "fibonacci",
+      "params": [
+        { "name": "n", "type": { "kind": "Int" } }
+      ],
+      "returnType": { "kind": "Int" },
+      "effects": ["pure"],
+      "grant": [],
+      "body": [
+        {
+          "kind": "IfStmt",
+          "condition": {
+            "kind": "BinaryExpr",
+            "op": "<=",
+            "left": { "kind": "Ident", "name": "n" },
+            "right": { "kind": "Literal", "valueType": "Int", "value": 1 }
+          },
+          "then": [
+            {
+              "kind": "ReturnStmt",
+              "value": { "kind": "Ident", "name": "n" }
+            }
+          ],
+          "else": [
+            {
+              "kind": "ReturnStmt",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": {
+                  "kind": "CallExpr",
+                  "callee": "fibonacci",
+                  "args": [
+                    {
+                      "kind": "BinaryExpr",
+                      "op": "-",
+                      "left": { "kind": "Ident", "name": "n" },
+                      "right": { "kind": "Literal", "valueType": "Int", "value": 1 }
+                    }
+                  ]
+                },
+                "right": {
+                  "kind": "CallExpr",
+                  "callee": "fibonacci",
+                  "args": [
+                    {
+                      "kind": "BinaryExpr",
+                      "op": "-",
+                      "left": { "kind": "Ident", "name": "n" },
+                      "right": { "kind": "Literal", "valueType": "Int", "value": 2 }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "sum",
+          "type": { "kind": "Int" },
+          "value": {
+            "kind": "CallExpr",
+            "callee": "add",
+            "args": [
+              { "kind": "Literal", "valueType": "Int", "value": 3 },
+              { "kind": "Literal", "valueType": "Int", "value": 5 }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              { "kind": "Ident", "name": "sum" }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "fib",
+          "type": { "kind": "Int" },
+          "value": {
+            "kind": "CallExpr",
+            "callee": "fibonacci",
+            "args": [
+              { "kind": "Literal", "valueType": "Int", "value": 10 }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              { "kind": "Ident", "name": "fib" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

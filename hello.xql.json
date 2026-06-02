@@ -1,0 +1,50 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "greet",
+      "params": [{ "name": "name", "type": { "kind": "String" } }],
+      "returnType": { "kind": "String" },
+      "effects": ["pure"],
+      "grant": [],
+      "body": [
+        {
+          "kind": "ReturnStmt",
+          "value": {
+            "kind": "BinaryExpr",
+            "op": "+",
+            "left": { "kind": "Literal", "valueType": "String", "value": "Hello, " },
+            "right": { "kind": "Ident", "name": "name" }
+          }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": [],
+      "grant": [],
+      "body": [
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "CallExpr",
+                "callee": "greet",
+                "args": [
+                  { "kind": "Literal", "valueType": "String", "value": "World" }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
