@@ -1,97 +1,37 @@
 # Xiaoqinli (xql)
 
-AST-First transpiler for AI agents. Single Go binary, zero dependencies.
+**AST-First transpiler for AI agents.** Single Go binary, zero dependencies.
 
-AI agents write structured `.xql.json` (AST) directly — no parser needed, no syntax errors possible. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic source code.
+AI agents write structured `.xql.json` (AST) directly — no text parser needed, no syntax errors possible. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic source code in 8 languages.
 
-## Targets
-
-Go | Rust | TypeScript | Kotlin | Swift | Python | Java | C#
+```
+.xql.json ──▶ [ Type Check ──▶ Effect Check ──▶ Capability Check ] ──▶ Code Generation
+                              all checks pass?                          ▼
+                              no → error + halt                   Go / Rust / TS / Kotlin
+                                                                  Swift / Python / Java / C#
+```
 
 ## Quick Start
 
 ```bash
 go build -o xql .
 
-# Validate
-./xql validate --file hello.xql.json
-
-# Compile to Go (default)
-./xql compile --file example.xql.json --target go
-
-# Compile to other languages
-./xql compile --file example.xql.json --target rust --out main.rs
-./xql compile --file example.xql.json --target ts --out main.ts
-./xql compile --file example.xql.json --target kotlin --out main.kt
-./xql compile --file example.xql.json --target swift --out main.swift
-./xql compile --file example.xql.json --target py --out main.py
-./xql compile --file example.xql.json --target java --out Main.java
-./xql compile --file example.xql.json --target csharp --out Program.cs
+./xql validate --file examples/hello.xql.json
+./xql compile  --file examples/hello.xql.json --target go
+./xql compile  --file examples/hello.xql.json --target rust   --out main.rs
+./xql compile  --file examples/hello.xql.json --target ts     --out main.ts
+./xql compile  --file examples/hello.xql.json --target kotlin --out main.kt
+./xql compile  --file examples/hello.xql.json --target swift  --out main.swift
+./xql compile  --file examples/hello.xql.json --target py     --out main.py
+./xql compile  --file examples/hello.xql.json --target java   --out Main.java
+./xql compile  --file examples/hello.xql.json --target csharp --out Program.cs
 ```
 
-## Use with Claude Code (MCP + Skills)
+## One AST, Eight Languages
 
-Xiaoqinli can be used as a local MCP server inside Claude Code, providing `compile` and `validate` tools directly in your conversations.
+Write one `.xql.json`, compile to any target:
 
-### Setup
-
-**1. Add MCP server config** — create or edit `~/.mcp.json`:
-
-```json
-{
-  "xiaoqinli": {
-    "command": "/path/to/xql",
-    "args": ["stdio"]
-  }
-}
-```
-
-**2. (Optional) Auto-allow tool calls** — add to `~/.claude/settings.local.json` under `permissions.allow`:
-
-```json
-"mcp__xiaoqinli__compile",
-"mcp__xiaoqinli__validate"
-```
-
-**3. (Optional) Add slash commands** — create these files:
-
-- `~/.claude/commands/xql-compile.md` — compile guide + AST reference
-- `~/.claude/commands/xql-validate.md` — validate guide + error codes
-
-**4. Restart Claude Code** to load the MCP server.
-
-### Usage in Claude Code
-
-Once connected, you can ask Claude directly:
-
-```
-Compile this xql program to Rust:
-{ "kind": "Program", "declarations": [...] }
-```
-
-Claude will call the `mcp__xiaoqinli__compile` tool automatically.
-
-Available slash commands:
-- `/xql-compile` — compile guide with full AST node reference
-- `/xql-validate` — validate guide with error code reference
-
-### MCP Tools
-
-| Tool | Description |
-|------|-------------|
-| `compile` | Compile `.xql.json` AST to target language. Args: `source` (JSON string), `target` (go/rust/ts/kotlin/swift/py/java/csharp) |
-| `validate` | Validate `.xql.json` AST without codegen. Args: `source` (JSON string) |
-
-### MCP Prompts (Skills)
-
-| Prompt | Description |
-|--------|-------------|
-| `xiaoqinli-usage-guide` | Full `.xql.json` format reference, type system, node types, built-in functions |
-| `xiaoqinli-error-handbook` | All `XQL_Exxx` error codes with causes and fixes |
-
-## Example
-
-`hello.xql.json`:
+**hello.xql.json**
 ```json
 {
   "kind": "Program",
@@ -134,7 +74,9 @@ Available slash commands:
 }
 ```
 
-Compiles to Go:
+<details>
+<summary><strong>Go</strong> — <code>xql compile --target go</code></summary>
+
 ```go
 package main
 
@@ -148,6 +90,74 @@ func main() {
     fmt.Println(greet("World"))
 }
 ```
+</details>
+
+<details>
+<summary><strong>Rust</strong> — <code>xql compile --target rust</code></summary>
+
+```rust
+fn greet(name: String) -> String {
+    return (String::from("Hello, ") + &name);
+}
+
+fn main() {
+    println!("{}", greet(String::from("World")));
+}
+```
+</details>
+
+<details>
+<summary><strong>Java</strong> — <code>xql compile --target java</code></summary>
+
+```java
+public class Main {
+    static String greet(String name) {
+        return ("Hello, " + name);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(greet("World"));
+    }
+}
+```
+</details>
+
+<details>
+<summary><strong>C#</strong> — <code>xql compile --target csharp</code></summary>
+
+```csharp
+using System;
+
+class Program {
+    static string greet(string name) {
+        return ("Hello, " + name);
+    }
+
+    static void Main() {
+        Console.WriteLine(greet("World"));
+    }
+}
+```
+</details>
+
+<details>
+<summary><strong>Python</strong> — <code>xql compile --target py</code></summary>
+
+```python
+def greet(name: str) -> str:
+    return ("Hello, " + name)
+
+
+def main() -> None:
+    print(greet("World"))
+
+
+if __name__ == "__main__":
+    main()
+```
+</details>
+
+Also supports **TypeScript** (`ts`), **Kotlin** (`kotlin`), **Swift** (`swift`).
 
 ## Three Static Checks
 
@@ -155,26 +165,18 @@ All checks run at compile time. Code generation only proceeds if all three pass.
 
 | Check | What it does | Error codes |
 |-------|-------------|-------------|
-| **Type check** | Validates variable types, function signatures, return types | `XQL_E2xx` |
-| **Effect inference** | Infers side effects (network/filesystem/state). Catches purity violations | `XQL_E2xx` |
+| **Type check** | Validates variable types, function signatures, return types, operator compatibility | `XQL_E2xx` |
+| **Effect inference** | Infers side effects (network / filesystem / state), catches purity violations | `XQL_E2xx` |
 | **Capability check** | Enforces `@grant` — callee capabilities must be subset of caller's | `XQL_E3xx` |
 
-## Server Modes
-
-```bash
-# MCP stdio (for Claude Code, Cursor, etc.)
-./xql stdio
-
-# MCP over HTTP
-./xql http :8080
-
-# REST API
-./xql http :8080 --mode rest
+```json
+"effects": ["pure"],
+"grant": ["io", "network"]
 ```
 
-## .xql.json AST Reference
+A `pure` function cannot call `println` or any function with side effects. If function A calls function B, A's `grant` must cover all of B's `grant`.
 
-### Type System
+## Type System
 
 | Kind | Go | Rust | TypeScript | Kotlin | Swift | Python | Java | C# |
 |------|-----|------|------------|--------|-------|--------|------|-----|
@@ -187,10 +189,10 @@ All checks run at compile time. Code generation only proceeds if all three pass.
 | `Option` | `*T` | `Option<T>` | `T \| null` | `T?` | `T?` | `Optional[T]` | `T` (boxed) | `T?` |
 | `Result` | `(T, error)` | `Result<T, E>` | — | — | — | — | — | — |
 
-### Node Kinds
+## .xql.json Node Reference
 
 **Declarations:**
-- `Program` — top-level, contains `declarations[]`
+- `Program` — `{ "kind": "Program", "declarations": [...] }`
 - `FunctionDecl` — `name`, `params[]`, `returnType`, `effects[]`, `grant[]`, `body[]`
 
 **Statements:**
@@ -202,26 +204,45 @@ All checks run at compile time. Code generation only proceeds if all three pass.
 - `ExprStmt` — `expr`
 
 **Expressions:**
-- `Literal` — `valueType`, `value`
+- `Literal` — `valueType` (`Int` / `Float` / `String` / `Bool`), `value`
 - `Ident` — `name`
-- `BinaryExpr` — `op`, `left`, `right`
-- `UnaryExpr` — `op`, `operand`
+- `BinaryExpr` — `op` (`+` `-` `*` `/` `%` `==` `!=` `<` `>` `<=` `>=` `&&` `||`), `left`, `right`
+- `UnaryExpr` — `op` (`-` `!`), `operand`
 - `CallExpr` — `callee`, `args[]`
 - `MemberExpr` — `object`, `field`
 
-### Built-in Functions
+**Built-in functions:** `println` (state), `printf` (state), `sprintf` (pure)
 
-| Name | Effect | Description |
-|------|--------|-------------|
-| `println` | state | Print with newline |
-| `printf` | state | Formatted print |
-| `sprintf` | pure | Formatted string build |
+## MCP Integration
 
-### Safety Annotations
+Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-compatible editors.
 
-- `effects: ["pure"]` — compiler verifies no side effects
-- `effects: ["state"]` / `["network"]` / `["filesystem"]` — declare side effects
-- `grant: ["io", "network"]` — capability declaration; callee must be subset of caller
+```bash
+./xql stdio                      # stdio mode
+./xql http :8080                 # streamable HTTP mode
+./xql http :8080 --mode rest     # REST API mode
+```
+
+**Setup** — add to `~/.mcp.json`:
+
+```json
+{
+  "xiaoqinli": {
+    "command": "/path/to/xql",
+    "args": ["stdio"]
+  }
+}
+```
+
+| Tool | Description |
+|------|-------------|
+| `compile` | Compile `.xql.json` AST to target language. Args: `source`, `target` (default: go) |
+| `validate` | Validate `.xql.json` AST without generating code. Args: `source` |
+
+| Prompt | Description |
+|--------|-------------|
+| `xiaoqinli-usage-guide` | Full `.xql.json` format reference |
+| `xiaoqinli-error-handbook` | All `XQL_Exxx` error codes with causes and fixes |
 
 ## Error Codes
 
@@ -232,41 +253,43 @@ All checks run at compile time. Code generation only proceeds if all three pass.
 | `XQL_E3xx` | Capability errors | Static check |
 | `XQL_E4xx` | Codegen errors | Code generation |
 
+Run `xql validate` first to catch errors before codegen. Use PascalCase type names (`Int`, not `int`).
+
 ## Project Structure
 
 ```
 xiaoqinli/
-  main.go              # CLI entry point + version constant
+  main.go                 CLI entry point + version
   ast/
-    nodes.go           # AST node definitions + parser
-    hash.go            # Content-addressable hashing (SHA-256)
+    nodes.go              AST node definitions + JSON parser
+    hash.go               Content-addressable hashing (SHA-256)
   check/
-    types.go           # Type checker + transitive effect inference
-    capability.go      # Capability checker (@grant)
-    check.go           # RunAll orchestrator
+    types.go              Type checker + transitive effect inference
+    capability.go         Capability checker (@grant)
+    check.go              RunAll orchestrator
   codegen/
-    golang.go          # Go backend
-    rust.go            # Rust backend
-    typescript.go      # TypeScript backend
-    kotlin.go          # Kotlin backend
-    swift.go           # Swift backend
-    python.go          # Python backend
-    java.go            # Java backend
-    csharp.go          # C# backend
-    util.go            # Shared codegen utilities + Generate() dispatcher
+    golang.go             Go backend
+    rust.go               Rust backend
+    typescript.go         TypeScript backend
+    kotlin.go             Kotlin backend
+    swift.go              Swift backend
+    python.go             Python backend
+    java.go               Java backend
+    csharp.go             C# backend
+    util.go               Generate() dispatcher + shared utilities
+    codegen_test.go       36 unit tests across all backends
   server/
-    mcp.go             # MCP server (stdio + HTTP) with panic recovery
-    rest.go            # REST API server
-    skills.go          # Skills dispatcher
+    mcp.go                MCP server (stdio + HTTP) with panic recovery
+    rest.go               REST API server
+    skills.go             Skills dispatcher
   vfs/
-    workspace.go       # In-memory virtual filesystem
+    workspace.go          In-memory virtual filesystem
   skills/
-    *.md               # Skill documents (embedded via go:embed)
+    *.md                  Skill documents (embedded via go:embed)
   examples/
-    hello.xql.json     # Hello world example
-    example.xql.json   # Fibonacci + arithmetic example
-    clock.xql.json     # System clock example
-    clock.go           # Clock Go reference output
+    hello.xql.json        Hello world
+    example.xql.json      Fibonacci + arithmetic
+    clock.xql.json        System clock with live output
 ```
 
 ## Tests
@@ -275,11 +298,13 @@ xiaoqinli/
 go test ./... -v
 ```
 
+36 tests covering AST parsing, type/effect/capability checking, and code generation for all 8 backends.
+
 ## Design Principles
 
-- **Minimal**: Single language, single binary, zero third-party dependencies
-- **Secure**: All validation at compile time, deterministic output, no runtime uncertainty
-- **Fast**: 2-layer pipeline (check then codegen), single-pass AST traversal, no intermediate representation
+- **Minimal** — Single language (Go), single binary, zero third-party dependencies
+- **Secure** — All validation at compile time, deterministic output, no runtime uncertainty
+- **Fast** — 2-layer pipeline (check then codegen), single-pass AST traversal, no IR
 
 ## License
 

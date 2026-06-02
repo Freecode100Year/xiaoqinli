@@ -372,6 +372,120 @@ func TestGeneratePythonBoolOps(t *testing.T) {
 	}
 }
 
+// --- Java codegen ---
+
+func TestGenerateJava(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateJava(root)
+	if err != nil {
+		t.Fatalf("GenerateJava: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"public class Main {",
+		"static long add(long a, long b)",
+		"public static void main(String[] args)",
+		"System.out.println(result)",
+		"return (a + b);",
+		"3L",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Java output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateJavaMutability(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateJava(root)
+	if err != nil {
+		t.Fatalf("GenerateJava: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "long i") {
+		t.Errorf("Java should declare mutable var without final, got:\n%s", code)
+	}
+	if strings.Contains(code, "final long i") {
+		t.Errorf("Java should NOT use 'final' for reassigned var, got:\n%s", code)
+	}
+	if !strings.Contains(code, "while (") {
+		t.Errorf("Java should emit 'while' loop, got:\n%s", code)
+	}
+}
+
+func TestGenerateJavaStringConcat(t *testing.T) {
+	root := mustParse(t, stringConcatProgram)
+	out, err := GenerateJava(root)
+	if err != nil {
+		t.Fatalf("GenerateJava: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "static String greet(String name)") {
+		t.Errorf("Java should map String type correctly, got:\n%s", code)
+	}
+	if !strings.Contains(code, `"Hello, " + name`) {
+		t.Errorf("Java string concat should use +, got:\n%s", code)
+	}
+}
+
+// --- C# codegen ---
+
+func TestGenerateCSharp(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateCSharp(root)
+	if err != nil {
+		t.Fatalf("GenerateCSharp: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"using System;",
+		"class Program {",
+		"static long add(long a, long b)",
+		"static void Main()",
+		"Console.WriteLine(result)",
+		"return (a + b);",
+		"3L",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("C# output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateCSharpMutability(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateCSharp(root)
+	if err != nil {
+		t.Fatalf("GenerateCSharp: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "long i") {
+		t.Errorf("C# should declare var with type, got:\n%s", code)
+	}
+	if !strings.Contains(code, "while (") {
+		t.Errorf("C# should emit 'while' loop, got:\n%s", code)
+	}
+}
+
+func TestGenerateCSharpStringConcat(t *testing.T) {
+	root := mustParse(t, stringConcatProgram)
+	out, err := GenerateCSharp(root)
+	if err != nil {
+		t.Fatalf("GenerateCSharp: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "static string greet(string name)") {
+		t.Errorf("C# should map string type (lowercase), got:\n%s", code)
+	}
+	if !strings.Contains(code, `"Hello, " + name`) {
+		t.Errorf("C# string concat should use +, got:\n%s", code)
+	}
+}
+
 // --- collectMutables tests ---
 
 func TestCollectMutables(t *testing.T) {
