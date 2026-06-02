@@ -10,7 +10,7 @@ import (
 	"xiaoqinli/server"
 )
 
-const Version = "2.1.0"
+const Version = "2.2.0"
 
 const usage = `xiaoqinli - AST-First transpiler v` + Version + `
 

@@ -1,7 +1,7 @@
 ---
 name: xiaoqinli
 description: "Architecture, design, and developer guide for the Xiaoqinli (xql) AST-First transpiler v2.0."
-version: 2.1.0
+version: 2.2.0
 author: Freecode100Year
 platforms: [linux, macos, windows]
 metadata:
@@ -49,7 +49,7 @@ Xiaoqinli 是一个极简、安全、高性能的 **AST-First 转译器**。
 
 * **输入**：AI 直接编写结构化的 `.xql.json`（物理上天然无语法错误）。
 * **处理**：编译器做类型与能力的静态检查。
-* **输出**：直接输出目标语言源码（Go / Rust / TypeScript / Python）。
+* **输出**：直接输出目标语言源码（Go / Rust / TS / Kotlin / Swift / Python / Java / C# / Dart / Lua / Ruby / PHP / Zig / Nim / Julia）。
 * **原则**：**无 VM，无运行时，无运行期 LLM 调用。**
 
 ### 1.1 是与不是 (Is / Is Not)
@@ -71,7 +71,7 @@ Xiaoqinli 是一个极简、安全、高性能的 **AST-First 转译器**。
    * *全部通过才进入下一层*
 3. **层 2：代码生成**
    * AST 直接遍历 → 目标语言源码字符串
-4. **输出**：`main.go` / `main.rs` / `main.ts` / `main.py`
+4. **输出**：15 种目标语言源码（`main.go` / `main.rs` / `main.ts` / `main.kt` / `main.swift` / `main.py` / `Main.java` / `Program.cs` / `main.dart` / `main.lua` / `main.rb` / `main.php` / `main.zig` / `main.nim` / `main.jl`）
 
 > **对比 v1.4**：删除了 IR DAG、字节码、VM 三层。中间不落任何中间表示，AST 检查通过后直接 codegen，走最快路径。
 
@@ -91,10 +91,22 @@ xiaoqinli/                      # 单一 Go module
     types.go                # 类型检查 + 效果推断
     capability.go           # 能力检查（@grant 验证）
   codegen/
-    golang.go               # Go（P0 首先实现）
-    rust.go                 # Rust（P2）
-    typescript.go           # TypeScript（P2）
-    python.go               # Python（P2）
+    golang.go               # Go
+    rust.go                 # Rust
+    typescript.go           # TypeScript
+    kotlin.go               # Kotlin
+    swift.go                # Swift
+    python.go               # Python
+    java.go                 # Java
+    csharp.go               # C#
+    dart.go                 # Dart
+    lua.go                  # Lua
+    ruby.go                 # Ruby
+    php.go                  # PHP
+    zig.go                  # Zig
+    nim.go                  # Nim
+    julia.go                # Julia
+    util.go                 # Generate() dispatcher + shared utilities
   server/
     mcp.go                  # MCP（stdio + streamable HTTP）
     rest.go                 # REST API

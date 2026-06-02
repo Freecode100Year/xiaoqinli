@@ -441,7 +441,7 @@ Use PascalCase type names in the AST (`Int`, not `int`). Run `xql validate` to c
 
 ```
 xiaoqinli/
-  main.go                    CLI + version (2.1.0)
+  main.go                    CLI + version (2.2.0)
   ast/
     nodes.go                 AST node definitions + JSON parser
     hash.go                  Content-addressable hashing (SHA-256)

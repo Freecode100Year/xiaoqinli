@@ -207,7 +207,7 @@ func (s *MCPServer) handleInitialize(req *jsonRPCRequest) jsonRPCResponse {
 			"protocolVersion": "2025-03-26",
 			"serverInfo": map[string]string{
 				"name":    "xiaoqinli",
-				"version": "2.1.0",
+				"version": "2.2.0",
 			},
 			"capabilities": map[string]interface{}{
 				"tools":   map[string]interface{}{},

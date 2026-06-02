@@ -10,11 +10,11 @@ Xiaoqinli (xql) is an AST-First transpiler that converts `.xql.json` files into 
 # Build
 go build -o xql .
 
-# Compile .xql.json to Go
+# Compile .xql.json (targets: go|rust|ts|kotlin|swift|py|java|csharp|dart|lua|ruby|php|zig|nim|julia)
 xql compile --file program.xql.json --target go
 
 # Write output to file
-xql compile --file program.xql.json --target go --out main.go
+xql compile --file program.xql.json --target rust --out main.rs
 
 # Validate only (no codegen)
 xql validate --file program.xql.json
