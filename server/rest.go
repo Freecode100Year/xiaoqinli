@@ -35,7 +35,7 @@ func (s *RESTServer) Serve(addr string) error {
 
 type compileRequest struct {
 	Source string `json:"source"` // raw .xql.json string
-	Target string `json:"target"` // go | rust | ts | kotlin | swift | py | java | csharp
+	Target string `json:"target"` // go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia
 }
 
 type compileResponse struct {

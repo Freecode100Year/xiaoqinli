@@ -486,6 +486,301 @@ func TestGenerateCSharpStringConcat(t *testing.T) {
 	}
 }
 
+// --- Dart codegen ---
+
+func TestGenerateDart(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateDart(root)
+	if err != nil {
+		t.Fatalf("GenerateDart: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"int add(int a, int b)",
+		"void main()",
+		"print(result)",
+		"return (a + b);",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Dart output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateDartMutability(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateDart(root)
+	if err != nil {
+		t.Fatalf("GenerateDart: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "int i") {
+		t.Errorf("Dart should declare mutable var without final, got:\n%s", code)
+	}
+	if strings.Contains(code, "final int i") {
+		t.Errorf("Dart should NOT use 'final' for reassigned var, got:\n%s", code)
+	}
+}
+
+// --- Lua codegen ---
+
+func TestGenerateLua(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateLua(root)
+	if err != nil {
+		t.Fatalf("GenerateLua: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"function add(a, b)",
+		"print(result)",
+		"return (a + b)",
+		"local result",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Lua output missing %q\n---\n%s", c, code)
+		}
+	}
+	if strings.Contains(code, "function main") {
+		t.Errorf("Lua should emit main body at top level, not function main:\n%s", code)
+	}
+}
+
+func TestGenerateLuaStringConcat(t *testing.T) {
+	root := mustParse(t, stringConcatProgram)
+	out, err := GenerateLua(root)
+	if err != nil {
+		t.Fatalf("GenerateLua: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "..") {
+		t.Errorf("Lua string concat should use '..', got:\n%s", code)
+	}
+}
+
+func TestGenerateLuaWhile(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateLua(root)
+	if err != nil {
+		t.Fatalf("GenerateLua: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "while") || !strings.Contains(code, "do") {
+		t.Errorf("Lua should use 'while...do', got:\n%s", code)
+	}
+}
+
+// --- Ruby codegen ---
+
+func TestGenerateRuby(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateRuby(root)
+	if err != nil {
+		t.Fatalf("GenerateRuby: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"def add(a, b)",
+		"puts(result)",
+		"return (a + b)",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Ruby output missing %q\n---\n%s", c, code)
+		}
+	}
+	if strings.Contains(code, "def main") {
+		t.Errorf("Ruby should emit main body at top level, not def main:\n%s", code)
+	}
+}
+
+func TestGenerateRubyWhile(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateRuby(root)
+	if err != nil {
+		t.Fatalf("GenerateRuby: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "while") || !strings.Contains(code, "end") {
+		t.Errorf("Ruby should use 'while...end', got:\n%s", code)
+	}
+}
+
+// --- PHP codegen ---
+
+func TestGeneratePHP(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GeneratePHP(root)
+	if err != nil {
+		t.Fatalf("GeneratePHP: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"<?php",
+		"function add(int $a, int $b): int",
+		"echo $result",
+		"return ($a + $b);",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("PHP output missing %q\n---\n%s", c, code)
+		}
+	}
+	if strings.Contains(code, "function main") {
+		t.Errorf("PHP should emit main body at top level, not function main:\n%s", code)
+	}
+}
+
+func TestGeneratePHPStringConcat(t *testing.T) {
+	root := mustParse(t, stringConcatProgram)
+	out, err := GeneratePHP(root)
+	if err != nil {
+		t.Fatalf("GeneratePHP: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, " . ") {
+		t.Errorf("PHP string concat should use '.', got:\n%s", code)
+	}
+}
+
+// --- Zig codegen ---
+
+func TestGenerateZig(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateZig(root)
+	if err != nil {
+		t.Fatalf("GenerateZig: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"fn add(a: i64, b: i64) i64",
+		"pub fn main()",
+		"std.debug.print",
+		"const std = @import(\"std\");",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Zig output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateZigMutability(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateZig(root)
+	if err != nil {
+		t.Fatalf("GenerateZig: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "var i: i64") {
+		t.Errorf("Zig should use 'var' for reassigned var, got:\n%s", code)
+	}
+}
+
+func TestGenerateZigStringConcat(t *testing.T) {
+	root := mustParse(t, stringConcatProgram)
+	out, err := GenerateZig(root)
+	if err != nil {
+		t.Fatalf("GenerateZig: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "++") {
+		t.Errorf("Zig string concat should use '++', got:\n%s", code)
+	}
+}
+
+// --- Nim codegen ---
+
+func TestGenerateNim(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateNim(root)
+	if err != nil {
+		t.Fatalf("GenerateNim: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"proc add(a: int64, b: int64): int64 =",
+		"echo result",
+		"return (a + b)",
+		"let result: int64",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Nim output missing %q\n---\n%s", c, code)
+		}
+	}
+	if strings.Contains(code, "proc main") {
+		t.Errorf("Nim should emit main body at top level, not proc main:\n%s", code)
+	}
+}
+
+func TestGenerateNimMutability(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateNim(root)
+	if err != nil {
+		t.Fatalf("GenerateNim: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "var i: int64") {
+		t.Errorf("Nim should use 'var' for reassigned var, got:\n%s", code)
+	}
+}
+
+func TestGenerateNimStringConcat(t *testing.T) {
+	root := mustParse(t, stringConcatProgram)
+	out, err := GenerateNim(root)
+	if err != nil {
+		t.Fatalf("GenerateNim: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, " & ") {
+		t.Errorf("Nim string concat should use '&', got:\n%s", code)
+	}
+}
+
+// --- Julia codegen ---
+
+func TestGenerateJulia(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateJulia(root)
+	if err != nil {
+		t.Fatalf("GenerateJulia: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"function add(a::Int64, b::Int64)::Int64",
+		"function main()",
+		"println(result)",
+		"main()",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Julia output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateJuliaStringConcat(t *testing.T) {
+	root := mustParse(t, stringConcatProgram)
+	out, err := GenerateJulia(root)
+	if err != nil {
+		t.Fatalf("GenerateJulia: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, " * ") {
+		t.Errorf("Julia string concat should use '*', got:\n%s", code)
+	}
+}
+
 // --- collectMutables tests ---
 
 func TestCollectMutables(t *testing.T) {

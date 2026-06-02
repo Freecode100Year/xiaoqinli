@@ -20,7 +20,7 @@ Usage:
   xiaoqinli stdio                           MCP stdio mode
   xiaoqinli http [<:port>] [--mode rest]    MCP/REST HTTP mode (default :8080)
 
-Targets: go | rust | ts | kotlin | swift | py | java | csharp (default: go)
+Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia (default: go)
 
 Exit codes: 0=success 1=validation failed 2=compilation error 3=argument error`
 

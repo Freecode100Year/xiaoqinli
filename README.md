@@ -2,13 +2,14 @@
 
 **AST-First transpiler for AI agents.** Single Go binary, zero dependencies.
 
-AI agents write structured `.xql.json` (AST) directly — no text parser needed, no syntax errors possible. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic source code in 8 languages.
+AI agents write structured `.xql.json` (AST) directly — no text parser needed, no syntax errors possible. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic source code in 15 languages.
 
 ```
 .xql.json ──▶ [ Type Check ──▶ Effect Check ──▶ Capability Check ] ──▶ Code Generation
                               all checks pass?                          ▼
-                              no → error + halt                   Go / Rust / TS / Kotlin
-                                                                  Swift / Python / Java / C#
+                              no → error + halt                   Go / Rust / TS / Kotlin / Swift
+                                                                  Python / Java / C# / Dart / Lua
+                                                                  Ruby / PHP / Zig / Nim / Julia
 ```
 
 ## Quick Start
@@ -25,9 +26,16 @@ go build -o xql .
 ./xql compile  --file examples/hello.xql.json --target py     --out main.py
 ./xql compile  --file examples/hello.xql.json --target java   --out Main.java
 ./xql compile  --file examples/hello.xql.json --target csharp --out Program.cs
+./xql compile  --file examples/hello.xql.json --target dart   --out main.dart
+./xql compile  --file examples/hello.xql.json --target lua    --out main.lua
+./xql compile  --file examples/hello.xql.json --target ruby   --out main.rb
+./xql compile  --file examples/hello.xql.json --target php    --out main.php
+./xql compile  --file examples/hello.xql.json --target zig    --out main.zig
+./xql compile  --file examples/hello.xql.json --target nim    --out main.nim
+./xql compile  --file examples/hello.xql.json --target julia  --out main.jl
 ```
 
-## One AST, Eight Languages
+## One AST, Fifteen Languages
 
 Write one `.xql.json`, compile to any target:
 
@@ -157,7 +165,7 @@ if __name__ == "__main__":
 ```
 </details>
 
-Also supports **TypeScript** (`ts`), **Kotlin** (`kotlin`), **Swift** (`swift`).
+Also supports **TypeScript** (`ts`), **Kotlin** (`kotlin`), **Swift** (`swift`), **Dart** (`dart`), **Lua** (`lua`), **Ruby** (`ruby`), **PHP** (`php`), **Zig** (`zig`), **Nim** (`nim`), **Julia** (`julia`).
 
 ## Three Static Checks
 
@@ -178,16 +186,15 @@ A `pure` function cannot call `println` or any function with side effects. If fu
 
 ## Type System
 
-| Kind | Go | Rust | TypeScript | Kotlin | Swift | Python | Java | C# |
-|------|-----|------|------------|--------|-------|--------|------|-----|
-| `Int` | `int` | `i64` | `number` | `Long` | `Int` | `int` | `long` | `long` |
-| `Float` | `float64` | `f64` | `number` | `Double` | `Double` | `float` | `double` | `double` |
-| `String` | `string` | `String` | `string` | `String` | `String` | `str` | `String` | `string` |
-| `Bool` | `bool` | `bool` | `boolean` | `Boolean` | `Bool` | `bool` | `boolean` | `bool` |
-| `Void` | *(none)* | *(none)* | `void` | `Unit` | *(none)* | `None` | `void` | `void` |
-| `Array` | `[]T` | `Vec<T>` | `T[]` | `List<T>` | `[T]` | `list[T]` | `List<T>` | `List<T>` |
-| `Option` | `*T` | `Option<T>` | `T \| null` | `T?` | `T?` | `Optional[T]` | `T` (boxed) | `T?` |
-| `Result` | `(T, error)` | `Result<T, E>` | — | — | — | — | — | — |
+| Kind | Go | Rust | TS | Kotlin | Swift | Python | Java | C# | Dart | Lua | Ruby | PHP | Zig | Nim | Julia |
+|------|-----|------|-----|--------|-------|--------|------|-----|------|-----|------|-----|-----|-----|-------|
+| `Int` | `int` | `i64` | `number` | `Long` | `Int` | `int` | `long` | `long` | `int` | — | — | `int` | `i64` | `int64` | `Int64` |
+| `Float` | `float64` | `f64` | `number` | `Double` | `Double` | `float` | `double` | `double` | `double` | — | — | `float` | `f64` | `float64` | `Float64` |
+| `String` | `string` | `String` | `string` | `String` | `String` | `str` | `String` | `string` | `String` | — | — | `string` | `[]const u8` | `string` | `String` |
+| `Bool` | `bool` | `bool` | `boolean` | `Boolean` | `Bool` | `bool` | `boolean` | `bool` | `bool` | — | — | `bool` | `bool` | `bool` | `Bool` |
+| `Void` | *(none)* | *(none)* | `void` | `Unit` | *(none)* | `None` | `void` | `void` | `void` | — | — | `void` | `void` | — | `Nothing` |
+| `Array` | `[]T` | `Vec<T>` | `T[]` | `List<T>` | `[T]` | `list[T]` | `List<T>` | `List<T>` | `List<T>` | — | — | `array` | — | `seq[T]` | `Vector{T}` |
+| `Option` | `*T` | `Option<T>` | `T\|null` | `T?` | `T?` | `Optional[T]` | `T` | `T?` | `T?` | — | — | `?T` | `?T` | `Option[T]` | `Union{T,Nothing}` |
 
 ## .xql.json Node Reference
 
@@ -276,8 +283,15 @@ xiaoqinli/
     python.go             Python backend
     java.go               Java backend
     csharp.go             C# backend
+    dart.go               Dart backend
+    lua.go                Lua backend
+    ruby.go               Ruby backend
+    php.go                PHP backend
+    zig.go                Zig backend
+    nim.go                Nim backend
+    julia.go              Julia backend
     util.go               Generate() dispatcher + shared utilities
-    codegen_test.go       36 unit tests across all backends
+    codegen_test.go       37 unit tests across all backends
   server/
     mcp.go                MCP server (stdio + HTTP) with panic recovery
     rest.go               REST API server
@@ -298,7 +312,7 @@ xiaoqinli/
 go test ./... -v
 ```
 
-36 tests covering AST parsing, type/effect/capability checking, and code generation for all 8 backends.
+37 tests covering AST parsing, type/effect/capability checking, and code generation for all 15 backends.
 
 ## Design Principles
 

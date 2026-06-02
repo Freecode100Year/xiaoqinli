@@ -25,6 +25,20 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateJava(root)
 	case "csharp":
 		return GenerateCSharp(root)
+	case "dart":
+		return GenerateDart(root)
+	case "lua":
+		return GenerateLua(root)
+	case "ruby":
+		return GenerateRuby(root)
+	case "php":
+		return GeneratePHP(root)
+	case "zig":
+		return GenerateZig(root)
+	case "nim":
+		return GenerateNim(root)
+	case "julia":
+		return GenerateJulia(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}
