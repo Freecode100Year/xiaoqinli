@@ -65,8 +65,9 @@ type VarDecl struct {
 func (*VarDecl) Kind() string { return "VarDecl" }
 
 // AssignStmt represents an assignment statement.
+// Target can be Ident, IndexExpr, or MemberExpr.
 type AssignStmt struct {
-	Target string
+	Target Node
 	Value  Node
 }
 
@@ -88,6 +89,30 @@ type WhileStmt struct {
 }
 
 func (*WhileStmt) Kind() string { return "WhileStmt" }
+
+// ForStmt represents a for loop with two forms:
+//   - "range": iterates var from start to end (exclusive)
+//   - "each":  iterates var over each element of iterable
+type ForStmt struct {
+	Form     string // "range" or "each"
+	Var      string // loop variable name
+	Start    Node   // range form only
+	End      Node   // range form only
+	Iterable Node   // each form only
+	Body     []Node
+}
+
+func (*ForStmt) Kind() string { return "ForStmt" }
+
+// BreakStmt represents a break statement inside a loop.
+type BreakStmt struct{}
+
+func (*BreakStmt) Kind() string { return "BreakStmt" }
+
+// ContinueStmt represents a continue statement inside a loop.
+type ContinueStmt struct{}
+
+func (*ContinueStmt) Kind() string { return "ContinueStmt" }
 
 // ExprStmt wraps an expression used as a statement.
 type ExprStmt struct {
@@ -221,6 +246,12 @@ func parseNode(raw map[string]interface{}) (Node, error) {
 		return parseIfStmt(raw)
 	case "WhileStmt":
 		return parseWhileStmt(raw)
+	case "ForStmt":
+		return parseForStmt(raw)
+	case "BreakStmt":
+		return &BreakStmt{}, nil
+	case "ContinueStmt":
+		return &ContinueStmt{}, nil
 	case "ExprStmt":
 		return parseExprStmt(raw)
 	case "StructDecl":
@@ -424,8 +455,19 @@ func parseVarDecl(raw map[string]interface{}) (*VarDecl, error) {
 
 func parseAssignStmt(raw map[string]interface{}) (*AssignStmt, error) {
 	as := &AssignStmt{}
-	as.Target, _ = raw["target"].(string)
-	if as.Target == "" {
+	switch t := raw["target"].(type) {
+	case string:
+		if t == "" {
+			return nil, fmt.Errorf("XQL_E101: AssignStmt missing 'target'")
+		}
+		as.Target = &Ident{Name: t}
+	case map[string]interface{}:
+		node, err := parseNode(t)
+		if err != nil {
+			return nil, err
+		}
+		as.Target = node
+	default:
 		return nil, fmt.Errorf("XQL_E101: AssignStmt missing 'target'")
 	}
 	val, err := parseChildNode(raw, "value")
@@ -495,6 +537,53 @@ func parseWhileStmt(raw map[string]interface{}) (*WhileStmt, error) {
 		ws.Body = nodes
 	}
 	return ws, nil
+}
+
+func parseForStmt(raw map[string]interface{}) (*ForStmt, error) {
+	fs := &ForStmt{}
+	fs.Form, _ = raw["form"].(string)
+	if fs.Form != "range" && fs.Form != "each" {
+		return nil, fmt.Errorf("XQL_E101: ForStmt 'form' must be \"range\" or \"each\", got %q", fs.Form)
+	}
+	fs.Var, _ = raw["var"].(string)
+	if fs.Var == "" {
+		return nil, fmt.Errorf("XQL_E101: ForStmt missing 'var'")
+	}
+	if fs.Form == "range" {
+		start, err := parseChildNode(raw, "start")
+		if err != nil {
+			return nil, err
+		}
+		if start == nil {
+			return nil, fmt.Errorf("XQL_E101: ForStmt range form missing 'start'")
+		}
+		fs.Start = start
+		end, err := parseChildNode(raw, "end")
+		if err != nil {
+			return nil, err
+		}
+		if end == nil {
+			return nil, fmt.Errorf("XQL_E101: ForStmt range form missing 'end'")
+		}
+		fs.End = end
+	} else {
+		iter, err := parseChildNode(raw, "iterable")
+		if err != nil {
+			return nil, err
+		}
+		if iter == nil {
+			return nil, fmt.Errorf("XQL_E101: ForStmt each form missing 'iterable'")
+		}
+		fs.Iterable = iter
+	}
+	if body, ok := raw["body"].([]interface{}); ok {
+		nodes, err := parseNodeList(body)
+		if err != nil {
+			return nil, err
+		}
+		fs.Body = nodes
+	}
+	return fs, nil
 }
 
 func parseExprStmt(raw map[string]interface{}) (*ExprStmt, error) {

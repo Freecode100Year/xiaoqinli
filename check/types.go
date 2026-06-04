@@ -90,10 +90,9 @@ func (tc *TypeChecker) checkNode(n ast.Node) {
 }
 
 func (tc *TypeChecker) checkFunctionDecl(fd *ast.FunctionDecl) {
-	// Build a local scope with parameter types.
-	scope := make(map[string]string) // name → type kind
+	scope := make(map[string]ast.TypeExpr)
 	for _, p := range fd.Params {
-		scope[p.Name] = p.Type.KindName
+		scope[p.Name] = p.Type
 	}
 
 	for _, stmt := range fd.Body {
@@ -101,77 +100,124 @@ func (tc *TypeChecker) checkFunctionDecl(fd *ast.FunctionDecl) {
 	}
 }
 
-func (tc *TypeChecker) checkStmt(n ast.Node, fn *ast.FunctionDecl, scope map[string]string) {
+func forkScope(parent map[string]ast.TypeExpr) map[string]ast.TypeExpr {
+	child := make(map[string]ast.TypeExpr, len(parent))
+	for k, v := range parent {
+		child[k] = v
+	}
+	return child
+}
+
+func (tc *TypeChecker) checkStmt(n ast.Node, fn *ast.FunctionDecl, scope map[string]ast.TypeExpr) {
 	switch node := n.(type) {
 	case *ast.ReturnStmt:
 		if node.Value != nil {
 			exprType := tc.inferType(node.Value, scope)
 			expected := fn.ReturnType.KindName
-			if expected != "" && expected != "Void" && exprType != "" && exprType != expected {
+			if expected != "" && expected != "Void" && exprType.KindName != "" && exprType.KindName != expected {
 				tc.addError(fmt.Sprintf(
 					"function '%s': return type mismatch, expected %s but got %s",
-					fn.Name, expected, exprType))
+					fn.Name, expected, exprType.KindName))
 			}
 		}
 	case *ast.VarDecl:
 		if node.Value != nil {
 			valType := tc.inferType(node.Value, scope)
-			if node.Type.KindName != "" && valType != "" && valType != node.Type.KindName {
+			if node.Type.KindName != "" && valType.KindName != "" && valType.KindName != node.Type.KindName {
 				tc.addError(fmt.Sprintf(
 					"variable '%s': type mismatch, declared %s but assigned %s",
-					node.Name, node.Type.KindName, valType))
+					node.Name, node.Type.KindName, valType.KindName))
 			}
 			if node.Type.KindName != "" {
-				scope[node.Name] = node.Type.KindName
+				scope[node.Name] = node.Type
 			} else {
 				scope[node.Name] = valType
 			}
 		} else if node.Type.KindName != "" {
-			scope[node.Name] = node.Type.KindName
+			scope[node.Name] = node.Type
 		}
 	case *ast.AssignStmt:
-		if declaredType, ok := scope[node.Target]; ok {
-			valType := tc.inferType(node.Value, scope)
-			if valType != "" && declaredType != "" && valType != declaredType {
-				tc.addError(fmt.Sprintf(
-					"assignment to '%s': type mismatch, expected %s but got %s",
-					node.Target, declaredType, valType))
+		targetType := tc.inferType(node.Target, scope)
+		valType := tc.inferType(node.Value, scope)
+		if ident, ok := node.Target.(*ast.Ident); ok {
+			if declaredType, exists := scope[ident.Name]; exists {
+				if valType.KindName != "" && declaredType.KindName != "" && valType.KindName != declaredType.KindName {
+					tc.addError(fmt.Sprintf(
+						"assignment to '%s': type mismatch, expected %s but got %s",
+						ident.Name, declaredType.KindName, valType.KindName))
+				}
 			}
+		} else if targetType.KindName != "" && valType.KindName != "" && targetType.KindName != valType.KindName {
+			tc.addError(fmt.Sprintf(
+				"assignment type mismatch, expected %s but got %s",
+				targetType.KindName, valType.KindName))
 		}
 	case *ast.IfStmt:
 		condType := tc.inferType(node.Cond, scope)
-		if condType != "" && condType != "Bool" {
-			tc.addError(fmt.Sprintf("if condition must be Bool, got %s", condType))
+		if condType.KindName != "" && condType.KindName != "Bool" {
+			tc.addError(fmt.Sprintf("if condition must be Bool, got %s", condType.KindName))
 		}
+		thenScope := forkScope(scope)
 		for _, s := range node.Then {
-			tc.checkStmt(s, fn, scope)
+			tc.checkStmt(s, fn, thenScope)
 		}
+		elseScope := forkScope(scope)
 		for _, s := range node.Else {
-			tc.checkStmt(s, fn, scope)
+			tc.checkStmt(s, fn, elseScope)
 		}
 	case *ast.WhileStmt:
 		condType := tc.inferType(node.Cond, scope)
-		if condType != "" && condType != "Bool" {
-			tc.addError(fmt.Sprintf("while condition must be Bool, got %s", condType))
+		if condType.KindName != "" && condType.KindName != "Bool" {
+			tc.addError(fmt.Sprintf("while condition must be Bool, got %s", condType.KindName))
+		}
+		bodyScope := forkScope(scope)
+		for _, s := range node.Body {
+			tc.checkStmt(s, fn, bodyScope)
+		}
+	case *ast.ForStmt:
+		bodyScope := forkScope(scope)
+		if node.Form == "range" {
+			startType := tc.inferType(node.Start, scope)
+			if startType.KindName != "" && startType.KindName != "Int" {
+				tc.addError(fmt.Sprintf("for-range start must be Int, got %s", startType.KindName))
+			}
+			endType := tc.inferType(node.End, scope)
+			if endType.KindName != "" && endType.KindName != "Int" {
+				tc.addError(fmt.Sprintf("for-range end must be Int, got %s", endType.KindName))
+			}
+			bodyScope[node.Var] = ast.TypeExpr{KindName: "Int"}
+		} else {
+			iterType := tc.inferType(node.Iterable, scope)
+			if iterType.KindName != "" && iterType.KindName != "Array" {
+				tc.addError(fmt.Sprintf("for-each iterable must be Array, got %s", iterType.KindName))
+			}
+			if iterType.Elem != nil {
+				bodyScope[node.Var] = *iterType.Elem
+			} else {
+				bodyScope[node.Var] = ast.TypeExpr{}
+			}
 		}
 		for _, s := range node.Body {
-			tc.checkStmt(s, fn, scope)
+			tc.checkStmt(s, fn, bodyScope)
 		}
+	case *ast.BreakStmt, *ast.ContinueStmt:
+		// No type checking needed.
 	case *ast.ExprStmt:
 		tc.inferType(node.Expr, scope)
 	}
 }
 
-// inferType infers the type of an expression. Returns the type kind string.
-func (tc *TypeChecker) inferType(n ast.Node, scope map[string]string) string {
+// inferType infers the full type of an expression, preserving generic info.
+func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.TypeExpr {
+	none := ast.TypeExpr{}
 	switch node := n.(type) {
 	case *ast.Literal:
-		return node.ValueType
+		return ast.TypeExpr{KindName: node.ValueType}
 	case *ast.Ident:
 		if t, ok := scope[node.Name]; ok {
 			return t
 		}
-		return ""
+		return none
 	case *ast.BinaryExpr:
 		leftT := tc.inferType(node.Left, scope)
 		rightT := tc.inferType(node.Right, scope)
@@ -180,67 +226,61 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]string) string {
 		operandT := tc.inferType(node.Operand, scope)
 		switch node.Op {
 		case "!":
-			if operandT != "" && operandT != "Bool" {
-				tc.addError(fmt.Sprintf("unary '!' requires Bool, got %s", operandT))
+			if operandT.KindName != "" && operandT.KindName != "Bool" {
+				tc.addError(fmt.Sprintf("unary '!' requires Bool, got %s", operandT.KindName))
 			}
-			return "Bool"
+			return ast.TypeExpr{KindName: "Bool"}
 		case "-":
-			if operandT != "" && operandT != "Int" && operandT != "Float" {
-				tc.addError(fmt.Sprintf("unary '-' requires Int or Float, got %s", operandT))
+			if operandT.KindName != "" && operandT.KindName != "Int" && operandT.KindName != "Float" {
+				tc.addError(fmt.Sprintf("unary '-' requires Int or Float, got %s", operandT.KindName))
 			}
 			return operandT
 		}
 		return operandT
 	case *ast.CallExpr:
-		// Check built-in functions.
 		if bi, ok := builtinFuncs[node.Callee]; ok {
-			return bi.ReturnType
+			return ast.TypeExpr{KindName: bi.ReturnType}
 		}
-		// Check user-defined functions.
 		if fd, ok := tc.funcTable[node.Callee]; ok {
-			// Verify argument count.
 			if len(node.Args) != len(fd.Params) {
 				tc.addError(fmt.Sprintf(
 					"function '%s' expects %d args, got %d",
 					node.Callee, len(fd.Params), len(node.Args)))
 			} else {
-				// Verify argument types.
 				for i, arg := range node.Args {
 					argType := tc.inferType(arg, scope)
 					paramType := fd.Params[i].Type.KindName
-					if argType != "" && paramType != "" && argType != paramType {
+					if argType.KindName != "" && paramType != "" && argType.KindName != paramType {
 						tc.addError(fmt.Sprintf(
 							"function '%s' arg %d: expected %s, got %s",
-							node.Callee, i, paramType, argType))
+							node.Callee, i, paramType, argType.KindName))
 					}
 				}
 			}
-			return fd.ReturnType.KindName
+			return fd.ReturnType
 		}
-		return ""
+		return none
 	case *ast.MemberExpr:
 		objType := tc.inferType(node.Object, scope)
-		if sd, ok := tc.structTable[objType]; ok {
+		if sd, ok := tc.structTable[objType.KindName]; ok {
 			for _, f := range sd.Fields {
 				if f.Name == node.Field {
-					return f.Type.KindName
+					return f.Type
 				}
 			}
-			tc.addError(fmt.Sprintf("struct '%s' has no field '%s'", objType, node.Field))
+			tc.addError(fmt.Sprintf("struct '%s' has no field '%s'", objType.KindName, node.Field))
 		}
-		return ""
+		return none
 	case *ast.StructLit:
 		sd, ok := tc.structTable[node.TypeName]
 		if !ok {
 			tc.addError(fmt.Sprintf("unknown struct type '%s'", node.TypeName))
-			return node.TypeName
+			return ast.TypeExpr{KindName: node.TypeName}
 		}
-		// Check field completeness and types.
 		provided := make(map[string]bool)
 		for _, fi := range node.Fields {
 			provided[fi.Name] = true
 			valType := tc.inferType(fi.Value, scope)
-			// Find expected type.
 			var expectedType string
 			for _, sf := range sd.Fields {
 				if sf.Name == fi.Name {
@@ -250,9 +290,9 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]string) string {
 			}
 			if expectedType == "" {
 				tc.addError(fmt.Sprintf("struct '%s' has no field '%s'", node.TypeName, fi.Name))
-			} else if valType != "" && valType != expectedType {
+			} else if valType.KindName != "" && valType.KindName != expectedType {
 				tc.addError(fmt.Sprintf("struct '%s' field '%s': expected %s, got %s",
-					node.TypeName, fi.Name, expectedType, valType))
+					node.TypeName, fi.Name, expectedType, valType.KindName))
 			}
 		}
 		for _, sf := range sd.Fields {
@@ -260,74 +300,77 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]string) string {
 				tc.addError(fmt.Sprintf("struct '%s' missing field '%s'", node.TypeName, sf.Name))
 			}
 		}
-		return node.TypeName
+		return ast.TypeExpr{KindName: node.TypeName}
 	case *ast.ArrayLit:
-		// Check element type consistency.
 		expectedElem := node.ElemType.KindName
 		for i, elem := range node.Elements {
 			elemType := tc.inferType(elem, scope)
-			if expectedElem != "" && elemType != "" && elemType != expectedElem {
-				tc.addError(fmt.Sprintf("array element %d: expected %s, got %s", i, expectedElem, elemType))
+			if expectedElem != "" && elemType.KindName != "" && elemType.KindName != expectedElem {
+				tc.addError(fmt.Sprintf("array element %d: expected %s, got %s", i, expectedElem, elemType.KindName))
 			}
 		}
-		return "Array"
+		return ast.TypeExpr{KindName: "Array", Elem: &node.ElemType}
 	case *ast.IndexExpr:
 		targetType := tc.inferType(node.Target, scope)
 		indexType := tc.inferType(node.Index, scope)
-		if targetType == "Array" {
-			if indexType != "" && indexType != "Int" {
-				tc.addError(fmt.Sprintf("array index must be Int, got %s", indexType))
+		if targetType.KindName == "Array" {
+			if indexType.KindName != "" && indexType.KindName != "Int" {
+				tc.addError(fmt.Sprintf("array index must be Int, got %s", indexType.KindName))
+			}
+			if targetType.Elem != nil {
+				return *targetType.Elem
 			}
 		}
-		// We can't easily determine the element type without full TypeExpr tracking.
-		// Return empty for now; the element type is implicit.
-		return ""
+		return none
 	default:
-		return ""
+		return none
 	}
 }
 
-// checkBinaryOp checks type compatibility for a binary operator and returns the result type.
-func (tc *TypeChecker) checkBinaryOp(op, leftT, rightT string) string {
-	if leftT == "" || rightT == "" {
-		return leftT + rightT // return whichever is known
+func (tc *TypeChecker) checkBinaryOp(op string, leftT, rightT ast.TypeExpr) ast.TypeExpr {
+	l, r := leftT.KindName, rightT.KindName
+	if l == "" || r == "" {
+		if l != "" {
+			return leftT
+		}
+		return rightT
 	}
 
 	switch op {
 	case "+":
-		if leftT == "String" && rightT == "String" {
-			return "String"
-		}
-		if leftT == rightT && (leftT == "Int" || leftT == "Float") {
+		if l == "String" && r == "String" {
 			return leftT
 		}
-		if leftT != rightT {
-			tc.addError(fmt.Sprintf("operator '+': incompatible types %s and %s", leftT, rightT))
+		if l == r && (l == "Int" || l == "Float") {
+			return leftT
+		}
+		if l != r {
+			tc.addError(fmt.Sprintf("operator '+': incompatible types %s and %s", l, r))
 		}
 		return leftT
 	case "-", "*", "/", "%":
-		if leftT != rightT {
-			tc.addError(fmt.Sprintf("operator '%s': incompatible types %s and %s", op, leftT, rightT))
+		if l != r {
+			tc.addError(fmt.Sprintf("operator '%s': incompatible types %s and %s", op, l, r))
 		}
-		if leftT != "Int" && leftT != "Float" {
-			tc.addError(fmt.Sprintf("operator '%s': requires numeric types, got %s", op, leftT))
+		if l != "Int" && l != "Float" {
+			tc.addError(fmt.Sprintf("operator '%s': requires numeric types, got %s", op, l))
 		}
 		return leftT
 	case "==", "!=":
-		if leftT != rightT {
-			tc.addError(fmt.Sprintf("operator '%s': comparing different types %s and %s", op, leftT, rightT))
+		if l != r {
+			tc.addError(fmt.Sprintf("operator '%s': comparing different types %s and %s", op, l, r))
 		}
-		return "Bool"
+		return ast.TypeExpr{KindName: "Bool"}
 	case "<", ">", "<=", ">=":
-		if leftT != rightT {
-			tc.addError(fmt.Sprintf("operator '%s': incompatible types %s and %s", op, leftT, rightT))
+		if l != r {
+			tc.addError(fmt.Sprintf("operator '%s': incompatible types %s and %s", op, l, r))
 		}
-		return "Bool"
+		return ast.TypeExpr{KindName: "Bool"}
 	case "&&", "||":
-		if leftT != "Bool" || rightT != "Bool" {
-			tc.addError(fmt.Sprintf("operator '%s': requires Bool operands, got %s and %s", op, leftT, rightT))
+		if l != "Bool" || r != "Bool" {
+			tc.addError(fmt.Sprintf("operator '%s': requires Bool operands, got %s and %s", op, l, r))
 		}
-		return "Bool"
+		return ast.TypeExpr{KindName: "Bool"}
 	default:
 		return leftT
 	}
@@ -416,6 +459,7 @@ func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]as
 			collectEffects(node.Value, seen, funcBodies, result, resolving)
 		}
 	case *ast.AssignStmt:
+		collectEffects(node.Target, seen, funcBodies, result, resolving)
 		collectEffects(node.Value, seen, funcBodies, result, resolving)
 	case *ast.IfStmt:
 		collectEffects(node.Cond, seen, funcBodies, result, resolving)
@@ -427,6 +471,19 @@ func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]as
 		}
 	case *ast.WhileStmt:
 		collectEffects(node.Cond, seen, funcBodies, result, resolving)
+		for _, s := range node.Body {
+			collectEffects(s, seen, funcBodies, result, resolving)
+		}
+	case *ast.ForStmt:
+		if node.Start != nil {
+			collectEffects(node.Start, seen, funcBodies, result, resolving)
+		}
+		if node.End != nil {
+			collectEffects(node.End, seen, funcBodies, result, resolving)
+		}
+		if node.Iterable != nil {
+			collectEffects(node.Iterable, seen, funcBodies, result, resolving)
+		}
 		for _, s := range node.Body {
 			collectEffects(s, seen, funcBodies, result, resolving)
 		}

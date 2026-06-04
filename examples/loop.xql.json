@@ -1,0 +1,70 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "nums",
+          "type": { "kind": "Array", "elem": { "kind": "Int" } },
+          "value": {
+            "kind": "ArrayLit",
+            "elemType": { "kind": "Int" },
+            "elements": [
+              { "kind": "Literal", "valueType": "Int", "value": 1 },
+              { "kind": "Literal", "valueType": "Int", "value": 2 },
+              { "kind": "Literal", "valueType": "Int", "value": 3 },
+              { "kind": "Literal", "valueType": "Int", "value": 4 },
+              { "kind": "Literal", "valueType": "Int", "value": 5 }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "sum",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 0 }
+        },
+        {
+          "kind": "ForStmt",
+          "form": "range",
+          "var": "i",
+          "start": { "kind": "Literal", "valueType": "Int", "value": 0 },
+          "end": { "kind": "Literal", "valueType": "Int", "value": 5 },
+          "body": [
+            {
+              "kind": "AssignStmt",
+              "target": "sum",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": { "kind": "Ident", "name": "sum" },
+                "right": {
+                  "kind": "IndexExpr",
+                  "target": { "kind": "Ident", "name": "nums" },
+                  "index": { "kind": "Ident", "name": "i" }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              { "kind": "Ident", "name": "sum" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

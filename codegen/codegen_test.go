@@ -1223,17 +1223,155 @@ func TestResultTypeRejection(t *testing.T) {
 	}
 }
 
+// --- ForStmt codegen across all backends ---
+
+const forRangeProgram = `{
+	"kind": "Program",
+	"declarations": [{
+		"kind": "FunctionDecl",
+		"name": "main",
+		"params": [],
+		"returnType": {"kind": "Void"},
+		"effects": ["state"],
+		"grant": ["io"],
+		"body": [
+			{
+				"kind": "ForStmt", "form": "range", "var": "i",
+				"start": {"kind": "Literal", "valueType": "Int", "value": 0},
+				"end": {"kind": "Literal", "valueType": "Int", "value": 5},
+				"body": [{
+					"kind": "ExprStmt",
+					"expr": {"kind": "CallExpr", "callee": "println", "args": [
+						{"kind": "Ident", "name": "i"}
+					]}
+				}]
+			}
+		]
+	}]
+}`
+
+func TestForStmtCodegenAll(t *testing.T) {
+	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia"}
+	root := mustParse(t, forRangeProgram)
+	for _, target := range targets {
+		t.Run("for_"+target, func(t *testing.T) {
+			out, err := Generate(root, target)
+			if err != nil {
+				t.Fatalf("codegen error: %v", err)
+			}
+			if len(out) == 0 {
+				t.Fatal("empty output")
+			}
+		})
+	}
+}
+
+const breakContinueProgram = `{
+	"kind": "Program",
+	"declarations": [{
+		"kind": "FunctionDecl",
+		"name": "main",
+		"params": [],
+		"returnType": {"kind": "Void"},
+		"effects": ["state"],
+		"grant": ["io"],
+		"body": [{
+			"kind": "WhileStmt",
+			"cond": {"kind": "Literal", "valueType": "Bool", "value": true},
+			"body": [
+				{
+					"kind": "IfStmt",
+					"cond": {"kind": "Literal", "valueType": "Bool", "value": true},
+					"then": [{"kind": "BreakStmt"}],
+					"else": [{"kind": "ContinueStmt"}]
+				}
+			]
+		}]
+	}]
+}`
+
+func TestBreakContinueCodegenAll(t *testing.T) {
+	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "ruby", "php", "zig", "nim", "julia"}
+	root := mustParse(t, breakContinueProgram)
+	for _, target := range targets {
+		t.Run("brk_"+target, func(t *testing.T) {
+			out, err := Generate(root, target)
+			if err != nil {
+				t.Fatalf("codegen error: %v", err)
+			}
+			if len(out) == 0 {
+				t.Fatal("empty output")
+			}
+		})
+	}
+}
+
+const assignIndexProgram = `{
+	"kind": "Program",
+	"declarations": [{
+		"kind": "FunctionDecl",
+		"name": "main",
+		"params": [],
+		"returnType": {"kind": "Void"},
+		"effects": ["state"],
+		"grant": ["io"],
+		"body": [
+			{
+				"kind": "VarDecl", "name": "nums",
+				"type": {"kind": "Array", "elem": {"kind": "Int"}},
+				"value": {"kind": "ArrayLit", "elemType": {"kind": "Int"}, "elements": [
+					{"kind": "Literal", "valueType": "Int", "value": 1},
+					{"kind": "Literal", "valueType": "Int", "value": 2}
+				]}
+			},
+			{
+				"kind": "AssignStmt",
+				"target": {"kind": "IndexExpr",
+					"target": {"kind": "Ident", "name": "nums"},
+					"index": {"kind": "Literal", "valueType": "Int", "value": 0}
+				},
+				"value": {"kind": "Literal", "valueType": "Int", "value": 99}
+			},
+			{
+				"kind": "ExprStmt",
+				"expr": {"kind": "CallExpr", "callee": "println", "args": [
+					{"kind": "IndexExpr",
+						"target": {"kind": "Ident", "name": "nums"},
+						"index": {"kind": "Literal", "valueType": "Int", "value": 0}
+					}
+				]}
+			}
+		]
+	}]
+}`
+
+func TestAssignIndexCodegenAll(t *testing.T) {
+	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia"}
+	root := mustParse(t, assignIndexProgram)
+	for _, target := range targets {
+		t.Run("aidx_"+target, func(t *testing.T) {
+			out, err := Generate(root, target)
+			if err != nil {
+				t.Fatalf("codegen error: %v", err)
+			}
+			if len(out) == 0 {
+				t.Fatal("empty output")
+			}
+		})
+	}
+}
+
 // --- collectMutables tests ---
 
 func TestCollectMutables(t *testing.T) {
 	stmts := []ast.Node{
 		&ast.VarDecl{Name: "x"},
-		&ast.AssignStmt{Target: "x", Value: &ast.Literal{ValueType: "Int", Value: float64(1)}},
+		&ast.AssignStmt{Target: &ast.Ident{Name: "x"}, Value: &ast.Literal{ValueType: "Int", Value: float64(1)}},
 		&ast.VarDecl{Name: "y"},
 		&ast.IfStmt{
 			Cond: &ast.Literal{ValueType: "Bool", Value: true},
 			Then: []ast.Node{
-				&ast.AssignStmt{Target: "y", Value: &ast.Literal{ValueType: "Int", Value: float64(2)}},
+				&ast.AssignStmt{Target: &ast.Ident{Name: "y"}, Value: &ast.Literal{ValueType: "Int", Value: float64(2)}},
 			},
 		},
 		&ast.VarDecl{Name: "z"},

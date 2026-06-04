@@ -88,6 +88,7 @@ func checkCapStmt(n ast.Node, callerName string, callerCap Capability, funcGrant
 			checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs)
 		}
 	case *ast.AssignStmt:
+		checkCapExpr(node.Target, callerName, callerCap, funcGrants, errs)
 		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs)
 	case *ast.IfStmt:
 		checkCapExpr(node.Cond, callerName, callerCap, funcGrants, errs)
@@ -102,6 +103,21 @@ func checkCapStmt(n ast.Node, callerName string, callerCap Capability, funcGrant
 		for _, s := range node.Body {
 			checkCapStmt(s, callerName, callerCap, funcGrants, errs)
 		}
+	case *ast.ForStmt:
+		if node.Start != nil {
+			checkCapExpr(node.Start, callerName, callerCap, funcGrants, errs)
+		}
+		if node.End != nil {
+			checkCapExpr(node.End, callerName, callerCap, funcGrants, errs)
+		}
+		if node.Iterable != nil {
+			checkCapExpr(node.Iterable, callerName, callerCap, funcGrants, errs)
+		}
+		for _, s := range node.Body {
+			checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+		}
+	case *ast.BreakStmt, *ast.ContinueStmt:
+		// No capability checking needed.
 	}
 }
 
@@ -125,5 +141,16 @@ func checkCapExpr(n ast.Node, callerName string, callerCap Capability, funcGrant
 		checkCapExpr(node.Operand, callerName, callerCap, funcGrants, errs)
 	case *ast.MemberExpr:
 		checkCapExpr(node.Object, callerName, callerCap, funcGrants, errs)
+	case *ast.StructLit:
+		for _, fi := range node.Fields {
+			checkCapExpr(fi.Value, callerName, callerCap, funcGrants, errs)
+		}
+	case *ast.ArrayLit:
+		for _, elem := range node.Elements {
+			checkCapExpr(elem, callerName, callerCap, funcGrants, errs)
+		}
+	case *ast.IndexExpr:
+		checkCapExpr(node.Target, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Index, callerName, callerCap, funcGrants, errs)
 	}
 }

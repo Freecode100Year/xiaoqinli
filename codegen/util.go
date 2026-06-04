@@ -60,11 +60,15 @@ func scanMutables(stmts []ast.Node, muts map[string]bool) {
 	for _, s := range stmts {
 		switch n := s.(type) {
 		case *ast.AssignStmt:
-			muts[n.Target] = true
+			if ident, ok := n.Target.(*ast.Ident); ok {
+				muts[ident.Name] = true
+			}
 		case *ast.IfStmt:
 			scanMutables(n.Then, muts)
 			scanMutables(n.Else, muts)
 		case *ast.WhileStmt:
+			scanMutables(n.Body, muts)
+		case *ast.ForStmt:
 			scanMutables(n.Body, muts)
 		}
 	}
@@ -124,6 +128,10 @@ func walkTypes(n ast.Node, fn func(ast.TypeExpr, string)) {
 			walkTypes(s, fn)
 		}
 	case *ast.WhileStmt:
+		for _, s := range node.Body {
+			walkTypes(s, fn)
+		}
+	case *ast.ForStmt:
 		for _, s := range node.Body {
 			walkTypes(s, fn)
 		}

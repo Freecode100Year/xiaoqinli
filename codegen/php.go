@@ -104,6 +104,16 @@ func (g *phpGen) emitNode(n ast.Node) error {
 		return g.emitIf(node)
 	case *ast.WhileStmt:
 		return g.emitWhile(node)
+	case *ast.ForStmt:
+		return g.emitForStmt(node)
+	case *ast.BreakStmt:
+		g.writeIndent()
+		g.writeln("break;")
+		return nil
+	case *ast.ContinueStmt:
+		g.writeIndent()
+		g.writeln("continue;")
+		return nil
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
@@ -200,7 +210,10 @@ func (g *phpGen) emitVarDecl(vd *ast.VarDecl) error {
 
 func (g *phpGen) emitAssign(as *ast.AssignStmt) error {
 	g.writeIndent()
-	g.write("$" + as.Target + " = ")
+	if err := g.emitExpr(as.Target); err != nil {
+		return err
+	}
+	g.write(" = ")
 	if err := g.emitExpr(as.Value); err != nil {
 		return err
 	}
@@ -247,6 +260,40 @@ func (g *phpGen) emitWhile(ws *ast.WhileStmt) error {
 	g.writeln(") {")
 	g.indent++
 	for _, s := range ws.Body {
+		if err := g.emitNode(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *phpGen) emitForStmt(fs *ast.ForStmt) error {
+	g.writeIndent()
+	switch fs.Form {
+	case "range":
+		g.write("for ($" + fs.Var + " = ")
+		if err := g.emitExpr(fs.Start); err != nil {
+			return err
+		}
+		g.write("; $" + fs.Var + " < ")
+		if err := g.emitExpr(fs.End); err != nil {
+			return err
+		}
+		g.writeln("; $" + fs.Var + "++) {")
+	case "each":
+		g.write("foreach (")
+		if err := g.emitExpr(fs.Iterable); err != nil {
+			return err
+		}
+		g.writeln(" as $" + fs.Var + ") {")
+	default:
+		return fmt.Errorf("XQL_E401: unknown ForStmt form %q", fs.Form)
+	}
+	g.indent++
+	for _, s := range fs.Body {
 		if err := g.emitNode(s); err != nil {
 			return err
 		}
