@@ -127,6 +127,10 @@ func walkTypes(n ast.Node, fn func(ast.TypeExpr, string)) {
 		for _, s := range node.Body {
 			walkTypes(s, fn)
 		}
+	case *ast.StructDecl:
+		for _, f := range node.Fields {
+			fn(f.Type, fmt.Sprintf("field '%s' of struct '%s'", f.Name, node.Name))
+		}
 	}
 }
 

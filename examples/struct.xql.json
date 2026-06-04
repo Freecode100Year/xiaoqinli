@@ -1,0 +1,64 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "StructDecl",
+      "name": "Point",
+      "fields": [
+        { "name": "x", "type": { "kind": "Int" } },
+        { "name": "y", "type": { "kind": "Int" } }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "p",
+          "type": { "kind": "Point" },
+          "value": {
+            "kind": "StructLit",
+            "typeName": "Point",
+            "fields": [
+              { "name": "x", "value": { "kind": "Literal", "valueType": "Int", "value": 3 } },
+              { "name": "y", "value": { "kind": "Literal", "valueType": "Int", "value": 5 } }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "MemberExpr",
+                "object": { "kind": "Ident", "name": "p" },
+                "field": "x"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "MemberExpr",
+                "object": { "kind": "Ident", "name": "p" },
+                "field": "y"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

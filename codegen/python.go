@@ -36,12 +36,19 @@ func GeneratePython(root ast.Node) ([]byte, error) {
 		g.writeln("if __name__ == \"__main__\":")
 		g.writeln("    main()")
 	}
-	return []byte(g.buf.String()), nil
+
+	var out strings.Builder
+	if g.needDataclass {
+		out.WriteString("from dataclasses import dataclass\n\n")
+	}
+	out.WriteString(g.buf.String())
+	return []byte(out.String()), nil
 }
 
 type pyGen struct {
-	buf    *strings.Builder
-	indent int
+	buf           *strings.Builder
+	indent        int
+	needDataclass bool
 }
 
 func (g *pyGen) write(s string)   { g.buf.WriteString(s) }
@@ -98,9 +105,26 @@ func (g *pyGen) emitNode(n ast.Node) error {
 		return g.emitWhile(node)
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
+	case *ast.StructDecl:
+		return g.emitStructDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *pyGen) emitStructDecl(sd *ast.StructDecl) error {
+	g.needDataclass = true
+	g.writeIndent()
+	g.writeln("@dataclass")
+	g.writeIndent()
+	g.writeln("class " + sd.Name + ":")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln(f.Name + ": " + typeToPython(f.Type))
+	}
+	g.indent--
+	return nil
 }
 
 func (g *pyGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
@@ -276,9 +300,26 @@ func (g *pyGen) emitExpr(n ast.Node) error {
 		}
 		g.write("." + node.Field)
 		return nil
+	case *ast.StructLit:
+		return g.emitStructLit(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *pyGen) emitStructLit(sl *ast.StructLit) error {
+	g.write(sl.TypeName + "(")
+	for i, f := range sl.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(f.Name + "=")
+		if err := g.emitExpr(f.Value); err != nil {
+			return err
+		}
+	}
+	g.write(")")
+	return nil
 }
 
 func (g *pyGen) emitCall(ce *ast.CallExpr) error {

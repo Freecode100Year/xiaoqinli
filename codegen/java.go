@@ -113,9 +113,24 @@ func (g *javaGen) emitNode(n ast.Node) error {
 		return g.emitWhile(node)
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
+	case *ast.StructDecl:
+		return g.emitStructDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *javaGen) emitStructDecl(sd *ast.StructDecl) error {
+	g.writeIndent()
+	g.write("static record " + sd.Name + "(")
+	for i, f := range sd.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(g.typeStr(f.Type) + " " + f.Name)
+	}
+	g.writeln(") {}")
+	return nil
 }
 
 func (g *javaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
@@ -278,9 +293,25 @@ func (g *javaGen) emitExpr(n ast.Node) error {
 		}
 		g.write("." + node.Field)
 		return nil
+	case *ast.StructLit:
+		return g.emitStructLit(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *javaGen) emitStructLit(sl *ast.StructLit) error {
+	g.write("new " + sl.TypeName + "(")
+	for i, f := range sl.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(f.Value); err != nil {
+			return err
+		}
+	}
+	g.write(")")
+	return nil
 }
 
 func (g *javaGen) emitCall(ce *ast.CallExpr) error {

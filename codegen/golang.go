@@ -134,6 +134,8 @@ func (g *goGen) emitNode(n ast.Node) error {
 		return g.emitWhileStmt(node)
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
+	case *ast.StructDecl:
+		return g.emitStructDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: cannot emit statement for node kind %s", n.Kind())
 	}
@@ -299,6 +301,8 @@ func (g *goGen) emitExpr(n ast.Node) error {
 		return nil
 	case *ast.MemberExpr:
 		return g.emitMemberExpr(node)
+	case *ast.StructLit:
+		return g.emitStructLit(node)
 	default:
 		return fmt.Errorf("XQL_E401: cannot emit expression for node kind %s", n.Kind())
 	}
@@ -370,6 +374,35 @@ func (g *goGen) emitLiteral(lit *ast.Literal) error {
 	default:
 		g.write(fmt.Sprintf("%v", lit.Value))
 	}
+	return nil
+}
+
+func (g *goGen) emitStructDecl(sd *ast.StructDecl) error {
+	g.writeIndent()
+	g.writeln("type " + sd.Name + " struct {")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln(f.Name + " " + typeToGo(f.Type))
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *goGen) emitStructLit(sl *ast.StructLit) error {
+	g.write(sl.TypeName + "{")
+	for i, f := range sl.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(f.Name + ": ")
+		if err := g.emitExpr(f.Value); err != nil {
+			return err
+		}
+	}
+	g.write("}")
 	return nil
 }
 

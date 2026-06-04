@@ -95,6 +95,20 @@ type ExprStmt struct {
 
 func (*ExprStmt) Kind() string { return "ExprStmt" }
 
+// StructField represents a field in a struct declaration.
+type StructField struct {
+	Name string   `json:"name"`
+	Type TypeExpr `json:"type"`
+}
+
+// StructDecl represents a struct type declaration.
+type StructDecl struct {
+	Name   string
+	Fields []StructField
+}
+
+func (*StructDecl) Kind() string { return "StructDecl" }
+
 // --- Expressions ---
 
 // BinaryExpr represents a binary operation.
@@ -145,6 +159,20 @@ type MemberExpr struct {
 
 func (*MemberExpr) Kind() string { return "MemberExpr" }
 
+// StructFieldInit represents a field initialization in a struct literal.
+type StructFieldInit struct {
+	Name  string
+	Value Node
+}
+
+// StructLit represents a struct literal expression.
+type StructLit struct {
+	TypeName string
+	Fields   []StructFieldInit
+}
+
+func (*StructLit) Kind() string { return "StructLit" }
+
 // ===================== JSON Parsing =====================
 
 // Parse parses .xql.json bytes into a typed AST tree.
@@ -178,6 +206,10 @@ func parseNode(raw map[string]interface{}) (Node, error) {
 		return parseWhileStmt(raw)
 	case "ExprStmt":
 		return parseExprStmt(raw)
+	case "StructDecl":
+		return parseStructDecl(raw)
+	case "StructLit":
+		return parseStructLit(raw)
 	case "BinaryExpr":
 		return parseBinaryExpr(raw)
 	case "UnaryExpr":
@@ -524,4 +556,62 @@ func parseMemberExpr(raw map[string]interface{}) (*MemberExpr, error) {
 	}
 	me.Object = obj
 	return me, nil
+}
+
+func parseStructDecl(raw map[string]interface{}) (*StructDecl, error) {
+	sd := &StructDecl{}
+	sd.Name, _ = raw["name"].(string)
+	if sd.Name == "" {
+		return nil, fmt.Errorf("XQL_E101: StructDecl missing 'name'")
+	}
+	if fields, ok := raw["fields"].([]interface{}); ok {
+		for _, f := range fields {
+			fm, ok := f.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("XQL_E101: StructDecl field is not an object")
+			}
+			sf := StructField{}
+			sf.Name, _ = fm["name"].(string)
+			if sf.Name == "" {
+				return nil, fmt.Errorf("XQL_E101: StructDecl field missing 'name'")
+			}
+			if t, ok := fm["type"]; ok {
+				te, err := parseTypeExpr(t)
+				if err != nil {
+					return nil, err
+				}
+				sf.Type = te
+			}
+			sd.Fields = append(sd.Fields, sf)
+		}
+	}
+	return sd, nil
+}
+
+func parseStructLit(raw map[string]interface{}) (*StructLit, error) {
+	sl := &StructLit{}
+	sl.TypeName, _ = raw["typeName"].(string)
+	if sl.TypeName == "" {
+		return nil, fmt.Errorf("XQL_E101: StructLit missing 'typeName'")
+	}
+	if fields, ok := raw["fields"].([]interface{}); ok {
+		for _, f := range fields {
+			fm, ok := f.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("XQL_E101: StructLit field is not an object")
+			}
+			fi := StructFieldInit{}
+			fi.Name, _ = fm["name"].(string)
+			if fi.Name == "" {
+				return nil, fmt.Errorf("XQL_E101: StructLit field missing 'name'")
+			}
+			val, err := parseChildNode(fm, "value")
+			if err != nil {
+				return nil, err
+			}
+			fi.Value = val
+			sl.Fields = append(sl.Fields, fi)
+		}
+	}
+	return sl, nil
 }

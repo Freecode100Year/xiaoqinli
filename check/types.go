@@ -29,14 +29,16 @@ var builtinFuncs = map[string]struct {
 // TypeChecker performs static type checking on a typed AST.
 type TypeChecker struct {
 	// funcTable maps function name to its declaration for cross-reference.
-	funcTable map[string]*ast.FunctionDecl
-	errors    []string
+	funcTable   map[string]*ast.FunctionDecl
+	structTable map[string]*ast.StructDecl
+	errors      []string
 }
 
 // NewTypeChecker creates a new TypeChecker.
 func NewTypeChecker() *TypeChecker {
 	return &TypeChecker{
-		funcTable: make(map[string]*ast.FunctionDecl),
+		funcTable:   make(map[string]*ast.FunctionDecl),
+		structTable: make(map[string]*ast.StructDecl),
 	}
 }
 
@@ -67,6 +69,8 @@ func (tc *TypeChecker) collectFunctions(n ast.Node) {
 		}
 	case *ast.FunctionDecl:
 		tc.funcTable[node.Name] = node
+	case *ast.StructDecl:
+		tc.structTable[node.Name] = node
 	}
 }
 
@@ -215,8 +219,48 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]string) string {
 		}
 		return ""
 	case *ast.MemberExpr:
-		tc.inferType(node.Object, scope)
+		objType := tc.inferType(node.Object, scope)
+		if sd, ok := tc.structTable[objType]; ok {
+			for _, f := range sd.Fields {
+				if f.Name == node.Field {
+					return f.Type.KindName
+				}
+			}
+			tc.addError(fmt.Sprintf("struct '%s' has no field '%s'", objType, node.Field))
+		}
 		return ""
+	case *ast.StructLit:
+		sd, ok := tc.structTable[node.TypeName]
+		if !ok {
+			tc.addError(fmt.Sprintf("unknown struct type '%s'", node.TypeName))
+			return node.TypeName
+		}
+		// Check field completeness and types.
+		provided := make(map[string]bool)
+		for _, fi := range node.Fields {
+			provided[fi.Name] = true
+			valType := tc.inferType(fi.Value, scope)
+			// Find expected type.
+			var expectedType string
+			for _, sf := range sd.Fields {
+				if sf.Name == fi.Name {
+					expectedType = sf.Type.KindName
+					break
+				}
+			}
+			if expectedType == "" {
+				tc.addError(fmt.Sprintf("struct '%s' has no field '%s'", node.TypeName, fi.Name))
+			} else if valType != "" && valType != expectedType {
+				tc.addError(fmt.Sprintf("struct '%s' field '%s': expected %s, got %s",
+					node.TypeName, fi.Name, expectedType, valType))
+			}
+		}
+		for _, sf := range sd.Fields {
+			if !provided[sf.Name] {
+				tc.addError(fmt.Sprintf("struct '%s' missing field '%s'", node.TypeName, sf.Name))
+			}
+		}
+		return node.TypeName
 	default:
 		return ""
 	}
@@ -370,6 +414,12 @@ func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]as
 		collectEffects(node.Right, seen, funcBodies, result, resolving)
 	case *ast.UnaryExpr:
 		collectEffects(node.Operand, seen, funcBodies, result, resolving)
+	case *ast.StructLit:
+		for _, fi := range node.Fields {
+			collectEffects(fi.Value, seen, funcBodies, result, resolving)
+		}
+	case *ast.MemberExpr:
+		collectEffects(node.Object, seen, funcBodies, result, resolving)
 	}
 }
 

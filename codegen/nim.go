@@ -19,6 +19,18 @@ func GenerateNim(root ast.Node) ([]byte, error) {
 
 	first := true
 	for _, d := range prog.Decls {
+		if sd, ok := d.(*ast.StructDecl); ok {
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitStructDecl(sd); err != nil {
+				return nil, err
+			}
+			first = false
+		}
+	}
+
+	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name == "main" {
 			continue
@@ -109,9 +121,23 @@ func (g *nimGen) emitNode(n ast.Node) error {
 		return g.emitWhile(node)
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
+	case *ast.StructDecl:
+		return g.emitStructDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *nimGen) emitStructDecl(sd *ast.StructDecl) error {
+	g.writeIndent()
+	g.writeln("type " + sd.Name + " = object")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln(f.Name + ": " + typeToNim(f.Type))
+	}
+	g.indent--
+	return nil
 }
 
 func (g *nimGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
@@ -294,9 +320,26 @@ func (g *nimGen) emitExpr(n ast.Node) error {
 		}
 		g.write("." + node.Field)
 		return nil
+	case *ast.StructLit:
+		return g.emitStructLit(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *nimGen) emitStructLit(sl *ast.StructLit) error {
+	g.write(sl.TypeName + "(")
+	for i, f := range sl.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(f.Name + ": ")
+		if err := g.emitExpr(f.Value); err != nil {
+			return err
+		}
+	}
+	g.write(")")
+	return nil
 }
 
 func (g *nimGen) emitCall(ce *ast.CallExpr) error {

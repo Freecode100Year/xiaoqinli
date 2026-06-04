@@ -98,9 +98,25 @@ func (g *zigGen) emitNode(n ast.Node) error {
 		return g.emitWhile(node)
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
+	case *ast.StructDecl:
+		return g.emitStructDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *zigGen) emitStructDecl(sd *ast.StructDecl) error {
+	g.writeIndent()
+	g.writeln("const " + sd.Name + " = struct {")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln(f.Name + ": " + typeToZig(f.Type) + ",")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("};")
+	return nil
 }
 
 func (g *zigGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
@@ -277,9 +293,26 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 		}
 		g.write("." + node.Field)
 		return nil
+	case *ast.StructLit:
+		return g.emitStructLit(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *zigGen) emitStructLit(sl *ast.StructLit) error {
+	g.write(sl.TypeName + "{ ")
+	for i, f := range sl.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write("." + f.Name + " = ")
+		if err := g.emitExpr(f.Value); err != nil {
+			return err
+		}
+	}
+	g.write(" }")
+	return nil
 }
 
 // exprIsString checks whether an expression evaluates to a String type.

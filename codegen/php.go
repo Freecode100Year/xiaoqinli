@@ -21,6 +21,15 @@ func GeneratePHP(root ast.Node) ([]byte, error) {
 	g.writeln("")
 
 	for _, d := range prog.Decls {
+		if sd, ok := d.(*ast.StructDecl); ok {
+			if err := g.emitStructDecl(sd); err != nil {
+				return nil, err
+			}
+			g.writeln("")
+		}
+	}
+
+	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name == "main" {
 			continue
@@ -97,9 +106,42 @@ func (g *phpGen) emitNode(n ast.Node) error {
 		return g.emitWhile(node)
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
+	case *ast.StructDecl:
+		return g.emitStructDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *phpGen) emitStructDecl(sd *ast.StructDecl) error {
+	g.writeIndent()
+	g.writeln("class " + sd.Name + " {")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln("public " + typeToPHP(f.Type) + " $" + f.Name + ";")
+	}
+	g.writeIndent()
+	g.write("public function __construct(")
+	for i, f := range sd.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(typeToPHP(f.Type) + " $" + f.Name)
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln("$this->" + f.Name + " = $" + f.Name + ";")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
 }
 
 func (g *phpGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
@@ -257,9 +299,25 @@ func (g *phpGen) emitExpr(n ast.Node) error {
 		}
 		g.write("->" + node.Field)
 		return nil
+	case *ast.StructLit:
+		return g.emitStructLit(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *phpGen) emitStructLit(sl *ast.StructLit) error {
+	g.write("new " + sl.TypeName + "(")
+	for i, f := range sl.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(f.Value); err != nil {
+			return err
+		}
+	}
+	g.write(")")
+	return nil
 }
 
 func (g *phpGen) emitCall(ce *ast.CallExpr) error {

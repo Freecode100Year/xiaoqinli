@@ -109,9 +109,25 @@ func (g *rsGen) emitNode(n ast.Node) error {
 		return g.emitWhile(node)
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
+	case *ast.StructDecl:
+		return g.emitStructDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *rsGen) emitStructDecl(sd *ast.StructDecl) error {
+	g.writeIndent()
+	g.writeln("struct " + sd.Name + " {")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln(f.Name + ": " + typeToRust(f.Type) + ",")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
 }
 
 func (g *rsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
@@ -340,9 +356,26 @@ func (g *rsGen) emitExpr(n ast.Node) error {
 		}
 		g.write("." + node.Field)
 		return nil
+	case *ast.StructLit:
+		return g.emitStructLit(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *rsGen) emitStructLit(sl *ast.StructLit) error {
+	g.write(sl.TypeName + " { ")
+	for i, f := range sl.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(f.Name + ": ")
+		if err := g.emitExpr(f.Value); err != nil {
+			return err
+		}
+	}
+	g.write(" }")
+	return nil
 }
 
 func (g *rsGen) emitCall(ce *ast.CallExpr) error {

@@ -141,6 +141,50 @@ const stringConcatProgram = `{
 	}]
 }`
 
+// structProgram tests struct declaration, construction, and field access
+const structProgram = `{
+	"kind": "Program",
+	"declarations": [
+		{
+			"kind": "StructDecl",
+			"name": "Point",
+			"fields": [
+				{"name": "x", "type": {"kind": "Int"}},
+				{"name": "y", "type": {"kind": "Int"}}
+			]
+		},
+		{
+			"kind": "FunctionDecl",
+			"name": "main",
+			"params": [],
+			"returnType": {"kind": "Void"},
+			"effects": ["state"],
+			"grant": ["io"],
+			"body": [
+				{
+					"kind": "VarDecl",
+					"name": "p",
+					"type": {"kind": "Point"},
+					"value": {
+						"kind": "StructLit",
+						"typeName": "Point",
+						"fields": [
+							{"name": "x", "value": {"kind": "Literal", "valueType": "Int", "value": 3}},
+							{"name": "y", "value": {"kind": "Literal", "valueType": "Int", "value": 5}}
+						]
+					}
+				},
+				{
+					"kind": "ExprStmt",
+					"expr": {"kind": "CallExpr", "callee": "println", "args": [
+						{"kind": "MemberExpr", "object": {"kind": "Ident", "name": "p"}, "field": "x"}
+					]}
+				}
+			]
+		}
+	]
+}`
+
 // helloProgram tests println with a string-returning function call
 const helloProgram = `{
 	"kind": "Program",
@@ -1011,6 +1055,49 @@ func TestGenerateJuliaStringConcat(t *testing.T) {
 	code := string(out)
 	if !strings.Contains(code, " * ") {
 		t.Errorf("Julia string concat should use '*', got:\n%s", code)
+	}
+}
+
+// --- Struct codegen ---
+
+func TestStructCodegenAll(t *testing.T) {
+	root := mustParse(t, structProgram)
+
+	type check struct {
+		target string
+		expect []string
+	}
+	cases := []check{
+		{"go", []string{"type Point struct", "x int", "Point{x: 3"}},
+		{"rust", []string{"struct Point", "x: i64", "Point {"}},
+		{"ts", []string{"interface Point", "x: number", "x: 3"}},
+		{"kotlin", []string{"data class Point", "val x: Long", "Point(x ="}},
+		{"swift", []string{"struct Point", "var x: Int", "Point(x:"}},
+		{"py", []string{"@dataclass", "class Point", "x: int", "Point(x="}},
+		{"java", []string{"record Point", "long x", "new Point("}},
+		{"csharp", []string{"record Point", "long x", "new Point("}},
+		{"dart", []string{"class Point", "final int x", "Point(x:"}},
+		{"lua", []string{"x = 3"}},
+		{"ruby", []string{"Point = Struct.new", "Point.new("}},
+		{"php", []string{"class Point", "public int $x", "new Point("}},
+		{"zig", []string{"const Point = struct", "x: i64", "Point{"}},
+		{"nim", []string{"type Point = object", "x: int64", "Point(x:"}},
+		{"julia", []string{"struct Point", "x::Int64", "Point("}},
+	}
+
+	for _, tc := range cases {
+		t.Run("struct_"+tc.target, func(t *testing.T) {
+			out, err := Generate(root, tc.target)
+			if err != nil {
+				t.Fatalf("Generate(%q): %v", tc.target, err)
+			}
+			code := string(out)
+			for _, s := range tc.expect {
+				if !strings.Contains(code, s) {
+					t.Errorf("%s output missing %q\n---\n%s", tc.target, s, code)
+				}
+			}
+		})
 	}
 }
 
