@@ -9,11 +9,18 @@ import (
 
 // GenerateZig produces Zig source code from the given typed AST.
 func GenerateZig(root ast.Node) ([]byte, error) {
-	g := &zigGen{buf: &strings.Builder{}}
+	g := &zigGen{buf: &strings.Builder{}, funcReturns: make(map[string]string)}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	// Collect function return types for format specifier inference.
+	for _, d := range prog.Decls {
+		if fd, ok := d.(*ast.FunctionDecl); ok {
+			g.funcReturns[fd.Name] = fd.ReturnType.KindName
+		}
 	}
 
 	for i, d := range prog.Decls {
@@ -34,10 +41,12 @@ func GenerateZig(root ast.Node) ([]byte, error) {
 }
 
 type zigGen struct {
-	buf     *strings.Builder
-	indent  int
-	muts    map[string]bool
-	needStd bool
+	buf       *strings.Builder
+	indent    int
+	muts      map[string]bool
+	needStd   bool
+	scope     map[string]string // variable/param name → type kind
+	funcReturns map[string]string // function name → return type kind
 }
 
 func (g *zigGen) write(s string)   { g.buf.WriteString(s) }
@@ -96,6 +105,10 @@ func (g *zigGen) emitNode(n ast.Node) error {
 
 func (g *zigGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.muts = collectMutables(fd.Body)
+	g.scope = make(map[string]string)
+	for _, p := range fd.Params {
+		g.scope[p.Name] = p.Type.KindName
+	}
 
 	g.writeIndent()
 	if fd.Name == "main" {
@@ -137,6 +150,9 @@ func (g *zigGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *zigGen) emitVarDecl(vd *ast.VarDecl) error {
+	if g.scope != nil {
+		g.scope[vd.Name] = vd.Type.KindName
+	}
 	g.writeIndent()
 	if g.muts[vd.Name] {
 		g.write("var ")
@@ -266,11 +282,54 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 	}
 }
 
+// exprIsString checks whether an expression evaluates to a String type.
+func (g *zigGen) exprIsString(n ast.Node) bool {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return node.ValueType == "String"
+	case *ast.Ident:
+		if g.scope != nil {
+			return g.scope[node.Name] == "String"
+		}
+		return false
+	case *ast.CallExpr:
+		if node.Callee == "sprintf" {
+			return true
+		}
+		if rt, ok := g.funcReturns[node.Callee]; ok {
+			return rt == "String"
+		}
+		return false
+	case *ast.BinaryExpr:
+		if node.Op == "+" {
+			return g.exprIsString(node.Left) || g.exprIsString(node.Right)
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+// zigFmtSpec returns "{s}" for string-typed expressions, "{}" for others.
+func (g *zigGen) zigFmtSpec(n ast.Node) string {
+	if g.exprIsString(n) {
+		return "{s}"
+	}
+	return "{}"
+}
+
 func (g *zigGen) emitCall(ce *ast.CallExpr) error {
 	switch ce.Callee {
 	case "println":
 		g.needStd = true
-		g.write(`std.debug.print("{}\n", .{`)
+		g.write(`std.debug.print("`)
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(" ")
+			}
+			g.write(g.zigFmtSpec(arg))
+		}
+		g.write(`\n", .{`)
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
@@ -283,7 +342,11 @@ func (g *zigGen) emitCall(ce *ast.CallExpr) error {
 		return nil
 	case "printf":
 		g.needStd = true
-		g.write(`std.debug.print("{}", .{`)
+		g.write(`std.debug.print("`)
+		if len(ce.Args) > 0 {
+			g.write(g.zigFmtSpec(ce.Args[0]))
+		}
+		g.write(`", .{`)
 		if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
@@ -293,7 +356,11 @@ func (g *zigGen) emitCall(ce *ast.CallExpr) error {
 		return nil
 	case "sprintf":
 		g.needStd = true
-		g.write(`std.fmt.comptimePrint("{}", .{`)
+		g.write(`std.fmt.comptimePrint("`)
+		if len(ce.Args) > 0 {
+			g.write(g.zigFmtSpec(ce.Args[0]))
+		}
+		g.write(`", .{`)
 		if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err

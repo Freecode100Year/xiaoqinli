@@ -9,11 +9,17 @@ import (
 
 // GenerateRust produces Rust source code from the given typed AST.
 func GenerateRust(root ast.Node) ([]byte, error) {
-	g := &rsGen{buf: &strings.Builder{}}
+	g := &rsGen{buf: &strings.Builder{}, funcReturns: make(map[string]string)}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	for _, d := range prog.Decls {
+		if fd, ok := d.(*ast.FunctionDecl); ok {
+			g.funcReturns[fd.Name] = fd.ReturnType.KindName
+		}
 	}
 
 	for i, d := range prog.Decls {
@@ -29,9 +35,12 @@ func GenerateRust(root ast.Node) ([]byte, error) {
 }
 
 type rsGen struct {
-	buf    *strings.Builder
-	indent int
-	muts   map[string]bool
+	buf         *strings.Builder
+	indent      int
+	muts        map[string]bool
+	scope       map[string]string // variable/param name → type kind
+	funcReturns map[string]string // function name → return type kind
+	currentFunc *ast.FunctionDecl
 }
 
 func (g *rsGen) write(s string)   { g.buf.WriteString(s) }
@@ -39,12 +48,23 @@ func (g *rsGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') 
 func (g *rsGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
 func typeToRust(t ast.TypeExpr) string {
+	return typeToRustInner(t, false)
+}
+
+func typeToRustParam(t ast.TypeExpr) string {
+	return typeToRustInner(t, true)
+}
+
+func typeToRustInner(t ast.TypeExpr, param bool) string {
 	switch t.KindName {
 	case "Int":
 		return "i64"
 	case "Float":
 		return "f64"
 	case "String":
+		if param {
+			return "&str"
+		}
 		return "String"
 	case "Bool":
 		return "bool"
@@ -96,6 +116,11 @@ func (g *rsGen) emitNode(n ast.Node) error {
 
 func (g *rsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.muts = collectMutables(fd.Body)
+	g.currentFunc = fd
+	g.scope = make(map[string]string)
+	for _, p := range fd.Params {
+		g.scope[p.Name] = p.Type.KindName
+	}
 
 	g.writeIndent()
 	g.write("fn " + fd.Name + "(")
@@ -103,7 +128,7 @@ func (g *rsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name + ": " + typeToRust(p.Type))
+		g.write(p.Name + ": " + typeToRustParam(p.Type))
 	}
 	g.write(")")
 
@@ -132,7 +157,12 @@ func (g *rsGen) emitReturn(rs *ast.ReturnStmt) error {
 		return nil
 	}
 	g.write("return ")
-	if err := g.emitExpr(rs.Value); err != nil {
+	needsOwned := g.currentFunc != nil && g.currentFunc.ReturnType.KindName == "String"
+	if needsOwned {
+		if err := g.emitOwnedExpr(rs.Value); err != nil {
+			return err
+		}
+	} else if err := g.emitExpr(rs.Value); err != nil {
 		return err
 	}
 	g.writeln(";")
@@ -140,6 +170,9 @@ func (g *rsGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *rsGen) emitVarDecl(vd *ast.VarDecl) error {
+	if g.scope != nil {
+		g.scope[vd.Name] = vd.Type.KindName
+	}
 	g.writeIndent()
 	if g.muts[vd.Name] {
 		g.write("let mut ")
@@ -153,7 +186,11 @@ func (g *rsGen) emitVarDecl(vd *ast.VarDecl) error {
 	}
 	if vd.Value != nil {
 		g.write(" = ")
-		if err := g.emitExpr(vd.Value); err != nil {
+		if vd.Type.KindName == "String" {
+			if err := g.emitOwnedExpr(vd.Value); err != nil {
+				return err
+			}
+		} else if err := g.emitExpr(vd.Value); err != nil {
 			return err
 		}
 	}
@@ -230,6 +267,40 @@ func (g *rsGen) emitExprStmt(es *ast.ExprStmt) error {
 	return nil
 }
 
+// exprIsStrLiteral checks if the top-level expression is a bare string literal (&str).
+func exprIsStrLiteral(n ast.Node) bool {
+	if lit, ok := n.(*ast.Literal); ok {
+		return lit.ValueType == "String"
+	}
+	return false
+}
+
+// emitOwnedExpr emits an expression, converting &str literals to owned String via .to_string().
+func (g *rsGen) emitOwnedExpr(n ast.Node) error {
+	if exprIsStrLiteral(n) {
+		if err := g.emitExpr(n); err != nil {
+			return err
+		}
+		g.write(".to_string()")
+		return nil
+	}
+	return g.emitExpr(n)
+}
+
+// isStrRef checks if an expression is already a &str reference (e.g., a function parameter).
+func (g *rsGen) isStrRef(n ast.Node) bool {
+	if ident, ok := n.(*ast.Ident); ok {
+		if g.currentFunc != nil {
+			for _, p := range g.currentFunc.Params {
+				if p.Name == ident.Name && p.Type.KindName == "String" {
+					return true // param String → &str, already a reference
+				}
+			}
+		}
+	}
+	return false
+}
+
 // --- Expression emitters ---
 
 func (g *rsGen) emitExpr(n ast.Node) error {
@@ -242,11 +313,15 @@ func (g *rsGen) emitExpr(n ast.Node) error {
 	case *ast.BinaryExpr:
 		isStrConcat := node.Op == "+" && (containsStringExpr(node.Left) || containsStringExpr(node.Right))
 		g.write("(")
-		if err := g.emitExpr(node.Left); err != nil {
+		if isStrConcat {
+			if err := g.emitOwnedExpr(node.Left); err != nil {
+				return err
+			}
+		} else if err := g.emitExpr(node.Left); err != nil {
 			return err
 		}
 		g.write(" " + node.Op + " ")
-		if isStrConcat {
+		if isStrConcat && !g.isStrRef(node.Right) {
 			g.write("&")
 		}
 		if err := g.emitExpr(node.Right); err != nil {
@@ -316,7 +391,7 @@ func (g *rsGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("String::from(%q)", s))
+		g.write(fmt.Sprintf("%q", s))
 	case "Int":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%d", int64(f)))

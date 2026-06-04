@@ -141,6 +141,43 @@ const stringConcatProgram = `{
 	}]
 }`
 
+// helloProgram tests println with a string-returning function call
+const helloProgram = `{
+	"kind": "Program",
+	"declarations": [
+		{
+			"kind": "FunctionDecl",
+			"name": "greet",
+			"params": [{"name": "name", "type": {"kind": "String"}}],
+			"returnType": {"kind": "String"},
+			"effects": ["pure"],
+			"grant": [],
+			"body": [{
+				"kind": "ReturnStmt",
+				"value": {"kind": "BinaryExpr", "op": "+",
+					"left": {"kind": "Literal", "valueType": "String", "value": "Hello, "},
+					"right": {"kind": "Ident", "name": "name"}}
+			}]
+		},
+		{
+			"kind": "FunctionDecl",
+			"name": "main",
+			"params": [],
+			"returnType": {"kind": "Void"},
+			"effects": [],
+			"grant": [],
+			"body": [{
+				"kind": "ExprStmt",
+				"expr": {"kind": "CallExpr", "callee": "println", "args": [
+					{"kind": "CallExpr", "callee": "greet", "args": [
+						{"kind": "Literal", "valueType": "String", "value": "World"}
+					]}
+				]}
+			}]
+		}
+	]
+}`
+
 // ifElseProgram tests if/else code generation
 const ifElseProgram = `{
 	"kind": "Program",
@@ -247,8 +284,12 @@ func TestGenerateRustStringConcat(t *testing.T) {
 		t.Fatalf("GenerateRust: %v", err)
 	}
 	code := string(out)
-	if !strings.Contains(code, "+ &") {
-		t.Errorf("Rust string concat should use '+ &' for rhs, got:\n%s", code)
+	// param String → &str, so concat uses "+" directly (no extra &)
+	if !strings.Contains(code, "name: &str") {
+		t.Errorf("Rust String param should be &str, got:\n%s", code)
+	}
+	if !strings.Contains(code, `"Hello, ".to_string() + name`) {
+		t.Errorf("Rust string concat should use .to_string() on lhs + bare &str param, got:\n%s", code)
 	}
 }
 
@@ -829,6 +870,29 @@ func TestGenerateZigStringConcat(t *testing.T) {
 	}
 }
 
+func TestGenerateZigStringFmtSpec(t *testing.T) {
+	// hello.xql.json pattern: println(greet("World")) where greet returns String
+	root := mustParse(t, helloProgram)
+	out, err := GenerateZig(root)
+	if err != nil {
+		t.Fatalf("GenerateZig: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, `{s}`) {
+		t.Errorf("Zig should use {s} for string args in println, got:\n%s", code)
+	}
+	// Integer printing should still use {}
+	root2 := mustParse(t, addFibMain)
+	out2, err := GenerateZig(root2)
+	if err != nil {
+		t.Fatalf("GenerateZig: %v", err)
+	}
+	code2 := string(out2)
+	if !strings.Contains(code2, `{}\n`) {
+		t.Errorf("Zig should use {} for int args in println, got:\n%s", code2)
+	}
+}
+
 // --- Nim codegen ---
 
 func TestGenerateNim(t *testing.T) {
@@ -947,6 +1011,48 @@ func TestGenerateJuliaStringConcat(t *testing.T) {
 	code := string(out)
 	if !strings.Contains(code, " * ") {
 		t.Errorf("Julia string concat should use '*', got:\n%s", code)
+	}
+}
+
+// --- Result type rejection ---
+
+func TestResultTypeRejection(t *testing.T) {
+	// Program using Result<Int> return type
+	src := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "tryParse",
+			"params": [{"name": "s", "type": {"kind": "String"}}],
+			"returnType": {"kind": "Result", "okType": {"kind": "Int"}},
+			"effects": [],
+			"grant": [],
+			"body": [{
+				"kind": "ReturnStmt",
+				"value": {"kind": "Literal", "valueType": "Int", "value": 42}
+			}]
+		}]
+	}`
+	root := mustParse(t, src)
+
+	// These targets should reject Result
+	rejectTargets := []string{"ts", "dart", "nim", "julia", "lua", "ruby"}
+	for _, tgt := range rejectTargets {
+		_, err := Generate(root, tgt)
+		if err == nil {
+			t.Errorf("Generate(%q) should reject Result type, but succeeded", tgt)
+		} else if !strings.Contains(err.Error(), "XQL_E402") {
+			t.Errorf("Generate(%q) error should be XQL_E402, got: %v", tgt, err)
+		}
+	}
+
+	// These targets should accept Result
+	acceptTargets := []string{"go", "rust", "kotlin", "swift", "py", "java", "csharp", "php", "zig"}
+	for _, tgt := range acceptTargets {
+		_, err := Generate(root, tgt)
+		if err != nil {
+			t.Errorf("Generate(%q) should accept Result type, got error: %v", tgt, err)
+		}
 	}
 }
 

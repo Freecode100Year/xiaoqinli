@@ -8,6 +8,9 @@ import (
 
 // Generate dispatches code generation to the appropriate backend by target name.
 func Generate(root ast.Node, target string) ([]byte, error) {
+	if err := validateTypesForTarget(root, target); err != nil {
+		return nil, err
+	}
 	switch target {
 	case "go":
 		return GenerateGo(root)
@@ -63,6 +66,66 @@ func scanMutables(stmts []ast.Node, muts map[string]bool) {
 			scanMutables(n.Else, muts)
 		case *ast.WhileStmt:
 			scanMutables(n.Body, muts)
+		}
+	}
+}
+
+// unsupportedResultTargets lists targets that silently map Result<T> to just T,
+// losing error-handling semantics. These should reject Result types explicitly.
+var unsupportedResultTargets = map[string]bool{
+	"ts":     true,
+	"dart":   true,
+	"nim":    true,
+	"julia":  true,
+	"lua":    true,
+	"ruby":   true,
+}
+
+// validateTypesForTarget walks the AST and returns an error if any type is
+// unsupported by the target backend.
+func validateTypesForTarget(root ast.Node, target string) error {
+	if !unsupportedResultTargets[target] {
+		return nil
+	}
+	var err error
+	walkTypes(root, func(t ast.TypeExpr, context string) {
+		if err != nil {
+			return
+		}
+		if t.KindName == "Result" {
+			err = fmt.Errorf("XQL_E402: target %q does not support Result<T> type (used in %s)", target, context)
+		}
+	})
+	return err
+}
+
+// walkTypes traverses the AST and calls fn for each TypeExpr found.
+func walkTypes(n ast.Node, fn func(ast.TypeExpr, string)) {
+	switch node := n.(type) {
+	case *ast.Program:
+		for _, d := range node.Decls {
+			walkTypes(d, fn)
+		}
+	case *ast.FunctionDecl:
+		for _, p := range node.Params {
+			fn(p.Type, fmt.Sprintf("param '%s' of function '%s'", p.Name, node.Name))
+		}
+		fn(node.ReturnType, fmt.Sprintf("return type of function '%s'", node.Name))
+		for _, s := range node.Body {
+			walkTypes(s, fn)
+		}
+	case *ast.VarDecl:
+		fn(node.Type, fmt.Sprintf("variable '%s'", node.Name))
+	case *ast.IfStmt:
+		for _, s := range node.Then {
+			walkTypes(s, fn)
+		}
+		for _, s := range node.Else {
+			walkTypes(s, fn)
+		}
+	case *ast.WhileStmt:
+		for _, s := range node.Body {
+			walkTypes(s, fn)
 		}
 	}
 }
