@@ -95,6 +95,28 @@ function 'main' calls 'writeFile' but lacks required capabilities: [io, filesyst
 
 **Fix:** Ensure the AST structure matches the expected shape. Top-level nodes should only contain `FunctionDecl` inside `Program`.
 
+### XQL_E402: Unsupported type for target
+
+**Cause:** The AST uses a type that the target language cannot cleanly map.
+
+**Examples:**
+- `XQL_E402: C++ target does not support Result<T>`
+- `XQL_E402: target "lua" does not support Result<T> type`
+
+**Fix:** Remove or replace the unsupported type, or choose a different target that supports it.
+
+### XQL_E403: MQL unsupported feature
+
+**Cause:** The AST uses a language feature that MQL4/MQL5 does not support. MQL targets only generate script-mode skeletons (`OnStart` entry point, `Print` for output). They do not support Map, Option, Result types or for-each loops.
+
+**Examples:**
+- `XQL_E403: MQL does not support Map type`
+- `XQL_E403: MQL does not support Option type`
+- `XQL_E403: MQL does not support Result type`
+- `XQL_E403: MQL does not support for-each loops`
+
+**Fix:** Remove the unsupported type or feature from the AST before targeting MQL. Use `Array<T>` with index-based for-range loops instead of for-each.
+
 ---
 
 ## General Debugging Tips

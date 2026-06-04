@@ -45,6 +45,12 @@ func TestRoundTrip(t *testing.T) {
 			compiler: "node",
 			run:      runTS,
 		},
+		{
+			target:   "cpp",
+			ext:      ".cpp",
+			compiler: "g++",
+			run:      runCpp,
+		},
 	}
 
 	for _, tc := range cases {
@@ -107,6 +113,25 @@ func runRust(t *testing.T, path string) string {
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("rust binary failed: %v\n%s", err, out)
+	}
+	return string(out)
+}
+
+func runCpp(t *testing.T, path string) string {
+	t.Helper()
+	dir := filepath.Dir(path)
+	bin := filepath.Join(dir, "main.exe")
+
+	cmd := exec.Command("g++", "-std=c++17", path, "-o", bin)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("g++ failed: %v\n%s", err, out)
+	}
+
+	cmd = exec.Command(bin)
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("cpp binary failed: %v\n%s", err, out)
 	}
 	return string(out)
 }

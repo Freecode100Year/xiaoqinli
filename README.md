@@ -1,10 +1,10 @@
 # Xiaoqinli (xql)
 
-**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out — 15 languages, single Go binary, zero dependencies.
+**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out — 18 languages, single Go binary, zero dependencies.
 
 ```
   .xql.json  ──▶  Type Check  ──▶  Effect Inference  ──▶  Capability Enforcement  ──▶  Source Code
-  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (15 targets)
+  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (18 targets)
 ```
 
 AI agents write structured `.xql.json` directly — no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
@@ -17,6 +17,7 @@ AI agents write structured `.xql.json` directly — no parser, no syntax errors.
 | Rust | `rust` | yes |
 | TypeScript | `ts` | yes |
 | Python | `py` | yes |
+| C++ | `cpp` | yes |
 | Kotlin | `kotlin` | — |
 | Swift | `swift` | — |
 | Java | `java` | — |
@@ -28,6 +29,10 @@ AI agents write structured `.xql.json` directly — no parser, no syntax errors.
 | Zig | `zig` | — |
 | Nim | `nim` | — |
 | Julia | `julia` | — |
+| MQL4 | `mql4` | no* |
+| MQL5 | `mql5` | no* |
+
+> \* **MQL4/MQL5 limitations:** Script mode only (`OnStart` entry point). Generates language skeleton — no trading API (`OrderSend`, `CTrade`, `OnTick`, `OnCalculate`). Cannot be CI-verified (MetaEditor compiler is closed-source). Map, Option, and Result types are not supported and will emit `XQL_E403`.
 
 ## Quick Start
 
@@ -161,15 +166,16 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 
 ## Type System
 
-| XQL Kind | Go | Rust | TypeScript | Python | Kotlin | Swift |
-|----------|-----|------|------------|--------|--------|-------|
-| `Int` | `int` | `i64` | `number` | `int` | `Long` | `Int` |
-| `Float` | `float64` | `f64` | `number` | `float` | `Double` | `Double` |
-| `String` | `string` | `String` | `string` | `str` | `String` | `String` |
-| `Bool` | `bool` | `bool` | `boolean` | `bool` | `Boolean` | `Bool` |
-| `Void` | — | — | `void` | `None` | `Unit` | — |
-| `Array<T>` | `[]T` | `Vec<T>` | `T[]` | `list[T]` | `List<T>` | `[T]` |
-| `Option<T>` | `*T` | `Option<T>` | `T \| null` | `Optional[T]` | `T?` | `T?` |
+| XQL Kind | Go | Rust | TypeScript | Python | C++ | MQL4/5 |
+|----------|-----|------|------------|--------|-----|--------|
+| `Int` | `int` | `i64` | `number` | `int` | `long` | `long` |
+| `Float` | `float64` | `f64` | `number` | `float` | `double` | `double` |
+| `String` | `string` | `String` | `string` | `str` | `std::string` | `string` |
+| `Bool` | `bool` | `bool` | `boolean` | `bool` | `bool` | `bool` |
+| `Void` | — | — | `void` | `None` | `void` | `void` |
+| `Array<T>` | `[]T` | `Vec<T>` | `T[]` | `list[T]` | `std::vector<T>` | `T[]` |
+| `Option<T>` | `*T` | `Option<T>` | `T \| null` | `Optional[T]` | `std::optional<T>` | E403 |
+| `Map<K,V>` | `map[K]V` | `HashMap<K,V>` | `Map<K,V>` | `dict[K,V]` | `std::unordered_map<K,V>` | E403 |
 
 ## .xql.json Node Reference
 
@@ -269,7 +275,7 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 
 ```
 xiaoqinli/
-  main.go                    CLI + version (2.3.0)
+  main.go                    CLI + version (2.4.0)
   ast/
     nodes.go                 AST node definitions + JSON parser
     hash.go                  Content-addressable hashing
@@ -278,9 +284,11 @@ xiaoqinli/
     capability.go            Capability checker (@grant)
     check.go                 RunAll orchestrator
   codegen/
-    golang.go ... julia.go   15 language backends
+    golang.go ... julia.go   15 general-purpose backends
+    cpp.go                   C++ backend (C++17, auto #include)
+    mql.go                   MQL4/MQL5 shared backend (script mode)
     util.go                  Generate() dispatcher + shared utilities
-    codegen_test.go          Tests across all 15 backends
+    codegen_test.go          Tests across all 18 backends
     roundtrip_test.go        Compile-and-run verification
   server/
     mcp.go                   MCP server (stdio + streamable HTTP)

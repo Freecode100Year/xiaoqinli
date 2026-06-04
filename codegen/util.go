@@ -42,6 +42,12 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateNim(root)
 	case "julia":
 		return GenerateJulia(root)
+	case "cpp":
+		return GenerateCpp(root)
+	case "mql4":
+		return GenerateMQL4(root)
+	case "mql5":
+		return GenerateMQL5(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}

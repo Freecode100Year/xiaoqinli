@@ -1,0 +1,518 @@
+package codegen
+
+import (
+	"fmt"
+	"strings"
+
+	"xiaoqinli/ast"
+)
+
+// GenerateCpp produces C++17 source code from the given typed AST.
+// Structs are emitted before functions. The main function is wrapped
+// with int main() { ...; return 0; }. Includes are deduced from types used.
+func GenerateCpp(root ast.Node) ([]byte, error) {
+	g := &cppGen{buf: &strings.Builder{}}
+
+	prog, ok := root.(*ast.Program)
+	if !ok {
+		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	// Separate structs from functions so structs come first.
+	var structs []*ast.StructDecl
+	var others []ast.Node
+	for _, d := range prog.Decls {
+		if sd, ok := d.(*ast.StructDecl); ok {
+			structs = append(structs, sd)
+		} else {
+			others = append(others, d)
+		}
+	}
+
+	// Emit structs first.
+	for i, sd := range structs {
+		if i > 0 {
+			g.writeln("")
+		}
+		if err := g.emitStructDecl(sd); err != nil {
+			return nil, err
+		}
+	}
+	if len(structs) > 0 && len(others) > 0 {
+		g.writeln("")
+	}
+
+	// Emit functions.
+	for i, d := range others {
+		if i > 0 {
+			g.writeln("")
+		}
+		if err := g.emitNode(d); err != nil {
+			return nil, err
+		}
+	}
+
+	// Build final output with includes prepended.
+	var out strings.Builder
+	includes := g.collectIncludes()
+	for _, inc := range includes {
+		out.WriteString("#include " + inc + "\n")
+	}
+	if len(includes) > 0 {
+		out.WriteString("\n")
+	}
+	out.WriteString(g.buf.String())
+
+	return []byte(out.String()), nil
+}
+
+type cppGen struct {
+	buf       *strings.Builder
+	indent    int
+	muts      map[string]bool
+	needStr   bool // <string>
+	needVec   bool // <vector>
+	needOpt   bool // <optional>
+	needMap   bool // <unordered_map>
+}
+
+func (g *cppGen) write(s string)   { g.buf.WriteString(s) }
+func (g *cppGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
+func (g *cppGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+
+// collectIncludes returns the sorted list of required #include directives.
+func (g *cppGen) collectIncludes() []string {
+	var incs []string
+	incs = append(incs, "<iostream>")
+	if g.needStr {
+		incs = append(incs, "<string>")
+	}
+	if g.needVec {
+		incs = append(incs, "<vector>")
+	}
+	if g.needOpt {
+		incs = append(incs, "<optional>")
+	}
+	if g.needMap {
+		incs = append(incs, "<unordered_map>")
+	}
+	return incs
+}
+
+func (g *cppGen) typeStr(t ast.TypeExpr) string {
+	switch t.KindName {
+	case "Int":
+		return "long"
+	case "Float":
+		return "double"
+	case "String":
+		g.needStr = true
+		return "std::string"
+	case "Bool":
+		return "bool"
+	case "Void":
+		return "void"
+	case "Array":
+		g.needVec = true
+		if t.Elem != nil {
+			return "std::vector<" + g.typeStr(*t.Elem) + ">"
+		}
+		return "std::vector<int>"
+	case "Option":
+		g.needOpt = true
+		if t.Elem != nil {
+			return "std::optional<" + g.typeStr(*t.Elem) + ">"
+		}
+		return "std::optional<int>"
+	case "Map":
+		g.needMap = true
+		k := "int"
+		v := "int"
+		if t.KeyType != nil {
+			k = g.typeStr(*t.KeyType)
+		}
+		if t.Elem != nil {
+			v = g.typeStr(*t.Elem)
+		}
+		return "std::unordered_map<" + k + ", " + v + ">"
+	case "Result":
+		return "" // handled as error
+	default:
+		return t.KindName
+	}
+}
+
+// --- Node emitters ---
+
+func (g *cppGen) emitNode(n ast.Node) error {
+	switch node := n.(type) {
+	case *ast.FunctionDecl:
+		return g.emitFunctionDecl(node)
+	case *ast.ReturnStmt:
+		return g.emitReturn(node)
+	case *ast.VarDecl:
+		return g.emitVarDecl(node)
+	case *ast.AssignStmt:
+		return g.emitAssign(node)
+	case *ast.IfStmt:
+		return g.emitIf(node)
+	case *ast.WhileStmt:
+		return g.emitWhile(node)
+	case *ast.ForStmt:
+		return g.emitForStmt(node)
+	case *ast.BreakStmt:
+		g.writeIndent()
+		g.writeln("break;")
+		return nil
+	case *ast.ContinueStmt:
+		g.writeIndent()
+		g.writeln("continue;")
+		return nil
+	case *ast.ExprStmt:
+		return g.emitExprStmt(node)
+	case *ast.StructDecl:
+		return g.emitStructDecl(node)
+	default:
+		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
+	}
+}
+
+func (g *cppGen) emitStructDecl(sd *ast.StructDecl) error {
+	g.writeIndent()
+	g.writeln("struct " + sd.Name + " {")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln(g.typeStr(f.Type) + " " + f.Name + ";")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("};")
+	return nil
+}
+
+func (g *cppGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.muts = collectMutables(fd.Body)
+
+	// Check for Result return type.
+	if fd.ReturnType.KindName == "Result" {
+		return fmt.Errorf("XQL_E402: C++ target does not support Result<T>")
+	}
+
+	g.writeIndent()
+	if fd.Name == "main" {
+		g.writeln("int main() {")
+	} else {
+		rt := g.typeStr(fd.ReturnType)
+		g.write(rt + " " + fd.Name + "(")
+		for i, p := range fd.Params {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.write(g.typeStr(p.Type) + " " + p.Name)
+		}
+		g.writeln(") {")
+	}
+
+	g.indent++
+	for _, stmt := range fd.Body {
+		if err := g.emitNode(stmt); err != nil {
+			return err
+		}
+	}
+
+	// For main, emit return 0.
+	if fd.Name == "main" {
+		g.writeIndent()
+		g.writeln("return 0;")
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *cppGen) emitReturn(rs *ast.ReturnStmt) error {
+	g.writeIndent()
+	if rs.Value == nil {
+		g.writeln("return;")
+		return nil
+	}
+	g.write("return ")
+	if err := g.emitExpr(rs.Value); err != nil {
+		return err
+	}
+	g.writeln(";")
+	return nil
+}
+
+func (g *cppGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.writeIndent()
+	g.write(g.typeStr(vd.Type) + " " + vd.Name)
+	if vd.Value != nil {
+		g.write(" = ")
+		if err := g.emitExpr(vd.Value); err != nil {
+			return err
+		}
+	}
+	g.writeln(";")
+	return nil
+}
+
+func (g *cppGen) emitAssign(as *ast.AssignStmt) error {
+	g.writeIndent()
+	if err := g.emitExpr(as.Target); err != nil {
+		return err
+	}
+	g.write(" = ")
+	if err := g.emitExpr(as.Value); err != nil {
+		return err
+	}
+	g.writeln(";")
+	return nil
+}
+
+func (g *cppGen) emitIf(is *ast.IfStmt) error {
+	g.writeIndent()
+	g.write("if (")
+	if err := g.emitExpr(is.Cond); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, s := range is.Then {
+		if err := g.emitNode(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+
+	if len(is.Else) > 0 {
+		g.writeln("} else {")
+		g.indent++
+		for _, s := range is.Else {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+	}
+	g.writeln("}")
+	return nil
+}
+
+func (g *cppGen) emitWhile(ws *ast.WhileStmt) error {
+	g.writeIndent()
+	g.write("while (")
+	if err := g.emitExpr(ws.Cond); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, s := range ws.Body {
+		if err := g.emitNode(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *cppGen) emitForStmt(fs *ast.ForStmt) error {
+	g.writeIndent()
+	switch fs.Form {
+	case "range":
+		g.write("for (long " + fs.Var + " = ")
+		if err := g.emitExpr(fs.Start); err != nil {
+			return err
+		}
+		g.write("; " + fs.Var + " < ")
+		if err := g.emitExpr(fs.End); err != nil {
+			return err
+		}
+		g.write("; " + fs.Var + "++)")
+	case "each":
+		g.write("for (const auto& " + fs.Var + " : ")
+		if err := g.emitExpr(fs.Iterable); err != nil {
+			return err
+		}
+		g.write(")")
+	default:
+		return fmt.Errorf("XQL_E401: unknown ForStmt form %q", fs.Form)
+	}
+	g.writeln(" {")
+	g.indent++
+	for _, s := range fs.Body {
+		if err := g.emitNode(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *cppGen) emitExprStmt(es *ast.ExprStmt) error {
+	g.writeIndent()
+	if err := g.emitExpr(es.Expr); err != nil {
+		return err
+	}
+	g.writeln(";")
+	return nil
+}
+
+// --- Expression emitters ---
+
+func (g *cppGen) emitExpr(n ast.Node) error {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return g.emitLiteral(node)
+	case *ast.Ident:
+		g.write(node.Name)
+		return nil
+	case *ast.BinaryExpr:
+		g.write("(")
+		if err := g.emitExpr(node.Left); err != nil {
+			return err
+		}
+		g.write(" " + node.Op + " ")
+		if err := g.emitExpr(node.Right); err != nil {
+			return err
+		}
+		g.write(")")
+		return nil
+	case *ast.UnaryExpr:
+		g.write(node.Op)
+		return g.emitExpr(node.Operand)
+	case *ast.CallExpr:
+		return g.emitCall(node)
+	case *ast.MemberExpr:
+		if err := g.emitExpr(node.Object); err != nil {
+			return err
+		}
+		g.write("." + node.Field)
+		return nil
+	case *ast.StructLit:
+		return g.emitStructLit(node)
+	case *ast.ArrayLit:
+		return g.emitArrayLit(node)
+	case *ast.IndexExpr:
+		return g.emitIndexExpr(node)
+	default:
+		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
+	}
+}
+
+func (g *cppGen) emitArrayLit(al *ast.ArrayLit) error {
+	g.needVec = true
+	g.write("std::vector<" + g.typeStr(al.ElemType) + ">{")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write("}")
+	return nil
+}
+
+func (g *cppGen) emitIndexExpr(ie *ast.IndexExpr) error {
+	if err := g.emitExpr(ie.Target); err != nil {
+		return err
+	}
+	g.write("[")
+	if err := g.emitExpr(ie.Index); err != nil {
+		return err
+	}
+	g.write("]")
+	return nil
+}
+
+func (g *cppGen) emitStructLit(sl *ast.StructLit) error {
+	g.write(sl.TypeName + "{")
+	for i, f := range sl.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(f.Value); err != nil {
+			return err
+		}
+	}
+	g.write("}")
+	return nil
+}
+
+func (g *cppGen) emitCall(ce *ast.CallExpr) error {
+	switch ce.Callee {
+	case "println":
+		g.write("std::cout << ")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		} else {
+			g.write("\"\"")
+		}
+		g.write(" << std::endl")
+		return nil
+	case "printf":
+		g.write("std::cout << ")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		return nil
+	case "sprintf":
+		g.needStr = true
+		g.write("std::to_string(")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	default:
+		g.write(ce.Callee + "(")
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(arg); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	}
+}
+
+func (g *cppGen) emitLiteral(lit *ast.Literal) error {
+	switch lit.ValueType {
+	case "String":
+		g.needStr = true
+		s, _ := lit.Value.(string)
+		g.write(fmt.Sprintf("%q", s))
+	case "Int":
+		f, _ := lit.Value.(float64)
+		g.write(fmt.Sprintf("%d", int64(f)))
+	case "Float":
+		f, _ := lit.Value.(float64)
+		g.write(fmt.Sprintf("%g", f))
+	case "Bool":
+		b, _ := lit.Value.(bool)
+		g.write(fmt.Sprintf("%t", b))
+	default:
+		g.write(fmt.Sprintf("%v", lit.Value))
+	}
+	return nil
+}

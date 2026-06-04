@@ -640,7 +640,7 @@ func TestGenerateCSharpStringConcat(t *testing.T) {
 
 func TestGenerateDispatcher(t *testing.T) {
 	root := mustParse(t, addFibMain)
-	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia"}
+	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp", "mql4", "mql5"}
 	for _, tgt := range targets {
 		out, err := Generate(root, tgt)
 		if err != nil {
@@ -1120,6 +1120,9 @@ func TestStructCodegenAll(t *testing.T) {
 		{"zig", []string{"const Point = struct", "x: i64", "Point{"}},
 		{"nim", []string{"type Point = object", "x: int64", "Point(x:"}},
 		{"julia", []string{"struct Point", "x::Int64", "Point("}},
+		{"cpp", []string{"struct Point {", "long x;", "Point{"}},
+		{"mql4", []string{"struct Point {", "long x;"}},
+		{"mql5", []string{"struct Point {", "long x;"}},
 	}
 
 	for _, tc := range cases {
@@ -1163,6 +1166,7 @@ func TestCollectionCodegenAll(t *testing.T) {
 		{"zig", []string{"&[_]i64{", "nums[@intCast(0)]"}},
 		{"nim", []string{"@[10'i64", "nums[0'i64]"}},
 		{"julia", []string{"Int64[Int64(10)", "nums[Int64(0)]"}},
+		{"cpp", []string{"std::vector<long>{10, 20, 30}", "nums[0]"}},
 	}
 
 	for _, tc := range cases {
@@ -1251,7 +1255,7 @@ const forRangeProgram = `{
 }`
 
 func TestForStmtCodegenAll(t *testing.T) {
-	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia"}
+	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp", "mql4", "mql5"}
 	root := mustParse(t, forRangeProgram)
 	for _, target := range targets {
 		t.Run("for_"+target, func(t *testing.T) {
@@ -1291,7 +1295,7 @@ const breakContinueProgram = `{
 }`
 
 func TestBreakContinueCodegenAll(t *testing.T) {
-	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "ruby", "php", "zig", "nim", "julia"}
+	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "ruby", "php", "zig", "nim", "julia", "cpp", "mql4", "mql5"}
 	root := mustParse(t, breakContinueProgram)
 	for _, target := range targets {
 		t.Run("brk_"+target, func(t *testing.T) {
@@ -1346,7 +1350,7 @@ const assignIndexProgram = `{
 }`
 
 func TestAssignIndexCodegenAll(t *testing.T) {
-	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia"}
+	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp"}
 	root := mustParse(t, assignIndexProgram)
 	for _, target := range targets {
 		t.Run("aidx_"+target, func(t *testing.T) {
@@ -1358,6 +1362,240 @@ func TestAssignIndexCodegenAll(t *testing.T) {
 				t.Fatal("empty output")
 			}
 		})
+	}
+}
+
+// --- C++ codegen ---
+
+func TestGenerateCpp(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateCpp(root)
+	if err != nil {
+		t.Fatalf("GenerateCpp: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"#include <iostream>",
+		"long add(long a, long b)",
+		"int main()",
+		"std::cout << result << std::endl",
+		"return (a + b);",
+		"return 0;",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("C++ output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateCppStringConcat(t *testing.T) {
+	root := mustParse(t, stringConcatProgram)
+	out, err := GenerateCpp(root)
+	if err != nil {
+		t.Fatalf("GenerateCpp: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "#include <string>") {
+		t.Errorf("C++ should include <string>, got:\n%s", code)
+	}
+	if !strings.Contains(code, "std::string greet(std::string name)") {
+		t.Errorf("C++ should map String to std::string, got:\n%s", code)
+	}
+}
+
+func TestGenerateCppIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GenerateCpp(root)
+	if err != nil {
+		t.Fatalf("GenerateCpp: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if (") || !strings.Contains(code, "} else {") {
+		t.Errorf("C++ should emit 'if (...) { ... } else { ... }', got:\n%s", code)
+	}
+}
+
+func TestGenerateCppWhile(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateCpp(root)
+	if err != nil {
+		t.Fatalf("GenerateCpp: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "while (") {
+		t.Errorf("C++ should emit while, got:\n%s", code)
+	}
+}
+
+func TestGenerateCppResultRejection(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "tryParse",
+			"params": [{"name": "s", "type": {"kind": "String"}}],
+			"returnType": {"kind": "Result", "okType": {"kind": "Int"}},
+			"effects": [],
+			"grant": [],
+			"body": [{
+				"kind": "ReturnStmt",
+				"value": {"kind": "Literal", "valueType": "Int", "value": 42}
+			}]
+		}]
+	}`
+	root := mustParse(t, src)
+	_, err := GenerateCpp(root)
+	if err == nil {
+		t.Fatal("C++ should reject Result type")
+	}
+	if !strings.Contains(err.Error(), "XQL_E402") {
+		t.Errorf("expected XQL_E402, got: %v", err)
+	}
+}
+
+// --- MQL4/MQL5 codegen ---
+
+func TestGenerateMQL4Hello(t *testing.T) {
+	root := mustParse(t, helloProgram)
+	out, err := GenerateMQL4(root)
+	if err != nil {
+		t.Fatalf("GenerateMQL4: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"#property strict",
+		"void OnStart()",
+		"Print(",
+		"string greet(string name)",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("MQL4 output missing %q\n---\n%s", c, code)
+		}
+	}
+	forbidden := []string{"OrderSend", "CTrade", "OnTick", "OnCalculate", "PositionOpen"}
+	for _, f := range forbidden {
+		if strings.Contains(code, f) {
+			t.Errorf("MQL4 output must not contain %q\n---\n%s", f, code)
+		}
+	}
+}
+
+func TestGenerateMQL5Hello(t *testing.T) {
+	root := mustParse(t, helloProgram)
+	out, err := GenerateMQL5(root)
+	if err != nil {
+		t.Fatalf("GenerateMQL5: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"#property strict",
+		"void OnStart()",
+		"Print(",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("MQL5 output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateMQLStruct(t *testing.T) {
+	root := mustParse(t, structProgram)
+	for _, dialect := range []string{"mql4", "mql5"} {
+		t.Run(dialect, func(t *testing.T) {
+			out, err := Generate(root, dialect)
+			if err != nil {
+				t.Fatalf("Generate(%q): %v", dialect, err)
+			}
+			code := string(out)
+			if !strings.Contains(code, "struct Point {") {
+				t.Errorf("MQL should emit struct, got:\n%s", code)
+			}
+			if !strings.Contains(code, "long x;") {
+				t.Errorf("MQL should emit long field, got:\n%s", code)
+			}
+		})
+	}
+}
+
+func TestGenerateMQLMapRejection(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "main",
+			"params": [{"name": "m", "type": {"kind": "Map", "keyType": {"kind": "String"}, "elem": {"kind": "Int"}}}],
+			"returnType": {"kind": "Void"},
+			"effects": [],
+			"grant": [],
+			"body": []
+		}]
+	}`
+	root := mustParse(t, src)
+	for _, dialect := range []string{"mql4", "mql5"} {
+		_, err := Generate(root, dialect)
+		if err == nil {
+			t.Errorf("MQL %s should reject Map type", dialect)
+		} else if !strings.Contains(err.Error(), "XQL_E403") {
+			t.Errorf("expected XQL_E403 for %s, got: %v", dialect, err)
+		}
+	}
+}
+
+func TestGenerateMQLOptionRejection(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "main",
+			"params": [{"name": "x", "type": {"kind": "Option", "elem": {"kind": "Int"}}}],
+			"returnType": {"kind": "Void"},
+			"effects": [],
+			"grant": [],
+			"body": []
+		}]
+	}`
+	root := mustParse(t, src)
+	for _, dialect := range []string{"mql4", "mql5"} {
+		_, err := Generate(root, dialect)
+		if err == nil {
+			t.Errorf("MQL %s should reject Option type", dialect)
+		} else if !strings.Contains(err.Error(), "XQL_E403") {
+			t.Errorf("expected XQL_E403 for %s, got: %v", dialect, err)
+		}
+	}
+}
+
+func TestGenerateMQLForEachRejection(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "main",
+			"params": [],
+			"returnType": {"kind": "Void"},
+			"effects": [],
+			"grant": [],
+			"body": [{
+				"kind": "ForStmt", "form": "each", "var": "item",
+				"iterable": {"kind": "Ident", "name": "items"},
+				"body": []
+			}]
+		}]
+	}`
+	root := mustParse(t, src)
+	for _, dialect := range []string{"mql4", "mql5"} {
+		_, err := Generate(root, dialect)
+		if err == nil {
+			t.Errorf("MQL %s should reject for-each loops", dialect)
+		} else if !strings.Contains(err.Error(), "XQL_E403") {
+			t.Errorf("expected XQL_E403 for %s for-each, got: %v", dialect, err)
+		}
 	}
 }
 
