@@ -14,23 +14,23 @@ AI agents write structured `.xql.json` directly — no text parser, no syntax er
 
 ## Supported Languages
 
-| Target | CLI flag | String concat | Entry point | Mutability |
-|--------|----------|---------------|-------------|------------|
-| Go | `go` | `+` | `func main()` | all mutable |
-| Rust | `rust` | `+ &` | `fn main()` | `let` / `let mut` |
-| TypeScript | `ts` | `+` | `main()` call | `const` / `let` |
-| Kotlin | `kotlin` | `+` | `fun main()` | `val` / `var` |
-| Swift | `swift` | `+` | top-level body | `let` / `var` |
-| Python | `py` | `+` | `if __name__` guard | all mutable |
-| Java | `java` | `+` | `public static void main` | `final` / bare |
-| C# | `csharp` | `+` | `static void Main()` | all mutable |
-| Dart | `dart` | `+` | `void main()` | `final` / bare |
-| Lua | `lua` | `..` | top-level body | `local` |
-| Ruby | `ruby` | `+` | top-level body | all mutable |
-| PHP | `php` | `.` | top-level body | `$` prefix |
-| Zig | `zig` | `++` | `pub fn main()` | `const` / `var` |
-| Nim | `nim` | `&` | top-level body | `let` / `var` |
-| Julia | `julia` | `*` | `main()` call | all mutable |
+| Target | CLI flag | String concat | Entry point | Mutability | Verified |
+|--------|----------|---------------|-------------|------------|----------|
+| Go | `go` | `+` | `func main()` | all mutable | yes |
+| Rust | `rust` | `.to_string() +` | `fn main()` | `let` / `let mut` | yes |
+| TypeScript | `ts` | `+` | `main()` call | `const` / `let` | yes |
+| Kotlin | `kotlin` | `+` | `fun main()` | `val` / `var` | no |
+| Swift | `swift` | `+` | top-level body | `let` / `var` | no |
+| Python | `py` | `+` | `if __name__` guard | all mutable | yes |
+| Java | `java` | `+` | `public static void main` | `final` / bare | no |
+| C# | `csharp` | `+` | `static void Main()` | all mutable | no |
+| Dart | `dart` | `+` | `void main()` | `final` / bare | no |
+| Lua | `lua` | `..` | top-level body | `local` | no |
+| Ruby | `ruby` | `+` | top-level body | all mutable | no |
+| PHP | `php` | `.` | top-level body | `$` prefix | no |
+| Zig | `zig` | `++` | `pub fn main()` | `const` / `var` | no |
+| Nim | `nim` | `&` | top-level body | `let` / `var` | no |
+| Julia | `julia` | `*` | `main()` call | all mutable | no |
 
 ## Quick Start
 
@@ -126,12 +126,12 @@ func main() {
 <summary><strong>Rust</strong></summary>
 
 ```rust
-fn greet(name: String) -> String {
-    return (String::from("Hello, ") + &name);
+fn greet(name: &str) -> String {
+    return ("Hello, ".to_string() + name);
 }
 
 fn main() {
-    println!("{}", greet(String::from("World")));
+    println!("{}", greet("World"));
 }
 ```
 </details>
@@ -292,7 +292,7 @@ fn greet(name: []const u8) []const u8 {
 }
 
 pub fn main() void {
-    std.debug.print("{}\n", .{greet("World")});
+    std.debug.print("{s}\n", .{greet("World")});
 }
 ```
 </details>
@@ -458,7 +458,8 @@ xiaoqinli/
     ruby.go  php.go          Ruby, PHP backends
     zig.go  nim.go  julia.go Zig, Nim, Julia backends
     util.go                  Generate() dispatcher + shared utilities
-    codegen_test.go          48 tests across all 15 backends
+    codegen_test.go          52 tests across all 15 backends
+    roundtrip_test.go        compile-and-run verification (Go, Python, Rust, TS)
   server/
     mcp.go                   MCP server (stdio + streamable HTTP)
     rest.go                  REST API server
