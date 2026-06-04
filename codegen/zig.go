@@ -66,6 +66,9 @@ func typeToZig(t ast.TypeExpr) string {
 	case "Void":
 		return "void"
 	case "Array":
+		if t.Elem != nil {
+			return "[]const " + typeToZig(*t.Elem)
+		}
 		return "[]const u8"
 	case "Option":
 		if t.Elem != nil {
@@ -295,9 +298,39 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 		return nil
 	case *ast.StructLit:
 		return g.emitStructLit(node)
+	case *ast.ArrayLit:
+		return g.emitArrayLit(node)
+	case *ast.IndexExpr:
+		return g.emitIndexExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *zigGen) emitArrayLit(al *ast.ArrayLit) error {
+	g.write("&[_]" + typeToZig(al.ElemType) + "{ ")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write(" }")
+	return nil
+}
+
+func (g *zigGen) emitIndexExpr(ie *ast.IndexExpr) error {
+	if err := g.emitExpr(ie.Target); err != nil {
+		return err
+	}
+	g.write("[@intCast(")
+	if err := g.emitExpr(ie.Index); err != nil {
+		return err
+	}
+	g.write(")]")
+	return nil
 }
 
 func (g *zigGen) emitStructLit(sl *ast.StructLit) error {

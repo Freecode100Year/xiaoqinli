@@ -13,7 +13,8 @@ type Node interface {
 // TypeExpr represents a type reference in the AST.
 type TypeExpr struct {
 	KindName string    `json:"kind"`
-	Elem     *TypeExpr `json:"elem,omitempty"`
+	Elem     *TypeExpr `json:"elem,omitempty"`     // Array<T>, Option<T>
+	KeyType  *TypeExpr `json:"keyType,omitempty"`   // Map<K,V> key type
 	OkType   *TypeExpr `json:"okType,omitempty"`
 	ErrType  *TypeExpr `json:"errType,omitempty"`
 }
@@ -173,6 +174,22 @@ type StructLit struct {
 
 func (*StructLit) Kind() string { return "StructLit" }
 
+// ArrayLit represents an array/list literal expression.
+type ArrayLit struct {
+	ElemType TypeExpr
+	Elements []Node
+}
+
+func (*ArrayLit) Kind() string { return "ArrayLit" }
+
+// IndexExpr represents an index/subscript access (target[index]).
+type IndexExpr struct {
+	Target Node
+	Index  Node
+}
+
+func (*IndexExpr) Kind() string { return "IndexExpr" }
+
 // ===================== JSON Parsing =====================
 
 // Parse parses .xql.json bytes into a typed AST tree.
@@ -210,6 +227,10 @@ func parseNode(raw map[string]interface{}) (Node, error) {
 		return parseStructDecl(raw)
 	case "StructLit":
 		return parseStructLit(raw)
+	case "ArrayLit":
+		return parseArrayLit(raw)
+	case "IndexExpr":
+		return parseIndexExpr(raw)
 	case "BinaryExpr":
 		return parseBinaryExpr(raw)
 	case "UnaryExpr":
@@ -271,6 +292,13 @@ func parseTypeExpr(raw interface{}) (TypeExpr, error) {
 			return TypeExpr{}, err
 		}
 		te.Elem = &e
+	}
+	if keyT, ok := m["keyType"]; ok {
+		k, err := parseTypeExpr(keyT)
+		if err != nil {
+			return TypeExpr{}, err
+		}
+		te.KeyType = &k
 	}
 	if okT, ok := m["okType"]; ok {
 		o, err := parseTypeExpr(okT)
@@ -614,4 +642,44 @@ func parseStructLit(raw map[string]interface{}) (*StructLit, error) {
 		}
 	}
 	return sl, nil
+}
+
+func parseArrayLit(raw map[string]interface{}) (*ArrayLit, error) {
+	al := &ArrayLit{}
+	if t, ok := raw["elemType"]; ok {
+		te, err := parseTypeExpr(t)
+		if err != nil {
+			return nil, err
+		}
+		al.ElemType = te
+	}
+	if elems, ok := raw["elements"].([]interface{}); ok {
+		nodes, err := parseNodeList(elems)
+		if err != nil {
+			return nil, err
+		}
+		al.Elements = nodes
+	}
+	return al, nil
+}
+
+func parseIndexExpr(raw map[string]interface{}) (*IndexExpr, error) {
+	ie := &IndexExpr{}
+	target, err := parseChildNode(raw, "target")
+	if err != nil {
+		return nil, err
+	}
+	if target == nil {
+		return nil, fmt.Errorf("XQL_E101: IndexExpr missing 'target'")
+	}
+	ie.Target = target
+	index, err := parseChildNode(raw, "index")
+	if err != nil {
+		return nil, err
+	}
+	if index == nil {
+		return nil, fmt.Errorf("XQL_E101: IndexExpr missing 'index'")
+	}
+	ie.Index = index
+	return ie, nil
 }

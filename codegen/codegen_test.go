@@ -185,6 +185,43 @@ const structProgram = `{
 	]
 }`
 
+// collectionProgram tests array literal creation and index access
+const collectionProgram = `{
+	"kind": "Program",
+	"declarations": [{
+		"kind": "FunctionDecl",
+		"name": "main",
+		"params": [],
+		"returnType": {"kind": "Void"},
+		"effects": ["state"],
+		"grant": ["io"],
+		"body": [
+			{
+				"kind": "VarDecl",
+				"name": "nums",
+				"type": {"kind": "Array", "elem": {"kind": "Int"}},
+				"value": {
+					"kind": "ArrayLit",
+					"elemType": {"kind": "Int"},
+					"elements": [
+						{"kind": "Literal", "valueType": "Int", "value": 10},
+						{"kind": "Literal", "valueType": "Int", "value": 20},
+						{"kind": "Literal", "valueType": "Int", "value": 30}
+					]
+				}
+			},
+			{
+				"kind": "ExprStmt",
+				"expr": {"kind": "CallExpr", "callee": "println", "args": [
+					{"kind": "IndexExpr",
+					 "target": {"kind": "Ident", "name": "nums"},
+					 "index": {"kind": "Literal", "valueType": "Int", "value": 0}}
+				]}
+			}
+		]
+	}]
+}`
+
 // helloProgram tests println with a string-returning function call
 const helloProgram = `{
 	"kind": "Program",
@@ -1087,6 +1124,49 @@ func TestStructCodegenAll(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run("struct_"+tc.target, func(t *testing.T) {
+			out, err := Generate(root, tc.target)
+			if err != nil {
+				t.Fatalf("Generate(%q): %v", tc.target, err)
+			}
+			code := string(out)
+			for _, s := range tc.expect {
+				if !strings.Contains(code, s) {
+					t.Errorf("%s output missing %q\n---\n%s", tc.target, s, code)
+				}
+			}
+		})
+	}
+}
+
+// --- Collection codegen ---
+
+func TestCollectionCodegenAll(t *testing.T) {
+	root := mustParse(t, collectionProgram)
+
+	type check struct {
+		target string
+		expect []string
+	}
+	cases := []check{
+		{"go", []string{"[]int{10, 20, 30}", "nums[0]"}},
+		{"rust", []string{"vec![10, 20, 30]", "nums[0 as usize]"}},
+		{"ts", []string{"[10, 20, 30]", "nums[0]"}},
+		{"kotlin", []string{"listOf(10L, 20L, 30L)", "nums[(0L).toInt()]"}},
+		{"swift", []string{"[10, 20, 30]", "nums[0]"}},
+		{"py", []string{"[10, 20, 30]", "nums[0]"}},
+		{"java", []string{"java.util.List.of(10L, 20L, 30L)", "nums.get("}},
+		{"csharp", []string{"new List<long>", "{ 10L, 20L, 30L }", "nums[(int)"}},
+		{"dart", []string{"[10, 20, 30]", "nums[0]"}},
+		{"lua", []string{"{10, 20, 30}", "nums[0]"}},
+		{"ruby", []string{"[10, 20, 30]", "nums[0]"}},
+		{"php", []string{"[10, 20, 30]", "$nums[0]"}},
+		{"zig", []string{"&[_]i64{", "nums[@intCast(0)]"}},
+		{"nim", []string{"@[10'i64", "nums[0'i64]"}},
+		{"julia", []string{"Int64[Int64(10)", "nums[Int64(0)]"}},
+	}
+
+	for _, tc := range cases {
+		t.Run("collection_"+tc.target, func(t *testing.T) {
 			out, err := Generate(root, tc.target)
 			if err != nil {
 				t.Fatalf("Generate(%q): %v", tc.target, err)

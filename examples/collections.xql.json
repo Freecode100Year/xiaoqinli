@@ -1,0 +1,57 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "nums",
+          "type": { "kind": "Array", "elem": { "kind": "Int" } },
+          "value": {
+            "kind": "ArrayLit",
+            "elemType": { "kind": "Int" },
+            "elements": [
+              { "kind": "Literal", "valueType": "Int", "value": 10 },
+              { "kind": "Literal", "valueType": "Int", "value": 20 },
+              { "kind": "Literal", "valueType": "Int", "value": 30 }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "IndexExpr",
+                "target": { "kind": "Ident", "name": "nums" },
+                "index": { "kind": "Literal", "valueType": "Int", "value": 0 }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "IndexExpr",
+                "target": { "kind": "Ident", "name": "nums" },
+                "index": { "kind": "Literal", "valueType": "Int", "value": 2 }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

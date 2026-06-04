@@ -358,9 +358,39 @@ func (g *rsGen) emitExpr(n ast.Node) error {
 		return nil
 	case *ast.StructLit:
 		return g.emitStructLit(node)
+	case *ast.ArrayLit:
+		return g.emitArrayLit(node)
+	case *ast.IndexExpr:
+		return g.emitIndexExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *rsGen) emitArrayLit(al *ast.ArrayLit) error {
+	g.write("vec![")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write("]")
+	return nil
+}
+
+func (g *rsGen) emitIndexExpr(ie *ast.IndexExpr) error {
+	if err := g.emitExpr(ie.Target); err != nil {
+		return err
+	}
+	g.write("[")
+	if err := g.emitExpr(ie.Index); err != nil {
+		return err
+	}
+	g.write(" as usize]")
+	return nil
 }
 
 func (g *rsGen) emitStructLit(sl *ast.StructLit) error {

@@ -261,6 +261,27 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]string) string {
 			}
 		}
 		return node.TypeName
+	case *ast.ArrayLit:
+		// Check element type consistency.
+		expectedElem := node.ElemType.KindName
+		for i, elem := range node.Elements {
+			elemType := tc.inferType(elem, scope)
+			if expectedElem != "" && elemType != "" && elemType != expectedElem {
+				tc.addError(fmt.Sprintf("array element %d: expected %s, got %s", i, expectedElem, elemType))
+			}
+		}
+		return "Array"
+	case *ast.IndexExpr:
+		targetType := tc.inferType(node.Target, scope)
+		indexType := tc.inferType(node.Index, scope)
+		if targetType == "Array" {
+			if indexType != "" && indexType != "Int" {
+				tc.addError(fmt.Sprintf("array index must be Int, got %s", indexType))
+			}
+		}
+		// We can't easily determine the element type without full TypeExpr tracking.
+		// Return empty for now; the element type is implicit.
+		return ""
 	default:
 		return ""
 	}
@@ -420,6 +441,13 @@ func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]as
 		}
 	case *ast.MemberExpr:
 		collectEffects(node.Object, seen, funcBodies, result, resolving)
+	case *ast.ArrayLit:
+		for _, elem := range node.Elements {
+			collectEffects(elem, seen, funcBodies, result, resolving)
+		}
+	case *ast.IndexExpr:
+		collectEffects(node.Target, seen, funcBodies, result, resolving)
+		collectEffects(node.Index, seen, funcBodies, result, resolving)
 	}
 }
 
