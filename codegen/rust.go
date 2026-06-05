@@ -121,9 +121,61 @@ func (g *rsGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *rsGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.writeln("enum " + ed.Name + " {")
+	g.indent++
+	for _, v := range ed.Variants {
+		g.writeIndent()
+		g.writeln(v + ",")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *rsGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("match ")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(" {")
+	g.indent++
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.write("_")
+		} else {
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+		}
+		g.writeln(" => {")
+		g.indent++
+		for _, stmt := range arm.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("}")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
 }
 
 func (g *rsGen) emitStructDecl(sd *ast.StructDecl) error {

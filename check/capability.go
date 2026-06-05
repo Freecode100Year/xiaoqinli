@@ -118,6 +118,13 @@ func checkCapStmt(n ast.Node, callerName string, callerCap Capability, funcGrant
 		}
 	case *ast.BreakStmt, *ast.ContinueStmt:
 		// No capability checking needed.
+	case *ast.MatchExpr:
+		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs)
+		for _, arm := range node.Arms {
+			for _, s := range arm.Body {
+				checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+			}
+		}
 	}
 }
 

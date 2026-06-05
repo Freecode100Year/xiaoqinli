@@ -640,7 +640,7 @@ func TestGenerateCSharpStringConcat(t *testing.T) {
 
 func TestGenerateDispatcher(t *testing.T) {
 	root := mustParse(t, addFibMain)
-	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp", "mql4", "mql5"}
+	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp", "c", "scala", "haskell", "mql4", "mql5"}
 	for _, tgt := range targets {
 		out, err := Generate(root, tgt)
 		if err != nil {
@@ -1624,5 +1624,309 @@ func TestCollectMutables(t *testing.T) {
 	}
 	if muts["z"] {
 		t.Error("z should not be mutable")
+	}
+}
+
+// --- C codegen ---
+
+func TestGenerateC(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateC(root)
+	if err != nil {
+		t.Fatalf("GenerateC: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"#include <stdio.h>",
+		"long add(long a, long b)",
+		"int main()",
+		"printf(",
+		"return (a + b);",
+		"return 0;",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("C output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateCStringConcat(t *testing.T) {
+	root := mustParse(t, stringConcatProgram)
+	out, err := GenerateC(root)
+	if err != nil {
+		t.Fatalf("GenerateC: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "_xql_strcat") {
+		t.Errorf("C string concat should use _xql_strcat, got:\n%s", code)
+	}
+}
+
+func TestGenerateCIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GenerateC(root)
+	if err != nil {
+		t.Fatalf("GenerateC: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if (") || !strings.Contains(code, "} else {") {
+		t.Errorf("C should emit 'if (...) { ... } else { ... }', got:\n%s", code)
+	}
+}
+
+func TestGenerateCWhile(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateC(root)
+	if err != nil {
+		t.Fatalf("GenerateC: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "while (") {
+		t.Errorf("C should emit while, got:\n%s", code)
+	}
+}
+
+func TestGenerateCStruct(t *testing.T) {
+	root := mustParse(t, structProgram)
+	out, err := GenerateC(root)
+	if err != nil {
+		t.Fatalf("GenerateC: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "typedef struct") || !strings.Contains(code, "long x;") {
+		t.Errorf("C should emit typedef struct, got:\n%s", code)
+	}
+}
+
+// --- Scala codegen ---
+
+func TestGenerateScala(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateScala(root)
+	if err != nil {
+		t.Fatalf("GenerateScala: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"object Main {",
+		"def add(a: Long, b: Long): Long",
+		"def main(args: Array[String]): Unit",
+		"println(result)",
+		"3L",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Scala output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateScalaMutability(t *testing.T) {
+	root := mustParse(t, whileProgram)
+	out, err := GenerateScala(root)
+	if err != nil {
+		t.Fatalf("GenerateScala: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "var i: Long") {
+		t.Errorf("Scala should use 'var' for reassigned var, got:\n%s", code)
+	}
+}
+
+func TestGenerateScalaIfElse(t *testing.T) {
+	root := mustParse(t, ifElseProgram)
+	out, err := GenerateScala(root)
+	if err != nil {
+		t.Fatalf("GenerateScala: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "if (") || !strings.Contains(code, "} else {") {
+		t.Errorf("Scala should emit 'if (...) { ... } else { ... }', got:\n%s", code)
+	}
+}
+
+func TestGenerateScalaStruct(t *testing.T) {
+	root := mustParse(t, structProgram)
+	out, err := GenerateScala(root)
+	if err != nil {
+		t.Fatalf("GenerateScala: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "case class Point") {
+		t.Errorf("Scala should emit case class, got:\n%s", code)
+	}
+}
+
+// --- Haskell codegen ---
+
+func TestGenerateHaskell(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateHaskell(root)
+	if err != nil {
+		t.Fatalf("GenerateHaskell: %v", err)
+	}
+	code := string(out)
+
+	checks := []string{
+		"module Main where",
+		"add :: Int -> Int -> Int",
+		"main :: IO ()",
+		"main = do",
+		"print",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Haskell output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateHaskellHello(t *testing.T) {
+	root := mustParse(t, helloProgram)
+	out, err := GenerateHaskell(root)
+	if err != nil {
+		t.Fatalf("GenerateHaskell: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "putStrLn") {
+		t.Errorf("Haskell should use putStrLn for string output, got:\n%s", code)
+	}
+	if !strings.Contains(code, "++") {
+		t.Errorf("Haskell should use ++ for string concat, got:\n%s", code)
+	}
+}
+
+// --- EnumDecl + MatchExpr codegen ---
+
+const enumMatchProgram = `{
+	"kind": "Program",
+	"declarations": [
+		{
+			"kind": "EnumDecl",
+			"name": "Color",
+			"variants": ["Red", "Green", "Blue"]
+		},
+		{
+			"kind": "FunctionDecl",
+			"name": "main",
+			"params": [],
+			"returnType": {"kind": "Void"},
+			"effects": ["state"],
+			"grant": ["io"],
+			"body": [
+				{
+					"kind": "VarDecl",
+					"name": "x",
+					"type": {"kind": "Int"},
+					"value": {"kind": "Literal", "valueType": "Int", "value": 2}
+				},
+				{
+					"kind": "MatchExpr",
+					"value": {"kind": "Ident", "name": "x"},
+					"arms": [
+						{
+							"pattern": {"kind": "Literal", "valueType": "Int", "value": 1},
+							"body": [{
+								"kind": "ExprStmt",
+								"expr": {"kind": "CallExpr", "callee": "println", "args": [
+									{"kind": "Literal", "valueType": "String", "value": "one"}
+								]}
+							}]
+						},
+						{
+							"pattern": {"kind": "Ident", "name": "_"},
+							"body": [{
+								"kind": "ExprStmt",
+								"expr": {"kind": "CallExpr", "callee": "println", "args": [
+									{"kind": "Literal", "valueType": "String", "value": "other"}
+								]}
+							}]
+						}
+					]
+				}
+			]
+		}
+	]
+}`
+
+func TestEnumMatchCodegenGo(t *testing.T) {
+	root := mustParse(t, enumMatchProgram)
+	out, err := GenerateGo(root)
+	if err != nil {
+		t.Fatalf("GenerateGo: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "type Color int") {
+		t.Errorf("Go should emit enum as type + iota, got:\n%s", code)
+	}
+	if !strings.Contains(code, "switch x") {
+		t.Errorf("Go should emit switch for match, got:\n%s", code)
+	}
+	if !strings.Contains(code, "default:") {
+		t.Errorf("Go should emit default for _ pattern, got:\n%s", code)
+	}
+}
+
+func TestEnumMatchCodegenRust(t *testing.T) {
+	root := mustParse(t, enumMatchProgram)
+	out, err := GenerateRust(root)
+	if err != nil {
+		t.Fatalf("GenerateRust: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "enum Color") {
+		t.Errorf("Rust should emit enum, got:\n%s", code)
+	}
+	if !strings.Contains(code, "match x") {
+		t.Errorf("Rust should emit match, got:\n%s", code)
+	}
+}
+
+func TestEnumMatchCodegenPython(t *testing.T) {
+	root := mustParse(t, enumMatchProgram)
+	out, err := GeneratePython(root)
+	if err != nil {
+		t.Fatalf("GeneratePython: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "class Color(Enum)") {
+		t.Errorf("Python should emit Enum class, got:\n%s", code)
+	}
+	if !strings.Contains(code, "match x") {
+		t.Errorf("Python should emit match statement, got:\n%s", code)
+	}
+}
+
+func TestEnumMatchCodegenCpp(t *testing.T) {
+	root := mustParse(t, enumMatchProgram)
+	out, err := GenerateCpp(root)
+	if err != nil {
+		t.Fatalf("GenerateCpp: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "enum class Color") {
+		t.Errorf("C++ should emit enum class, got:\n%s", code)
+	}
+	if !strings.Contains(code, "switch (x)") {
+		t.Errorf("C++ should emit switch, got:\n%s", code)
+	}
+}
+
+func TestEnumMatchCodegenMultiTarget(t *testing.T) {
+	root := mustParse(t, enumMatchProgram)
+	targets := []string{"go", "rust", "py", "cpp", "c"}
+	for _, tgt := range targets {
+		t.Run("match_"+tgt, func(t *testing.T) {
+			out, err := Generate(root, tgt)
+			if err != nil {
+				t.Fatalf("Generate(%q): %v", tgt, err)
+			}
+			if len(out) == 0 {
+				t.Fatalf("Generate(%q) returned empty", tgt)
+			}
+		})
 	}
 }

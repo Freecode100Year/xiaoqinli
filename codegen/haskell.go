@@ -1,0 +1,586 @@
+package codegen
+
+import (
+	"fmt"
+	"strings"
+
+	"xiaoqinli/ast"
+)
+
+func GenerateHaskell(root ast.Node) ([]byte, error) {
+	g := &hsGen{
+		buf:      &strings.Builder{},
+		funcRets: make(map[string]string),
+	}
+
+	prog, ok := root.(*ast.Program)
+	if !ok {
+		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	for _, d := range prog.Decls {
+		if fd, ok := d.(*ast.FunctionDecl); ok {
+			g.funcRets[fd.Name] = fd.ReturnType.KindName
+		}
+	}
+
+	var structs []*ast.StructDecl
+	var funcs []*ast.FunctionDecl
+	for _, d := range prog.Decls {
+		switch n := d.(type) {
+		case *ast.StructDecl:
+			structs = append(structs, n)
+		case *ast.FunctionDecl:
+			funcs = append(funcs, n)
+		}
+	}
+
+	var out strings.Builder
+	out.WriteString("module Main where\n\n")
+
+	if g.needIORef {
+		out.WriteString("import Data.IORef\n\n")
+	}
+
+	for _, sd := range structs {
+		g.emitStructDecl(sd)
+		g.writeln("")
+	}
+
+	for i, fd := range funcs {
+		if i > 0 {
+			g.writeln("")
+		}
+		if err := g.emitFunctionDecl(fd); err != nil {
+			return nil, err
+		}
+	}
+
+	out.WriteString(g.buf.String())
+	return []byte(out.String()), nil
+}
+
+type hsGen struct {
+	buf       *strings.Builder
+	indent    int
+	funcRets  map[string]string
+	needIORef bool
+	inIO      bool
+}
+
+func (g *hsGen) write(s string)   { g.buf.WriteString(s) }
+func (g *hsGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
+func (g *hsGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+
+func typeToHaskell(t ast.TypeExpr) string {
+	switch t.KindName {
+	case "Int":
+		return "Int"
+	case "Float":
+		return "Double"
+	case "String":
+		return "String"
+	case "Bool":
+		return "Bool"
+	case "Void":
+		return "()"
+	case "Array":
+		if t.Elem != nil {
+			return "[" + typeToHaskell(*t.Elem) + "]"
+		}
+		return "[Int]"
+	case "Option":
+		if t.Elem != nil {
+			return "Maybe " + typeToHaskell(*t.Elem)
+		}
+		return "Maybe Int"
+	default:
+		return t.KindName
+	}
+}
+
+func (g *hsGen) isIOFunc(fd *ast.FunctionDecl) bool {
+	if fd.Name == "main" {
+		return true
+	}
+	for _, e := range fd.Effects {
+		if e == "state" || e == "network" || e == "filesystem" {
+			return true
+		}
+	}
+	return false
+}
+
+func (g *hsGen) inferTypeKind(n ast.Node) string {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return node.ValueType
+	case *ast.CallExpr:
+		if node.Callee == "sprintf" {
+			return "String"
+		}
+		if rt, ok := g.funcRets[node.Callee]; ok {
+			return rt
+		}
+		return ""
+	case *ast.BinaryExpr:
+		if node.Op == "+" && (g.inferTypeKind(node.Left) == "String" || g.inferTypeKind(node.Right) == "String") {
+			return "String"
+		}
+		switch node.Op {
+		case "==", "!=", "<", ">", "<=", ">=", "&&", "||":
+			return "Bool"
+		}
+		return g.inferTypeKind(node.Left)
+	case *ast.Ident:
+		return ""
+	default:
+		return ""
+	}
+}
+
+func (g *hsGen) emitStructDecl(sd *ast.StructDecl) {
+	g.writeln("data " + sd.Name + " = " + sd.Name)
+	g.indent++
+	for i, f := range sd.Fields {
+		g.writeIndent()
+		prefix := "{ "
+		if i > 0 {
+			prefix = ", "
+		}
+		g.writeln(prefix + f.Name + " :: " + typeToHaskell(f.Type))
+	}
+	g.writeIndent()
+	g.writeln("} deriving (Show)")
+	g.indent--
+}
+
+func (g *hsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	isIO := g.isIOFunc(fd)
+	g.inIO = isIO
+
+	g.writeIndent()
+	if fd.Name == "main" {
+		g.writeln("main :: IO ()")
+		g.writeIndent()
+		g.writeln("main = do")
+	} else {
+		g.write(fd.Name + " :: ")
+		for _, p := range fd.Params {
+			g.write(typeToHaskell(p.Type) + " -> ")
+		}
+		rt := typeToHaskell(fd.ReturnType)
+		if isIO {
+			g.writeln("IO " + rt)
+		} else {
+			g.writeln(rt)
+		}
+
+		g.writeIndent()
+		g.write(fd.Name)
+		for _, p := range fd.Params {
+			g.write(" " + p.Name)
+		}
+		if isIO {
+			g.writeln(" = do")
+		} else if len(fd.Body) == 1 {
+			g.write(" = ")
+			return g.emitPureExprBody(fd.Body[0])
+		} else {
+			g.writeln(" =")
+		}
+	}
+
+	g.indent++
+	for _, stmt := range fd.Body {
+		if err := g.emitStmt(stmt); err != nil {
+			return err
+		}
+	}
+	g.indent--
+
+	g.inIO = false
+	return nil
+}
+
+func (g *hsGen) emitPureExprBody(n ast.Node) error {
+	if rs, ok := n.(*ast.ReturnStmt); ok && rs.Value != nil {
+		if err := g.emitExpr(rs.Value); err != nil {
+			return err
+		}
+		g.writeln("")
+		return nil
+	}
+	g.writeln("")
+	g.indent++
+	err := g.emitStmt(n)
+	g.indent--
+	return err
+}
+
+func (g *hsGen) emitStmt(n ast.Node) error {
+	switch node := n.(type) {
+	case *ast.ReturnStmt:
+		g.writeIndent()
+		if node.Value == nil {
+			if g.inIO {
+				g.writeln("return ()")
+			} else {
+				g.writeln("()")
+			}
+			return nil
+		}
+		if g.inIO {
+			g.write("return ")
+		}
+		if err := g.emitExpr(node.Value); err != nil {
+			return err
+		}
+		g.writeln("")
+		return nil
+	case *ast.VarDecl:
+		g.writeIndent()
+		g.write("let " + node.Name + " = ")
+		if node.Value != nil {
+			if err := g.emitExpr(node.Value); err != nil {
+				return err
+			}
+		} else {
+			g.write("undefined")
+		}
+		g.writeln("")
+		return nil
+	case *ast.ExprStmt:
+		g.writeIndent()
+		if err := g.emitExpr(node.Expr); err != nil {
+			return err
+		}
+		g.writeln("")
+		return nil
+	case *ast.IfStmt:
+		return g.emitIf(node)
+	case *ast.AssignStmt:
+		return fmt.Errorf("XQL_E401: Haskell does not support mutable assignment")
+	case *ast.WhileStmt:
+		return fmt.Errorf("XQL_E401: Haskell does not support while loops")
+	case *ast.ForStmt:
+		return g.emitForStmt(node)
+	case *ast.BreakStmt:
+		return fmt.Errorf("XQL_E401: Haskell does not support break")
+	case *ast.ContinueStmt:
+		return fmt.Errorf("XQL_E401: Haskell does not support continue")
+	default:
+		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
+	}
+}
+
+func (g *hsGen) emitIf(is *ast.IfStmt) error {
+	g.writeIndent()
+	g.write("if ")
+	if err := g.emitExpr(is.Cond); err != nil {
+		return err
+	}
+	g.writeln("")
+	g.indent++
+	g.writeIndent()
+	g.writeln("then do")
+	g.indent++
+	for _, s := range is.Then {
+		if err := g.emitStmt(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("else do")
+	g.indent++
+	if len(is.Else) > 0 {
+		for _, s := range is.Else {
+			if err := g.emitStmt(s); err != nil {
+				return err
+			}
+		}
+	} else {
+		g.writeIndent()
+		if g.inIO {
+			g.writeln("return ()")
+		} else {
+			g.writeln("()")
+		}
+	}
+	g.indent--
+	g.indent--
+	return nil
+}
+
+func (g *hsGen) emitForStmt(fs *ast.ForStmt) error {
+	if fs.Form == "range" {
+		g.writeIndent()
+		g.write("mapM_ (\\")
+		g.write(fs.Var)
+		g.writeln(" -> do")
+		g.indent++
+		for _, s := range fs.Body {
+			if err := g.emitStmt(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+		g.write(") [")
+		if err := g.emitExpr(fs.Start); err != nil {
+			return err
+		}
+		g.write("..")
+		// Haskell ranges are inclusive, XQL is exclusive
+		g.write("(")
+		if err := g.emitExpr(fs.End); err != nil {
+			return err
+		}
+		g.write("-1)")
+		g.writeln("]")
+		return nil
+	}
+	// each form
+	g.writeIndent()
+	g.write("mapM_ (\\")
+	g.write(fs.Var)
+	g.writeln(" -> do")
+	g.indent++
+	for _, s := range fs.Body {
+		if err := g.emitStmt(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.write(") ")
+	if err := g.emitExpr(fs.Iterable); err != nil {
+		return err
+	}
+	g.writeln("")
+	return nil
+}
+
+func (g *hsGen) emitExpr(n ast.Node) error {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return g.emitLiteral(node)
+	case *ast.Ident:
+		g.write(node.Name)
+		return nil
+	case *ast.BinaryExpr:
+		return g.emitBinary(node)
+	case *ast.UnaryExpr:
+		return g.emitUnary(node)
+	case *ast.CallExpr:
+		return g.emitCall(node)
+	case *ast.MemberExpr:
+		g.write(node.Field + " ")
+		return g.emitExpr(node.Object)
+	case *ast.StructLit:
+		return g.emitStructLit(node)
+	case *ast.ArrayLit:
+		return g.emitArrayLit(node)
+	case *ast.IndexExpr:
+		return g.emitIndexExpr(node)
+	default:
+		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
+	}
+}
+
+func (g *hsGen) emitBinary(be *ast.BinaryExpr) error {
+	if be.Op == "+" && (g.inferTypeKind(be.Left) == "String" || g.inferTypeKind(be.Right) == "String") {
+		g.write("(")
+		if err := g.emitExpr(be.Left); err != nil {
+			return err
+		}
+		g.write(" ++ ")
+		if err := g.emitExpr(be.Right); err != nil {
+			return err
+		}
+		g.write(")")
+		return nil
+	}
+	op := be.Op
+	switch op {
+	case "&&":
+		op = "&&"
+	case "||":
+		op = "||"
+	case "!=":
+		op = "/="
+	case "%":
+		op = "`mod`"
+	}
+	g.write("(")
+	if err := g.emitExpr(be.Left); err != nil {
+		return err
+	}
+	g.write(" " + op + " ")
+	if err := g.emitExpr(be.Right); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *hsGen) emitUnary(ue *ast.UnaryExpr) error {
+	switch ue.Op {
+	case "!":
+		g.write("(not ")
+		if err := g.emitExpr(ue.Operand); err != nil {
+			return err
+		}
+		g.write(")")
+	case "-":
+		g.write("(negate ")
+		if err := g.emitExpr(ue.Operand); err != nil {
+			return err
+		}
+		g.write(")")
+	default:
+		g.write(ue.Op)
+		if err := g.emitExpr(ue.Operand); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (g *hsGen) emitCall(ce *ast.CallExpr) error {
+	switch ce.Callee {
+	case "println":
+		if len(ce.Args) == 0 {
+			g.write(`putStrLn ""`)
+			return nil
+		}
+		tk := g.inferTypeKind(ce.Args[0])
+		if tk == "String" {
+			g.write("putStrLn ")
+		} else {
+			g.write("print ")
+		}
+		needParen := g.needParens(ce.Args[0])
+		if needParen {
+			g.write("(")
+		}
+		if err := g.emitExpr(ce.Args[0]); err != nil {
+			return err
+		}
+		if needParen {
+			g.write(")")
+		}
+		return nil
+	case "printf":
+		if len(ce.Args) > 0 {
+			g.write("putStr (show ")
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(")")
+		}
+		return nil
+	case "sprintf":
+		if len(ce.Args) > 0 {
+			g.write("show ")
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		} else {
+			g.write(`""`)
+		}
+		return nil
+	default:
+		g.write(ce.Callee)
+		for _, arg := range ce.Args {
+			g.write(" ")
+			needParen := g.needParens(arg)
+			if needParen {
+				g.write("(")
+			}
+			if err := g.emitExpr(arg); err != nil {
+				return err
+			}
+			if needParen {
+				g.write(")")
+			}
+		}
+		return nil
+	}
+}
+
+func (g *hsGen) needParens(n ast.Node) bool {
+	switch n.(type) {
+	case *ast.CallExpr, *ast.BinaryExpr, *ast.UnaryExpr:
+		return true
+	default:
+		return false
+	}
+}
+
+func (g *hsGen) emitLiteral(lit *ast.Literal) error {
+	switch lit.ValueType {
+	case "String":
+		s, _ := lit.Value.(string)
+		g.write(fmt.Sprintf("%q", s))
+	case "Int":
+		f, _ := lit.Value.(float64)
+		g.write(fmt.Sprintf("%d", int64(f)))
+	case "Float":
+		f, _ := lit.Value.(float64)
+		g.write(fmt.Sprintf("%g", f))
+	case "Bool":
+		b, _ := lit.Value.(bool)
+		if b {
+			g.write("True")
+		} else {
+			g.write("False")
+		}
+	default:
+		g.write(fmt.Sprintf("%v", lit.Value))
+	}
+	return nil
+}
+
+func (g *hsGen) emitStructLit(sl *ast.StructLit) error {
+	g.write(sl.TypeName + " {")
+	for i, f := range sl.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(f.Name + " = ")
+		if err := g.emitExpr(f.Value); err != nil {
+			return err
+		}
+	}
+	g.write("}")
+	return nil
+}
+
+func (g *hsGen) emitArrayLit(al *ast.ArrayLit) error {
+	g.write("[")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write("]")
+	return nil
+}
+
+func (g *hsGen) emitIndexExpr(ie *ast.IndexExpr) error {
+	g.write("(")
+	if err := g.emitExpr(ie.Target); err != nil {
+		return err
+	}
+	g.write(" !! ")
+	if err := g.emitExpr(ie.Index); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}

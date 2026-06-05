@@ -38,6 +38,9 @@ func GeneratePython(root ast.Node) ([]byte, error) {
 	}
 
 	var out strings.Builder
+	if g.needEnum {
+		out.WriteString("from enum import Enum\n\n")
+	}
 	if g.needDataclass {
 		out.WriteString("from dataclasses import dataclass\n\n")
 	}
@@ -49,6 +52,7 @@ type pyGen struct {
 	buf           *strings.Builder
 	indent        int
 	needDataclass bool
+	needEnum      bool
 }
 
 func (g *pyGen) write(s string)   { g.buf.WriteString(s) }
@@ -117,6 +121,10 @@ func (g *pyGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
@@ -132,6 +140,51 @@ func (g *pyGen) emitStructDecl(sd *ast.StructDecl) error {
 	for _, f := range sd.Fields {
 		g.writeIndent()
 		g.writeln(f.Name + ": " + typeToPython(f.Type))
+	}
+	g.indent--
+	return nil
+}
+
+func (g *pyGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.needEnum = true
+	g.writeIndent()
+	g.writeln("class " + ed.Name + "(Enum):")
+	g.indent++
+	for _, v := range ed.Variants {
+		g.writeIndent()
+		g.writeln(v + " = " + fmt.Sprintf("%q", v))
+	}
+	g.indent--
+	return nil
+}
+
+func (g *pyGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("match ")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(":")
+	g.indent++
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		g.write("case ")
+		if err := g.emitExpr(arm.Pattern); err != nil {
+			return err
+		}
+		g.writeln(":")
+		g.indent++
+		if len(arm.Body) == 0 {
+			g.writeIndent()
+			g.writeln("pass")
+		} else {
+			for _, stmt := range arm.Body {
+				if err := g.emitNode(stmt); err != nil {
+					return err
+				}
+			}
+		}
+		g.indent--
 	}
 	g.indent--
 	return nil

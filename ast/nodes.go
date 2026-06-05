@@ -135,6 +135,28 @@ type StructDecl struct {
 
 func (*StructDecl) Kind() string { return "StructDecl" }
 
+// EnumDecl represents an enum type declaration with simple string variants.
+type EnumDecl struct {
+	Name     string
+	Variants []string
+}
+
+func (*EnumDecl) Kind() string { return "EnumDecl" }
+
+// MatchArm represents one arm of a match expression.
+type MatchArm struct {
+	Pattern Node   // Literal or Ident (name "_" = wildcard)
+	Body    []Node
+}
+
+// MatchExpr represents a match/switch expression.
+type MatchExpr struct {
+	Value Node
+	Arms  []MatchArm
+}
+
+func (*MatchExpr) Kind() string { return "MatchExpr" }
+
 // --- Expressions ---
 
 // BinaryExpr represents a binary operation.
@@ -256,6 +278,10 @@ func parseNode(raw map[string]interface{}) (Node, error) {
 		return parseExprStmt(raw)
 	case "StructDecl":
 		return parseStructDecl(raw)
+	case "EnumDecl":
+		return parseEnumDecl(raw)
+	case "MatchExpr":
+		return parseMatchExpr(raw)
 	case "StructLit":
 		return parseStructLit(raw)
 	case "ArrayLit":
@@ -750,6 +776,60 @@ func parseArrayLit(raw map[string]interface{}) (*ArrayLit, error) {
 		al.Elements = nodes
 	}
 	return al, nil
+}
+
+func parseEnumDecl(raw map[string]interface{}) (*EnumDecl, error) {
+	ed := &EnumDecl{}
+	ed.Name, _ = raw["name"].(string)
+	if ed.Name == "" {
+		return nil, fmt.Errorf("XQL_E101: EnumDecl missing 'name'")
+	}
+	ed.Variants = parseStringList(raw["variants"])
+	if len(ed.Variants) == 0 {
+		return nil, fmt.Errorf("XQL_E101: EnumDecl '%s' missing 'variants'", ed.Name)
+	}
+	return ed, nil
+}
+
+func parseMatchExpr(raw map[string]interface{}) (*MatchExpr, error) {
+	me := &MatchExpr{}
+	val, err := parseChildNode(raw, "value")
+	if err != nil {
+		return nil, err
+	}
+	if val == nil {
+		return nil, fmt.Errorf("XQL_E101: MatchExpr missing 'value'")
+	}
+	me.Value = val
+
+	arms, ok := raw["arms"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("XQL_E101: MatchExpr missing 'arms'")
+	}
+	for _, a := range arms {
+		am, ok := a.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("XQL_E101: MatchExpr arm is not an object")
+		}
+		arm := MatchArm{}
+		pat, err := parseChildNode(am, "pattern")
+		if err != nil {
+			return nil, err
+		}
+		if pat == nil {
+			return nil, fmt.Errorf("XQL_E101: MatchExpr arm missing 'pattern'")
+		}
+		arm.Pattern = pat
+		if body, ok := am["body"].([]interface{}); ok {
+			nodes, err := parseNodeList(body)
+			if err != nil {
+				return nil, err
+			}
+			arm.Body = nodes
+		}
+		me.Arms = append(me.Arms, arm)
+	}
+	return me, nil
 }
 
 func parseIndexExpr(raw map[string]interface{}) (*IndexExpr, error) {

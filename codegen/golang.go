@@ -146,6 +146,10 @@ func (g *goGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: cannot emit statement for node kind %s", n.Kind())
 	}
@@ -482,6 +486,58 @@ func (g *goGen) emitIndexExpr(ie *ast.IndexExpr) error {
 		return err
 	}
 	g.write("]")
+	return nil
+}
+
+func (g *goGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.writeln("type " + ed.Name + " int")
+	g.writeln("")
+	g.writeIndent()
+	g.writeln("const (")
+	g.indent++
+	for i, v := range ed.Variants {
+		g.writeIndent()
+		if i == 0 {
+			g.writeln(ed.Name + v + " " + ed.Name + " = iota")
+		} else {
+			g.writeln(ed.Name + v)
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln(")")
+	return nil
+}
+
+func (g *goGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("switch ")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(" {")
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.writeln("default:")
+		} else {
+			g.write("case ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.writeln(":")
+		}
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+	}
+	g.writeIndent()
+	g.writeln("}")
 	return nil
 }
 

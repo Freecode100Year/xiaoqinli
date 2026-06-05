@@ -10,17 +10,25 @@ import (
 	"xiaoqinli/server"
 )
 
-const Version = "2.4.0"
+const Version = "2.5.0"
+
+var allTargets = []string{
+	"go", "rust", "ts", "kotlin", "swift", "py",
+	"java", "csharp", "dart", "lua", "ruby", "php",
+	"zig", "nim", "julia", "cpp", "c", "scala", "haskell",
+	"mql4", "mql5",
+}
 
 const usage = `xiaoqinli - AST-First transpiler v` + Version + `
 
 Usage:
   xiaoqinli compile --file <path.xql.json> --target <lang> [--out <output>]
   xiaoqinli validate --file <path.xql.json>
+  xiaoqinli targets                         List all supported target languages
   xiaoqinli stdio                           MCP stdio mode
   xiaoqinli http [<:port>] [--mode rest]    MCP/REST HTTP mode (default :8080)
 
-Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | mql4 | mql5 (default: go)
+Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | mql4 | mql5 (default: go)
 
 Exit codes: 0=success 1=validation failed 2=compilation error 3=argument error`
 
@@ -35,6 +43,10 @@ func main() {
 		cmdCompile(os.Args[2:])
 	case "validate":
 		cmdValidate(os.Args[2:])
+	case "targets":
+		for _, t := range allTargets {
+			fmt.Println(t)
+		}
 	case "stdio":
 		mcp := server.NewMCPServer()
 		if err := mcp.ServeStdio(); err != nil {

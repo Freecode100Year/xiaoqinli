@@ -207,7 +207,7 @@ func (s *MCPServer) handleInitialize(req *jsonRPCRequest) jsonRPCResponse {
 			"protocolVersion": "2025-03-26",
 			"serverInfo": map[string]string{
 				"name":    "xiaoqinli",
-				"version": "2.2.0",
+				"version": "2.5.0",
 			},
 			"capabilities": map[string]interface{}{
 				"tools":   map[string]interface{}{},
@@ -221,7 +221,7 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 	tools := []map[string]interface{}{
 		{
 			"name":        "compile",
-			"description": "Compile .xql.json AST to target language source code",
+			"description": "Compile .xql.json AST to target language source code. Runs type/effect/capability checks before codegen.",
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -231,7 +231,7 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 					},
 					"target": map[string]string{
 						"type":        "string",
-						"description": "Target language: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia (default: go)",
+						"description": "Target language: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | mql4 | mql5 (default: go)",
 					},
 				},
 				"required": []string{"source"},
@@ -239,7 +239,7 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 		},
 		{
 			"name":        "validate",
-			"description": "Validate .xql.json AST without generating code",
+			"description": "Validate .xql.json AST (type check + effect check + capability check) without generating code",
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -249,6 +249,14 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 					},
 				},
 				"required": []string{"source"},
+			},
+		},
+		{
+			"name":        "targets",
+			"description": "List all supported target languages with their flags and file extensions",
+			"inputSchema": map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
 			},
 		},
 	}
@@ -286,6 +294,8 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 		return s.toolCompile(req.ID, args.Source, args.Target)
 	case "validate":
 		return s.toolValidate(req.ID, args.Source)
+	case "targets":
+		return s.toolTargets(req.ID)
 	default:
 		return jsonRPCResponse{
 			JSONRPC: "2.0",
@@ -334,6 +344,49 @@ func (s *MCPServer) toolValidate(id interface{}, source string) jsonRPCResponse 
 		Result: map[string]interface{}{
 			"content": []map[string]string{
 				{"type": "text", "text": "ok: all checks passed"},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
+	targets := []map[string]string{
+		{"flag": "go", "ext": ".go", "name": "Go"},
+		{"flag": "rust", "ext": ".rs", "name": "Rust"},
+		{"flag": "ts", "ext": ".ts", "name": "TypeScript"},
+		{"flag": "py", "ext": ".py", "name": "Python"},
+		{"flag": "cpp", "ext": ".cpp", "name": "C++"},
+		{"flag": "c", "ext": ".c", "name": "C"},
+		{"flag": "java", "ext": ".java", "name": "Java"},
+		{"flag": "csharp", "ext": ".cs", "name": "C#"},
+		{"flag": "kotlin", "ext": ".kt", "name": "Kotlin"},
+		{"flag": "swift", "ext": ".swift", "name": "Swift"},
+		{"flag": "scala", "ext": ".scala", "name": "Scala"},
+		{"flag": "haskell", "ext": ".hs", "name": "Haskell"},
+		{"flag": "dart", "ext": ".dart", "name": "Dart"},
+		{"flag": "lua", "ext": ".lua", "name": "Lua"},
+		{"flag": "ruby", "ext": ".rb", "name": "Ruby"},
+		{"flag": "php", "ext": ".php", "name": "PHP"},
+		{"flag": "zig", "ext": ".zig", "name": "Zig"},
+		{"flag": "nim", "ext": ".nim", "name": "Nim"},
+		{"flag": "julia", "ext": ".jl", "name": "Julia"},
+		{"flag": "mql4", "ext": ".mq4", "name": "MQL4"},
+		{"flag": "mql5", "ext": ".mq5", "name": "MQL5"},
+	}
+	lines := make([]string, len(targets))
+	for i, t := range targets {
+		lines[i] = t["flag"] + " (" + t["name"] + ", " + t["ext"] + ")"
+	}
+	text := "Supported targets (21 languages):\n"
+	for _, l := range lines {
+		text += "  " + l + "\n"
+	}
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": text},
 			},
 		},
 	}

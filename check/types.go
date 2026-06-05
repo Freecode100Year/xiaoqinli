@@ -28,9 +28,9 @@ var builtinFuncs = map[string]struct {
 
 // TypeChecker performs static type checking on a typed AST.
 type TypeChecker struct {
-	// funcTable maps function name to its declaration for cross-reference.
 	funcTable   map[string]*ast.FunctionDecl
 	structTable map[string]*ast.StructDecl
+	enumTable   map[string]*ast.EnumDecl
 	errors      []string
 }
 
@@ -39,6 +39,7 @@ func NewTypeChecker() *TypeChecker {
 	return &TypeChecker{
 		funcTable:   make(map[string]*ast.FunctionDecl),
 		structTable: make(map[string]*ast.StructDecl),
+		enumTable:   make(map[string]*ast.EnumDecl),
 	}
 }
 
@@ -71,6 +72,8 @@ func (tc *TypeChecker) collectFunctions(n ast.Node) {
 		tc.funcTable[node.Name] = node
 	case *ast.StructDecl:
 		tc.structTable[node.Name] = node
+	case *ast.EnumDecl:
+		tc.enumTable[node.Name] = node
 	}
 }
 
@@ -204,6 +207,14 @@ func (tc *TypeChecker) checkStmt(n ast.Node, fn *ast.FunctionDecl, scope map[str
 		// No type checking needed.
 	case *ast.ExprStmt:
 		tc.inferType(node.Expr, scope)
+	case *ast.MatchExpr:
+		tc.inferType(node.Value, scope)
+		for _, arm := range node.Arms {
+			armScope := forkScope(scope)
+			for _, s := range arm.Body {
+				tc.checkStmt(s, fn, armScope)
+			}
+		}
 	}
 }
 
@@ -321,6 +332,9 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 				return *targetType.Elem
 			}
 		}
+		return none
+	case *ast.MatchExpr:
+		tc.inferType(node.Value, scope)
 		return none
 	default:
 		return none
@@ -505,6 +519,13 @@ func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]as
 	case *ast.IndexExpr:
 		collectEffects(node.Target, seen, funcBodies, result, resolving)
 		collectEffects(node.Index, seen, funcBodies, result, resolving)
+	case *ast.MatchExpr:
+		collectEffects(node.Value, seen, funcBodies, result, resolving)
+		for _, arm := range node.Arms {
+			for _, s := range arm.Body {
+				collectEffects(s, seen, funcBodies, result, resolving)
+			}
+		}
 	}
 }
 

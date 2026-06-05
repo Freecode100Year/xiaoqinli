@@ -48,6 +48,12 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateMQL4(root)
 	case "mql5":
 		return GenerateMQL5(root)
+	case "c":
+		return GenerateC(root)
+	case "scala":
+		return GenerateScala(root)
+	case "haskell":
+		return GenerateHaskell(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}
@@ -144,6 +150,12 @@ func walkTypes(n ast.Node, fn func(ast.TypeExpr, string)) {
 	case *ast.StructDecl:
 		for _, f := range node.Fields {
 			fn(f.Type, fmt.Sprintf("field '%s' of struct '%s'", f.Name, node.Name))
+		}
+	case *ast.MatchExpr:
+		for _, arm := range node.Arms {
+			for _, s := range arm.Body {
+				walkTypes(s, fn)
+			}
 		}
 	}
 }
