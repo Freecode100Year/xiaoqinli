@@ -25,11 +25,14 @@ func GenerateHaskell(root ast.Node) ([]byte, error) {
 	}
 
 	var structs []*ast.StructDecl
+	var enums []*ast.EnumDecl
 	var funcs []*ast.FunctionDecl
 	for _, d := range prog.Decls {
 		switch n := d.(type) {
 		case *ast.StructDecl:
 			structs = append(structs, n)
+		case *ast.EnumDecl:
+			enums = append(enums, n)
 		case *ast.FunctionDecl:
 			funcs = append(funcs, n)
 		}
@@ -40,6 +43,11 @@ func GenerateHaskell(root ast.Node) ([]byte, error) {
 
 	if g.needIORef {
 		out.WriteString("import Data.IORef\n\n")
+	}
+
+	for _, ed := range enums {
+		g.emitEnumDecl(ed)
+		g.writeln("")
 	}
 
 	for _, sd := range structs {
@@ -269,6 +277,8 @@ func (g *hsGen) emitStmt(n ast.Node) error {
 		return fmt.Errorf("XQL_E401: Haskell does not support break")
 	case *ast.ContinueStmt:
 		return fmt.Errorf("XQL_E401: Haskell does not support continue")
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
@@ -282,33 +292,90 @@ func (g *hsGen) emitIf(is *ast.IfStmt) error {
 	}
 	g.writeln("")
 	g.indent++
-	g.writeIndent()
-	g.writeln("then do")
-	g.indent++
-	for _, s := range is.Then {
-		if err := g.emitStmt(s); err != nil {
-			return err
-		}
-	}
-	g.indent--
-	g.writeIndent()
-	g.writeln("else do")
-	g.indent++
-	if len(is.Else) > 0 {
-		for _, s := range is.Else {
+
+	if g.inIO {
+		g.writeIndent()
+		g.writeln("then do")
+		g.indent++
+		for _, s := range is.Then {
 			if err := g.emitStmt(s); err != nil {
 				return err
 			}
 		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("else do")
+		g.indent++
+		if len(is.Else) > 0 {
+			for _, s := range is.Else {
+				if err := g.emitStmt(s); err != nil {
+					return err
+				}
+			}
+		} else {
+			g.writeIndent()
+			g.writeln("return ()")
+		}
+		g.indent--
 	} else {
 		g.writeIndent()
-		if g.inIO {
-			g.writeln("return ()")
+		g.write("then ")
+		if err := g.emitPureBranch(is.Then); err != nil {
+			return err
+		}
+		g.writeIndent()
+		g.write("else ")
+		if len(is.Else) > 0 {
+			if err := g.emitPureBranch(is.Else); err != nil {
+				return err
+			}
 		} else {
 			g.writeln("()")
 		}
 	}
+
 	g.indent--
+	return nil
+}
+
+func (g *hsGen) emitPureBranch(body []ast.Node) error {
+	if len(body) == 1 {
+		if rs, ok := body[0].(*ast.ReturnStmt); ok && rs.Value != nil {
+			if err := g.emitExpr(rs.Value); err != nil {
+				return err
+			}
+			g.writeln("")
+			return nil
+		}
+	}
+	g.writeln("")
+	g.indent++
+	lets := body[:len(body)-1]
+	last := body[len(body)-1]
+	for _, s := range lets {
+		if vd, ok := s.(*ast.VarDecl); ok {
+			g.writeIndent()
+			g.write("let " + vd.Name + " = ")
+			if vd.Value != nil {
+				if err := g.emitExpr(vd.Value); err != nil {
+					return err
+				}
+			} else {
+				g.write("undefined")
+			}
+			g.writeln("")
+		}
+	}
+	g.writeIndent()
+	g.write("in ")
+	if rs, ok := last.(*ast.ReturnStmt); ok && rs.Value != nil {
+		if err := g.emitExpr(rs.Value); err != nil {
+			return err
+		}
+		g.writeln("")
+	} else {
+		g.writeln("()")
+	}
 	g.indent--
 	return nil
 }
@@ -512,7 +579,7 @@ func (g *hsGen) emitCall(ce *ast.CallExpr) error {
 
 func (g *hsGen) needParens(n ast.Node) bool {
 	switch n.(type) {
-	case *ast.CallExpr, *ast.BinaryExpr, *ast.UnaryExpr:
+	case *ast.CallExpr, *ast.BinaryExpr, *ast.UnaryExpr, *ast.MemberExpr:
 		return true
 	default:
 		return false
@@ -582,5 +649,54 @@ func (g *hsGen) emitIndexExpr(ie *ast.IndexExpr) error {
 		return err
 	}
 	g.write(")")
+	return nil
+}
+
+func (g *hsGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeln("data " + ed.Name + " = " + strings.Join(ed.Variants, " | ") + " deriving (Show, Eq)")
+	return nil
+}
+
+func (g *hsGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("case ")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(" of")
+	g.indent++
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.write("_ -> ")
+		} else {
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.write(" -> ")
+		}
+		if len(arm.Body) == 1 {
+			if es, ok := arm.Body[0].(*ast.ExprStmt); ok {
+				if err := g.emitExpr(es.Expr); err != nil {
+					return err
+				}
+				g.writeln("")
+				continue
+			}
+		}
+		if g.inIO {
+			g.writeln("do")
+		} else {
+			g.writeln("")
+		}
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitStmt(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+	}
+	g.indent--
 	return nil
 }

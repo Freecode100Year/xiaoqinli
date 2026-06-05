@@ -1915,9 +1915,54 @@ func TestEnumMatchCodegenCpp(t *testing.T) {
 	}
 }
 
+func TestEnumMatchCodegenC(t *testing.T) {
+	root := mustParse(t, enumMatchProgram)
+	out, err := GenerateC(root)
+	if err != nil {
+		t.Fatalf("GenerateC: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "typedef enum") {
+		t.Errorf("C should emit typedef enum, got:\n%s", code)
+	}
+	if !strings.Contains(code, "switch (x)") {
+		t.Errorf("C should emit switch, got:\n%s", code)
+	}
+}
+
+func TestEnumMatchCodegenScala(t *testing.T) {
+	root := mustParse(t, enumMatchProgram)
+	out, err := GenerateScala(root)
+	if err != nil {
+		t.Fatalf("GenerateScala: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "object Color") {
+		t.Errorf("Scala should emit object enum, got:\n%s", code)
+	}
+	if !strings.Contains(code, "match {") {
+		t.Errorf("Scala should emit match, got:\n%s", code)
+	}
+}
+
+func TestEnumMatchCodegenHaskell(t *testing.T) {
+	root := mustParse(t, enumMatchProgram)
+	out, err := GenerateHaskell(root)
+	if err != nil {
+		t.Fatalf("GenerateHaskell: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "data Color") {
+		t.Errorf("Haskell should emit data Color, got:\n%s", code)
+	}
+	if !strings.Contains(code, "case") {
+		t.Errorf("Haskell should emit case expression, got:\n%s", code)
+	}
+}
+
 func TestEnumMatchCodegenMultiTarget(t *testing.T) {
 	root := mustParse(t, enumMatchProgram)
-	targets := []string{"go", "rust", "py", "cpp", "c"}
+	targets := []string{"go", "rust", "py", "cpp", "c", "scala", "haskell"}
 	for _, tgt := range targets {
 		t.Run("match_"+tgt, func(t *testing.T) {
 			out, err := Generate(root, tgt)
@@ -1928,5 +1973,76 @@ func TestEnumMatchCodegenMultiTarget(t *testing.T) {
 				t.Fatalf("Generate(%q) returned empty", tgt)
 			}
 		})
+	}
+}
+
+func TestHaskellPureIfNoDoBlock(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateHaskell(root)
+	if err != nil {
+		t.Fatalf("GenerateHaskell: %v", err)
+	}
+	code := string(out)
+	if strings.Contains(code, "then do") {
+		if !strings.Contains(code, "main = do") || strings.Count(code, "then do") > 0 {
+			lines := strings.Split(code, "\n")
+			for _, l := range lines {
+				if strings.Contains(l, "then do") {
+					t.Errorf("pure function should not use 'then do', found: %s", l)
+				}
+			}
+		}
+	}
+}
+
+const printfMultiArgProgram = `{
+	"kind": "Program",
+	"declarations": [{
+		"kind": "FunctionDecl",
+		"name": "main",
+		"params": [],
+		"returnType": {"kind": "Void"},
+		"effects": ["state"],
+		"grant": ["io"],
+		"body": [{
+			"kind": "VarDecl",
+			"name": "name",
+			"type": {"kind": "String"},
+			"value": {"kind": "Literal", "valueType": "String", "value": "world"}
+		}, {
+			"kind": "ExprStmt",
+			"expr": {
+				"kind": "CallExpr",
+				"callee": "printf",
+				"args": [
+					{"kind": "Literal", "valueType": "String", "value": "hello %s"},
+					{"kind": "Ident", "name": "name"}
+				]
+			}
+		}]
+	}]
+}`
+
+func TestCPrintfMultiArg(t *testing.T) {
+	root := mustParse(t, printfMultiArgProgram)
+	out, err := GenerateC(root)
+	if err != nil {
+		t.Fatalf("GenerateC: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, `printf("hello %s", name)`) {
+		t.Errorf("C printf should pass all args, got:\n%s", code)
+	}
+}
+
+func TestScalaPrintfMultiArg(t *testing.T) {
+	root := mustParse(t, printfMultiArgProgram)
+	out, err := GenerateScala(root)
+	if err != nil {
+		t.Fatalf("GenerateScala: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, ".format(name)") {
+		t.Errorf("Scala printf should use .format with args, got:\n%s", code)
 	}
 }

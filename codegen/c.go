@@ -501,6 +501,19 @@ func (g *cGen) emitCall(ce *ast.CallExpr) error {
 		if len(ce.Args) == 0 {
 			return nil
 		}
+		if len(ce.Args) >= 2 {
+			g.write("printf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+			return nil
+		}
 		tk := g.inferTypeKind(ce.Args[0])
 		g.write(`printf("` + g.printfFmt(tk) + `", `)
 		if err := g.emitExpr(ce.Args[0]); err != nil {

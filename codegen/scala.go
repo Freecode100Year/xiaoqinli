@@ -16,11 +16,14 @@ func GenerateScala(root ast.Node) ([]byte, error) {
 	}
 
 	var structs []*ast.StructDecl
+	var enums []*ast.EnumDecl
 	var funcs []*ast.FunctionDecl
 	for _, d := range prog.Decls {
 		switch n := d.(type) {
 		case *ast.StructDecl:
 			structs = append(structs, n)
+		case *ast.EnumDecl:
+			enums = append(enums, n)
 		case *ast.FunctionDecl:
 			funcs = append(funcs, n)
 		}
@@ -35,6 +38,13 @@ func GenerateScala(root ast.Node) ([]byte, error) {
 
 	g.writeln("object Main {")
 	g.indent++
+
+	for _, ed := range enums {
+		if err := g.emitEnumDecl(ed); err != nil {
+			return nil, err
+		}
+		g.writeln("")
+	}
 
 	for i, fd := range funcs {
 		if i > 0 {
@@ -131,6 +141,10 @@ func (g *scalaGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
@@ -372,6 +386,23 @@ func (g *scalaGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
+		if len(ce.Args) >= 2 {
+			g.write("print(")
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(".format(")
+			for i, arg := range ce.Args[1:] {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write("))")
+			return nil
+		}
 		g.write("print(")
 		if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
@@ -463,5 +494,51 @@ func (g *scalaGen) emitIndexExpr(ie *ast.IndexExpr) error {
 		return err
 	}
 	g.write(".toInt)")
+	return nil
+}
+
+func (g *scalaGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.writeln("object " + ed.Name + " extends Enumeration {")
+	g.indent++
+	for _, v := range ed.Variants {
+		g.writeIndent()
+		g.writeln("val " + v + " = Value")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *scalaGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(" match {")
+	g.indent++
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		g.write("case ")
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.write("_")
+		} else {
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+		}
+		g.writeln(" =>")
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
 	return nil
 }
