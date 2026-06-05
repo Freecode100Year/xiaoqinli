@@ -1,10 +1,10 @@
 # Xiaoqinli (xql)
 
-**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out — 18 languages, single Go binary, zero dependencies.
+**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out — 21 languages, single Go binary, zero dependencies.
 
 ```
   .xql.json  ──▶  Type Check  ──▶  Effect Inference  ──▶  Capability Enforcement  ──▶  Source Code
-  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (18 targets)
+  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (21 targets)
 ```
 
 AI agents write structured `.xql.json` directly — no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
@@ -18,10 +18,13 @@ AI agents write structured `.xql.json` directly — no parser, no syntax errors.
 | TypeScript | `ts` | `.ts` | yes | `main()` call |
 | Python | `py` | `.py` | yes | `if __name__` |
 | C++ | `cpp` | `.cpp` | yes | `int main()` |
+| C | `c` | `.c` | — | `int main()` |
 | Kotlin | `kotlin` | `.kt` | — | `fun main()` |
 | Swift | `swift` | `.swift` | — | top-level |
 | Java | `java` | `.java` | — | `public static void main` |
 | C# | `csharp` | `.cs` | — | `static void Main` |
+| Scala | `scala` | `.scala` | — | `object Main { def main }` |
+| Haskell | `haskell` | `.hs` | — | `main :: IO ()` |
 | Dart | `dart` | `.dart` | — | `void main()` |
 | Lua | `lua` | `.lua` | — | top-level |
 | Ruby | `ruby` | `.rb` | — | top-level |
@@ -35,6 +38,11 @@ AI agents write structured `.xql.json` directly — no parser, no syntax errors.
 **Verified** = round-trip tested in CI (generate → compile → run → compare stdout).
 
 > \* **MQL4/MQL5:** Script mode only. Generates language skeleton with `OnStart` entry and `Print` output — no trading API (`OrderSend`, `CTrade`, `OnTick`, `OnCalculate`). Cannot be CI-verified (MetaEditor is closed-source). Map, Option, and Result types emit `XQL_E403`.
+
+**Backend notes:**
+- **C** — Uses `long` for Int, `_xql_strcat` helper for string concatenation (`malloc`+`memcpy`). Rejects Option/Map/Result types and for-each loops (`XQL_E402`).
+- **Haskell** — Pure functions use expression-based if/then/else; IO functions use `do` notation. Rejects mutable patterns: `AssignStmt`, `WhileStmt`, `BreakStmt`, `ContinueStmt` (`XQL_E401`).
+- **Scala** — Wraps all code in `object Main`. Uses `val`/`var` based on reassignment analysis. `Long` for Int with `L` suffixes.
 
 ## Quick Start
 
@@ -206,6 +214,64 @@ print(greet("World"))
 </details>
 
 <details>
+<summary><strong>C</strong></summary>
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+static char* _xql_strcat(const char* a, const char* b) {
+    size_t la = strlen(a), lb = strlen(b);
+    char* r = (char*)malloc(la + lb + 1);
+    memcpy(r, a, la);
+    memcpy(r + la, b, lb + 1);
+    return r;
+}
+
+const char* greet(const char* name) {
+    return _xql_strcat("Hello, ", name);
+}
+
+int main() {
+    printf("%s\n", greet("World"));
+    return 0;
+}
+```
+</details>
+
+<details>
+<summary><strong>Scala</strong></summary>
+
+```scala
+object Main {
+    def greet(name: String): String = {
+        return ("Hello, " + name)
+    }
+
+    def main(args: Array[String]): Unit = {
+        println(greet("World"))
+    }
+}
+```
+</details>
+
+<details>
+<summary><strong>Haskell</strong></summary>
+
+```haskell
+module Main where
+
+greet :: String -> String
+greet name = ("Hello, " ++ name)
+
+main :: IO ()
+main = do
+    putStrLn (greet "World")
+```
+</details>
+
+<details>
 <summary><strong>MQL5</strong></summary>
 
 ```mql5
@@ -251,17 +317,17 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 
 ## Type System
 
-| XQL Kind | Go | Rust | C++ | TypeScript | Python | MQL4/5 |
-|----------|-----|------|-----|------------|--------|--------|
-| `Int` | `int` | `i64` | `long` | `number` | `int` | `long` |
-| `Float` | `float64` | `f64` | `double` | `number` | `float` | `double` |
-| `String` | `string` | `String` | `std::string` | `string` | `str` | `string` |
-| `Bool` | `bool` | `bool` | `bool` | `boolean` | `bool` | `bool` |
-| `Void` | — | — | `void` | `void` | `None` | `void` |
-| `Array<T>` | `[]T` | `Vec<T>` | `std::vector<T>` | `T[]` | `list[T]` | `T[]` |
-| `Option<T>` | `*T` | `Option<T>` | `std::optional<T>` | `T \| null` | `Optional[T]` | E403 |
-| `Map<K,V>` | `map[K]V` | `HashMap<K,V>` | `std::unordered_map<K,V>` | `Map<K,V>` | `dict[K,V]` | E403 |
-| `Result<T>` | `(T, error)` | `Result<T,E>` | E402 | E402 | E402 | E403 |
+| XQL Kind | Go | Rust | C | C++ | Scala | Haskell | Python | MQL4/5 |
+|----------|-----|------|---|-----|-------|---------|--------|--------|
+| `Int` | `int` | `i64` | `long` | `long` | `Long` | `Int` | `int` | `long` |
+| `Float` | `float64` | `f64` | `double` | `double` | `Double` | `Double` | `float` | `double` |
+| `String` | `string` | `String` | `const char*` | `std::string` | `String` | `String` | `str` | `string` |
+| `Bool` | `bool` | `bool` | `int` | `bool` | `Boolean` | `Bool` | `bool` | `bool` |
+| `Void` | — | — | `void` | `void` | `Unit` | `()` | `None` | `void` |
+| `Array<T>` | `[]T` | `Vec<T>` | `T[]` | `std::vector<T>` | `Array[T]` | `[T]` | `list[T]` | `T[]` |
+| `Option<T>` | `*T` | `Option<T>` | E402 | `std::optional<T>` | `Option[T]` | `Maybe T` | `Optional[T]` | E403 |
+| `Map<K,V>` | `map[K]V` | `HashMap<K,V>` | E402 | `std::unordered_map<K,V>` | `Map[K,V]` | — | `dict[K,V]` | E403 |
+| `Result<T>` | `(T, error)` | `Result<T,E>` | E402 | E402 | `Either[Throwable,T]` | — | E402 | E403 |
 
 ## .xql.json Node Reference
 
@@ -277,6 +343,7 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 |------|--------|-------------|
 | `FunctionDecl` | `name`, `params[]`, `returnType`, `effects[]`, `grant[]`, `body[]` | Function definition |
 | `StructDecl` | `name`, `fields[]` | Struct type definition |
+| `EnumDecl` | `name`, `variants[]` | Enum type definition |
 
 ### Statements
 
@@ -305,6 +372,7 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 | `StructLit` | `typeName`, `fields[]` | Struct construction |
 | `ArrayLit` | `elemType`, `elements[]` | Array literal |
 | `IndexExpr` | `target`, `index` | Index access (`arr[i]`) |
+| `MatchExpr` | `value`, `arms[]` | Pattern match / switch expression |
 
 ### Built-in Functions
 
@@ -357,6 +425,7 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 |------|------|-------------|
 | `compile` | `source`, `target` | Compile `.xql.json` AST to target language |
 | `validate` | `source` | Validate AST without generating code |
+| `targets` | — | List all 21 supported target languages |
 
 ## Error Codes
 
@@ -378,7 +447,7 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 
 ```
 xiaoqinli/
-  main.go                    CLI entry + version (2.4.0)
+  main.go                    CLI entry + version (2.5.0)
   ast/
     nodes.go                 AST node definitions + JSON parser
     hash.go                  Content-addressable hashing
@@ -403,9 +472,12 @@ xiaoqinli/
     zig.go                   Zig backend
     nim.go                   Nim backend
     julia.go                 Julia backend
+    c.go                     C99 backend (printf, _xql_strcat)
+    scala.go                 Scala backend (object Main wrapper)
+    haskell.go               Haskell backend (pure + IO, do notation)
     mql.go                   MQL4/MQL5 shared backend (script mode)
     util.go                  Generate() dispatcher + shared utilities
-    codegen_test.go          93 tests across all 18 backends
+    codegen_test.go          124 tests across all 21 backends
     roundtrip_test.go        Compile-and-run verification (Go, Rust, Python, TS, C++)
   server/
     mcp.go                   MCP server (stdio + streamable HTTP)
@@ -427,7 +499,7 @@ xiaoqinli/
 ## Tests
 
 ```bash
-go test ./... -v              # run all tests (93 tests)
+go test ./... -v              # run all tests (124 tests)
 go build -o xql . && go test ./... -v   # build + test
 ```
 
