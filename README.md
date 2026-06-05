@@ -11,44 +11,48 @@ AI agents write structured `.xql.json` directly — no parser, no syntax errors.
 
 ## Supported Languages
 
-| Target | Flag | Verified |
-|--------|------|----------|
-| Go | `go` | yes |
-| Rust | `rust` | yes |
-| TypeScript | `ts` | yes |
-| Python | `py` | yes |
-| C++ | `cpp` | yes |
-| Kotlin | `kotlin` | — |
-| Swift | `swift` | — |
-| Java | `java` | — |
-| C# | `csharp` | — |
-| Dart | `dart` | — |
-| Lua | `lua` | — |
-| Ruby | `ruby` | — |
-| PHP | `php` | — |
-| Zig | `zig` | — |
-| Nim | `nim` | — |
-| Julia | `julia` | — |
-| MQL4 | `mql4` | no* |
-| MQL5 | `mql5` | no* |
+| Target | Flag | Extension | Verified | Entry Point |
+|--------|------|-----------|----------|-------------|
+| Go | `go` | `.go` | yes | `func main()` |
+| Rust | `rust` | `.rs` | yes | `fn main()` |
+| TypeScript | `ts` | `.ts` | yes | `main()` call |
+| Python | `py` | `.py` | yes | `if __name__` |
+| C++ | `cpp` | `.cpp` | yes | `int main()` |
+| Kotlin | `kotlin` | `.kt` | — | `fun main()` |
+| Swift | `swift` | `.swift` | — | top-level |
+| Java | `java` | `.java` | — | `public static void main` |
+| C# | `csharp` | `.cs` | — | `static void Main` |
+| Dart | `dart` | `.dart` | — | `void main()` |
+| Lua | `lua` | `.lua` | — | top-level |
+| Ruby | `ruby` | `.rb` | — | top-level |
+| PHP | `php` | `.php` | — | top-level |
+| Zig | `zig` | `.zig` | — | `pub fn main()` |
+| Nim | `nim` | `.nim` | — | top-level |
+| Julia | `julia` | `.jl` | — | `main()` call |
+| MQL4 | `mql4` | `.mq4` | no* | `void OnStart()` |
+| MQL5 | `mql5` | `.mq5` | no* | `void OnStart()` |
 
-> \* **MQL4/MQL5 limitations:** Script mode only (`OnStart` entry point). Generates language skeleton — no trading API (`OrderSend`, `CTrade`, `OnTick`, `OnCalculate`). Cannot be CI-verified (MetaEditor compiler is closed-source). Map, Option, and Result types are not supported and will emit `XQL_E403`.
+**Verified** = round-trip tested in CI (generate → compile → run → compare stdout).
+
+> \* **MQL4/MQL5:** Script mode only. Generates language skeleton with `OnStart` entry and `Print` output — no trading API (`OrderSend`, `CTrade`, `OnTick`, `OnCalculate`). Cannot be CI-verified (MetaEditor is closed-source). Map, Option, and Result types emit `XQL_E403`.
 
 ## Quick Start
 
 ```bash
 go build -o xql .
 
-# Validate without generating code
+# Validate AST without generating code
 ./xql validate --file examples/hello.xql.json
 
 # Compile to any target
 ./xql compile --file examples/hello.xql.json --target go
+./xql compile --file examples/hello.xql.json --target cpp    --out main.cpp
 ./xql compile --file examples/hello.xql.json --target rust   --out main.rs
 ./xql compile --file examples/hello.xql.json --target py     --out main.py
+./xql compile --file examples/hello.xql.json --target mql5   --out script.mq5
 ```
 
-## One AST, Fifteen Languages
+## One AST, Many Languages
 
 Write one `.xql.json`, compile to any target:
 
@@ -95,7 +99,7 @@ Write one `.xql.json`, compile to any target:
 ```
 
 <details>
-<summary><strong>Go output</strong></summary>
+<summary><strong>Go</strong></summary>
 
 ```go
 package main
@@ -113,7 +117,7 @@ func main() {
 </details>
 
 <details>
-<summary><strong>Rust output</strong></summary>
+<summary><strong>Rust</strong></summary>
 
 ```rust
 fn greet(name: &str) -> String {
@@ -127,7 +131,25 @@ fn main() {
 </details>
 
 <details>
-<summary><strong>Python output</strong></summary>
+<summary><strong>C++</strong></summary>
+
+```cpp
+#include <iostream>
+#include <string>
+
+std::string greet(std::string name) {
+    return ("Hello, " + name);
+}
+
+int main() {
+    std::cout << greet("World") << std::endl;
+    return 0;
+}
+```
+</details>
+
+<details>
+<summary><strong>Python</strong></summary>
 
 ```python
 def greet(name: str) -> str:
@@ -141,15 +163,78 @@ if __name__ == "__main__":
 ```
 </details>
 
+<details>
+<summary><strong>Java</strong></summary>
+
+```java
+public class Main {
+    static String greet(String name) {
+        return ("Hello, " + name);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(greet("World"));
+    }
+}
+```
+</details>
+
+<details>
+<summary><strong>Kotlin</strong></summary>
+
+```kotlin
+fun greet(name: String): String {
+    return ("Hello, " + name)
+}
+
+fun main() {
+    println(greet("World"))
+}
+```
+</details>
+
+<details>
+<summary><strong>Swift</strong></summary>
+
+```swift
+func greet(_ name: String) -> String {
+    return ("Hello, " + name)
+}
+
+print(greet("World"))
+```
+</details>
+
+<details>
+<summary><strong>MQL5</strong></summary>
+
+```mql5
+#property strict
+
+string greet(string name) {
+    return ("Hello, " + name);
+}
+
+void OnStart() {
+    Print(greet("World"));
+}
+```
+</details>
+
 ## Static Analysis Pipeline
 
 All checks run before code generation. If any check fails, no code is emitted.
 
-| Phase | What it validates | Error codes |
-|-------|-------------------|-------------|
-| **Type check** | Variable types, function signatures, return types, operator compatibility, array element types, struct field types, index expression types | `XQL_E2xx` |
-| **Effect inference** | Side effects (`network`/`filesystem`/`state`), purity violations, transitive propagation through call chains | `XQL_E2xx` |
-| **Capability check** | `@grant` enforcement — callee capabilities must be subset of caller's, checked through all control flow paths including for-loops | `XQL_E3xx` |
+```
+  Parse JSON  ──▶  Type Check  ──▶  Effect Check  ──▶  Capability Check  ──▶  Codegen
+  (XQL_E1xx)      (XQL_E2xx)      (XQL_E2xx)         (XQL_E3xx)             (XQL_E4xx)
+```
+
+| Phase | What it validates |
+|-------|-------------------|
+| **Type check** | Variable types, function signatures, return types, operator compatibility, array element types, struct field types, index expression types |
+| **Effect inference** | Side effects (`network`/`filesystem`/`state`), purity violations, transitive propagation through call chains |
+| **Capability check** | `@grant` enforcement — callee capabilities must be subset of caller's, checked through all control flow paths including for-loops |
 
 ### Type Inference
 
@@ -166,16 +251,17 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 
 ## Type System
 
-| XQL Kind | Go | Rust | TypeScript | Python | C++ | MQL4/5 |
-|----------|-----|------|------------|--------|-----|--------|
-| `Int` | `int` | `i64` | `number` | `int` | `long` | `long` |
-| `Float` | `float64` | `f64` | `number` | `float` | `double` | `double` |
-| `String` | `string` | `String` | `string` | `str` | `std::string` | `string` |
-| `Bool` | `bool` | `bool` | `boolean` | `bool` | `bool` | `bool` |
-| `Void` | — | — | `void` | `None` | `void` | `void` |
-| `Array<T>` | `[]T` | `Vec<T>` | `T[]` | `list[T]` | `std::vector<T>` | `T[]` |
-| `Option<T>` | `*T` | `Option<T>` | `T \| null` | `Optional[T]` | `std::optional<T>` | E403 |
-| `Map<K,V>` | `map[K]V` | `HashMap<K,V>` | `Map<K,V>` | `dict[K,V]` | `std::unordered_map<K,V>` | E403 |
+| XQL Kind | Go | Rust | C++ | TypeScript | Python | MQL4/5 |
+|----------|-----|------|-----|------------|--------|--------|
+| `Int` | `int` | `i64` | `long` | `number` | `int` | `long` |
+| `Float` | `float64` | `f64` | `double` | `number` | `float` | `double` |
+| `String` | `string` | `String` | `std::string` | `string` | `str` | `string` |
+| `Bool` | `bool` | `bool` | `bool` | `boolean` | `bool` | `bool` |
+| `Void` | — | — | `void` | `void` | `None` | `void` |
+| `Array<T>` | `[]T` | `Vec<T>` | `std::vector<T>` | `T[]` | `list[T]` | `T[]` |
+| `Option<T>` | `*T` | `Option<T>` | `std::optional<T>` | `T \| null` | `Optional[T]` | E403 |
+| `Map<K,V>` | `map[K]V` | `HashMap<K,V>` | `std::unordered_map<K,V>` | `Map<K,V>` | `dict[K,V]` | E403 |
+| `Result<T>` | `(T, error)` | `Result<T,E>` | E402 | E402 | E402 | E403 |
 
 ## .xql.json Node Reference
 
@@ -187,42 +273,48 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 
 ### Declarations
 
-- **FunctionDecl** — `name`, `params[]` (`{name, type}`), `returnType`, `effects[]`, `grant[]`, `body[]`
-- **StructDecl** — `name`, `fields[]` (`{name, type}`)
+| Node | Fields | Description |
+|------|--------|-------------|
+| `FunctionDecl` | `name`, `params[]`, `returnType`, `effects[]`, `grant[]`, `body[]` | Function definition |
+| `StructDecl` | `name`, `fields[]` | Struct type definition |
 
 ### Statements
 
-- **VarDecl** — `name`, `type`, `value`
-- **AssignStmt** — `target` (string or expression node), `value`. Target can be a variable name, `IndexExpr`, or `MemberExpr` for `arr[i] = x` and `obj.field = x`.
-- **ReturnStmt** — `value` (optional)
-- **IfStmt** — `cond`, `then[]`, `else[]`
-- **WhileStmt** — `cond`, `body[]`
-- **ForStmt** — `form` (`"range"` or `"each"`), `var`, `start`/`end` (range) or `iterable` (each), `body[]`
-- **BreakStmt** — exits the innermost loop
-- **ContinueStmt** — skips to next iteration (not supported in Lua)
-- **ExprStmt** — `expr`
+| Node | Fields | Description |
+|------|--------|-------------|
+| `VarDecl` | `name`, `type`, `value` | Variable declaration |
+| `AssignStmt` | `target`, `value` | Assignment (target: string, `IndexExpr`, or `MemberExpr`) |
+| `ReturnStmt` | `value` (optional) | Return from function |
+| `IfStmt` | `cond`, `then[]`, `else[]` | Conditional branch |
+| `WhileStmt` | `cond`, `body[]` | While loop |
+| `ForStmt` | `form`, `var`, `start`/`end` or `iterable`, `body[]` | For loop (range or each) |
+| `BreakStmt` | — | Exit innermost loop |
+| `ContinueStmt` | — | Skip to next iteration |
+| `ExprStmt` | `expr` | Expression as statement |
 
 ### Expressions
 
-- **Literal** — `valueType` (`Int`/`Float`/`String`/`Bool`), `value`
-- **Ident** — `name`
-- **BinaryExpr** — `op` (`+` `-` `*` `/` `%` `==` `!=` `<` `>` `<=` `>=` `&&` `||`), `left`, `right`
-- **UnaryExpr** — `op` (`-` `!`), `operand`
-- **CallExpr** — `callee`, `args[]`
-- **MemberExpr** — `object`, `field`
-- **StructLit** — `typeName`, `fields[]` (`{name, value}`)
-- **ArrayLit** — `elemType`, `elements[]`
-- **IndexExpr** — `target`, `index`
+| Node | Fields | Description |
+|------|--------|-------------|
+| `Literal` | `valueType`, `value` | Int, Float, String, Bool literal |
+| `Ident` | `name` | Variable reference |
+| `BinaryExpr` | `op`, `left`, `right` | `+ - * / % == != < > <= >= && \|\|` |
+| `UnaryExpr` | `op`, `operand` | `- !` |
+| `CallExpr` | `callee`, `args[]` | Function call |
+| `MemberExpr` | `object`, `field` | Field access (`obj.x`) |
+| `StructLit` | `typeName`, `fields[]` | Struct construction |
+| `ArrayLit` | `elemType`, `elements[]` | Array literal |
+| `IndexExpr` | `target`, `index` | Index access (`arr[i]`) |
 
 ### Built-in Functions
 
-| Function | Effect | Description |
-|----------|--------|-------------|
-| `println` | state | Print with newline |
-| `printf` | state | Formatted print |
-| `sprintf` | pure | Formatted string |
+| Function | Effect | Maps to |
+|----------|--------|---------|
+| `println` | state | `fmt.Println` / `println!` / `std::cout << ... << std::endl` / `print()` / `Print()` |
+| `printf` | state | `fmt.Printf` / `print!` / `std::cout << ...` / `Print()` |
+| `sprintf` | pure | `fmt.Sprintf` / `format!` / `std::to_string` |
 
-## ForStmt Examples
+## ForStmt
 
 **Range form** — iterate from start to end (exclusive):
 
@@ -235,7 +327,9 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 }
 ```
 
-**Each form** — iterate over elements of an array:
+Generates: `for i := 0; i < 10; i++` (Go) / `for i in 0..10` (Rust) / `for (long i = 0; i < 10; i++)` (C++/MQL)
+
+**Each form** — iterate over array elements:
 
 ```json
 {
@@ -244,6 +338,10 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
   "body": [...]
 }
 ```
+
+Generates: `for _, item := range items` (Go) / `for item in &items` (Rust) / `for (const auto& item : items)` (C++)
+
+> MQL4/MQL5 does not support for-each — use range form with index access instead.
 
 ## MCP Server
 
@@ -255,8 +353,6 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 ./xql http :8080 --mode rest     # REST API mode
 ```
 
-**Tools:**
-
 | Tool | Args | Description |
 |------|------|-------------|
 | `compile` | `source`, `target` | Compile `.xql.json` AST to target language |
@@ -264,32 +360,53 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 
 ## Error Codes
 
-| Range | Category | Phase |
-|-------|----------|-------|
-| `XQL_E1xx` | Parse / AST structure | Input |
-| `XQL_E2xx` | Type / effect violations | Static check |
-| `XQL_E3xx` | Capability violations | Static check |
-| `XQL_E4xx` | Codegen errors | Code generation |
+| Range | Category | Phase | Example |
+|-------|----------|-------|---------|
+| `XQL_E1xx` | Parse / AST structure | Input | Missing `kind` field, invalid JSON |
+| `XQL_E2xx` | Type / effect violations | Static check | Return type mismatch, purity violation |
+| `XQL_E3xx` | Capability violations | Static check | Missing `@grant` for callee |
+| `XQL_E4xx` | Codegen errors | Code generation | Unsupported node, unsupported type for target |
+
+### Target-Specific Rejections
+
+| Error | Targets | Cause |
+|-------|---------|-------|
+| `XQL_E402` | C++, TS, Dart, Nim, Julia, Lua, Ruby | `Result<T>` type not supported |
+| `XQL_E403` | MQL4, MQL5 | `Map`, `Option`, `Result` type or `for-each` loop not supported |
 
 ## Project Structure
 
 ```
 xiaoqinli/
-  main.go                    CLI + version (2.4.0)
+  main.go                    CLI entry + version (2.4.0)
   ast/
     nodes.go                 AST node definitions + JSON parser
     hash.go                  Content-addressable hashing
   check/
     types.go                 Type checker + scoped inference + effect system
-    capability.go            Capability checker (@grant)
+    capability.go            Capability checker (@grant enforcement)
     check.go                 RunAll orchestrator
   codegen/
-    golang.go ... julia.go   15 general-purpose backends
-    cpp.go                   C++ backend (C++17, auto #include)
+    golang.go                Go backend
+    rust.go                  Rust backend
+    typescript.go            TypeScript backend
+    python.go                Python backend
+    cpp.go                   C++17 backend (auto #include)
+    kotlin.go                Kotlin backend
+    swift.go                 Swift backend
+    java.go                  Java backend
+    csharp.go                C# backend
+    dart.go                  Dart backend
+    lua.go                   Lua backend
+    ruby.go                  Ruby backend
+    php.go                   PHP backend
+    zig.go                   Zig backend
+    nim.go                   Nim backend
+    julia.go                 Julia backend
     mql.go                   MQL4/MQL5 shared backend (script mode)
     util.go                  Generate() dispatcher + shared utilities
-    codegen_test.go          Tests across all 18 backends
-    roundtrip_test.go        Compile-and-run verification
+    codegen_test.go          93 tests across all 18 backends
+    roundtrip_test.go        Compile-and-run verification (Go, Rust, Python, TS, C++)
   server/
     mcp.go                   MCP server (stdio + streamable HTTP)
     rest.go                  REST API server
@@ -299,25 +416,37 @@ xiaoqinli/
   skills/
     *.md                     Embedded skill documents
   examples/
-    hello.xql.json           Hello world
+    hello.xql.json           Hello world (greet + println)
     example.xql.json         Fibonacci + arithmetic
     clock.xql.json           System clock with live output
     loop.xql.json            For-loop with array indexing
-    struct.xql.json          Struct declaration and literals
+    struct.xql.json          Struct declaration and field access
     collections.xql.json     Array literals and indexing
 ```
 
 ## Tests
 
 ```bash
-go test ./... -v
+go test ./... -v              # run all tests (93 tests)
+go build -o xql . && go test ./... -v   # build + test
 ```
+
+Round-trip tests automatically skip when the toolchain is not installed:
+
+| Target | Toolchain | Round-trip |
+|--------|-----------|------------|
+| Go | `go` | compile + run |
+| Rust | `rustc` | compile + run |
+| Python | `python` | interpret |
+| TypeScript | `node` | strip types + run |
+| C++ | `g++` | compile (-std=c++17) + run |
 
 ## Design Principles
 
-- **Minimal** — Single language (Go), single binary, zero third-party dependencies
-- **Secure** — All validation at compile time, deterministic output, no runtime uncertainty
-- **Fast** — 2-layer pipeline (check then codegen), single-pass AST traversal, no IR
+- **Zero dependencies** — Single language (Go), single binary, no third-party imports
+- **Deterministic** — Same AST always produces same output, no randomness
+- **Secure by default** — All validation at compile time; `os/exec` never runs user code
+- **Two-layer pipeline** — Check (types + effects + capabilities) then codegen, single-pass AST traversal, no IR
 
 ## License
 
