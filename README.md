@@ -11,41 +11,50 @@ AI agents write structured `.xql.json` directly — no parser, no syntax errors.
 
 ## Supported Languages (33)
 
-| # | Target | Flag | Extension | Entry Point |
-|---|--------|------|-----------|-------------|
-| 1 | Go | `go` | `.go` | `func main()` |
-| 2 | Rust | `rust` | `.rs` | `fn main()` |
-| 3 | TypeScript | `ts` | `.ts` | `main()` call |
-| 4 | Python | `py` | `.py` | `if __name__` |
-| 5 | C++ | `cpp` | `.cpp` | `int main()` |
-| 6 | C | `c` | `.c` | `int main()` |
-| 7 | Kotlin | `kotlin` | `.kt` | `fun main()` |
-| 8 | Swift | `swift` | `.swift` | top-level |
-| 9 | Java | `java` | `.java` | `public static void main` |
-| 10 | C# | `csharp` | `.cs` | `static void Main` |
-| 11 | Scala | `scala` | `.scala` | `object Main` |
-| 12 | Haskell | `haskell` | `.hs` | `main :: IO ()` |
-| 13 | Dart | `dart` | `.dart` | `void main()` |
-| 14 | Lua | `lua` | `.lua` | top-level |
-| 15 | Ruby | `ruby` | `.rb` | top-level |
-| 16 | PHP | `php` | `.php` | top-level |
-| 17 | Zig | `zig` | `.zig` | `pub fn main()` |
-| 18 | Nim | `nim` | `.nim` | top-level |
-| 19 | Julia | `julia` | `.jl` | `main()` call |
-| 20 | MQL4 | `mql4` | `.mq4` | `void OnStart()` |
-| 21 | MQL5 | `mql5` | `.mq5` | `void OnStart()` |
-| 22 | Ada | `ada` | `.adb` | `procedure Main` |
-| 23 | AWK | `awk` | `.awk` | `BEGIN {}` |
-| 24 | Bash | `bash` | `.sh` | top-level |
-| 25 | Crystal | `crystal` | `.cr` | top-level |
-| 26 | D | `d` | `.d` | `void main()` |
-| 27 | Fortran | `fortran` | `.f90` | `program main` |
-| 28 | Objective-C | `objc` | `.m` | `int main()` |
-| 29 | Pascal | `pascal` | `.pas` | `program Main` |
-| 30 | Perl | `perl` | `.pl` | top-level |
-| 31 | PowerShell | `powershell` | `.ps1` | top-level |
-| 32 | Tcl | `tcl` | `.tcl` | top-level |
-| 33 | V | `v` | `.v` | `fn main()` |
+**Systems** — `go` `rust` `c` `cpp` `zig` `d` `v` `nim`
+**JVM/CLR** — `java` `kotlin` `scala` `csharp` `dart`
+**Scripting** — `py` `ts` `ruby` `lua` `php` `perl` `julia` `crystal` `awk`
+**Functional** — `haskell`
+**Shell** — `bash` `powershell` `tcl`
+**Legacy/Niche** — `ada` `fortran` `pascal` `objc` `mql4` `mql5`
+
+| # | Target | Flag | Ext | IfExpr | Lambda |
+|---|--------|------|-----|--------|--------|
+| 1 | Go | `go` | `.go` | IIFE | yes |
+| 2 | Rust | `rust` | `.rs` | if-expr | closure |
+| 3 | TypeScript | `ts` | `.ts` | ternary | arrow fn |
+| 4 | Python | `py` | `.py` | inline if | lambda |
+| 5 | C++ | `cpp` | `.cpp` | ternary | `[](){}` |
+| 6 | C | `c` | `.c` | ternary | — |
+| 7 | Kotlin | `kotlin` | `.kt` | if-expr | `{}` |
+| 8 | Swift | `swift` | `.swift` | ternary | closure |
+| 9 | Java | `java` | `.java` | ternary | `->` |
+| 10 | C# | `csharp` | `.cs` | ternary | `=>` |
+| 11 | Scala | `scala` | `.scala` | if-expr | `=>` |
+| 12 | Haskell | `haskell` | `.hs` | if-then-else | `\->` |
+| 13 | Dart | `dart` | `.dart` | ternary | arrow/block |
+| 14 | Lua | `lua` | `.lua` | and/or | `function() end` |
+| 15 | Ruby | `ruby` | `.rb` | ternary | `lambda {}` |
+| 16 | PHP | `php` | `.php` | ternary | `function(){}` |
+| 17 | Zig | `zig` | `.zig` | if-expr | — |
+| 18 | Nim | `nim` | `.nim` | if-expr | `proc()` |
+| 19 | Julia | `julia` | `.jl` | ternary | `->` |
+| 20 | MQL4 | `mql4` | `.mq4` | ternary | — |
+| 21 | MQL5 | `mql5` | `.mq5` | ternary | — |
+| 22 | Ada | `ada` | `.adb` | if-expr | — |
+| 23 | AWK | `awk` | `.awk` | ternary | — |
+| 24 | Bash | `bash` | `.sh` | — | — |
+| 25 | Crystal | `crystal` | `.cr` | ternary | `->(){}` |
+| 26 | D | `d` | `.d` | ternary | `(){}` |
+| 27 | Fortran | `fortran` | `.f90` | `merge()` | — |
+| 28 | Objective-C | `objc` | `.m` | ternary | block `^(){}` |
+| 29 | Pascal | `pascal` | `.pas` | — | — |
+| 30 | Perl | `perl` | `.pl` | ternary | `sub {}` |
+| 31 | PowerShell | `powershell` | `.ps1` | `$(if)` | scriptblock |
+| 32 | Tcl | `tcl` | `.tcl` | `[expr]` | — |
+| 33 | V | `v` | `.v` | if-expr | `fn(){}` |
+
+> **—** = returns compile error (language limitation). All 33 targets support the full statement set (VarDecl, IfStmt, WhileStmt, ForStmt, etc.).
 
 ## Quick Start
 
