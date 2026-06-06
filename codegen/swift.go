@@ -367,9 +367,65 @@ func (g *swGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *swGen) emitIfExpr(ie *ast.IfExpr) error {
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" ? ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" : ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (g *swGen) emitLambda(lam *ast.Lambda) error {
+	g.write("{ (")
+	for i, p := range lam.Params {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(p.Name + ": " + typeToSwift(p.Type))
+	}
+	g.write(")")
+	rt := typeToSwift(lam.ReturnType)
+	if rt != "" && rt != "Void" {
+		g.write(" -> " + rt)
+	}
+	g.write(" in ")
+	for i, stmt := range lam.Body {
+		if i > 0 {
+			g.write("; ")
+		}
+		if es, ok := stmt.(*ast.ExprStmt); ok {
+			if err := g.emitExpr(es.Expr); err != nil {
+				return err
+			}
+		} else if rs, ok := stmt.(*ast.ReturnStmt); ok && rs.Value != nil {
+			g.write("return ")
+			if err := g.emitExpr(rs.Value); err != nil {
+				return err
+			}
+		} else {
+			if err := g.emitExpr(stmt); err != nil {
+				return err
+			}
+		}
+	}
+	g.write(" }")
+	return nil
 }
 
 func (g *swGen) emitArrayLit(al *ast.ArrayLit) error {

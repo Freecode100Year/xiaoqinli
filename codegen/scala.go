@@ -366,9 +366,49 @@ func (g *scalaGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *scalaGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("(if (")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(") ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" else ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *scalaGen) emitLambda(lam *ast.Lambda) error {
+	g.write("(")
+	for i, p := range lam.Params {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(p.Name + ": " + typeToScala(p.Type))
+	}
+	g.write(") => {")
+	for _, stmt := range lam.Body {
+		g.write(" ")
+		if err := g.emitNode(stmt); err != nil {
+			return err
+		}
+	}
+	g.write(" }")
+	return nil
 }
 
 func (g *scalaGen) emitCall(ce *ast.CallExpr) error {

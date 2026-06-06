@@ -360,6 +360,10 @@ func (g *goGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: cannot emit expression for node kind %s", n.Kind())
 	}
@@ -546,5 +550,53 @@ func (g *goGen) emitMemberExpr(me *ast.MemberExpr) error {
 		return err
 	}
 	g.write("." + me.Field)
+	return nil
+}
+
+func (g *goGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("func() interface{} { if ")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" { return ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" }; return ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(" }()")
+	return nil
+}
+
+func (g *goGen) emitLambda(lam *ast.Lambda) error {
+	g.write("func(")
+	for i, p := range lam.Params {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(p.Name + " " + typeToGo(p.Type))
+	}
+	g.write(")")
+	retType := typeToGo(lam.ReturnType)
+	if retType != "" {
+		g.write(" " + retType)
+	}
+	g.write(" {")
+	if len(lam.Body) == 0 {
+		g.write("}")
+		return nil
+	}
+	g.writeln("")
+	g.indent++
+	for _, stmt := range lam.Body {
+		if err := g.emitNode(stmt); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.write("}")
 	return nil
 }

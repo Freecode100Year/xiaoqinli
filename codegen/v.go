@@ -7,10 +7,10 @@ import (
 	"xiaoqinli/ast"
 )
 
-// GenerateLua produces Lua source code from the given typed AST.
-// The "main" function's body is emitted at top level.
-func GenerateLua(root ast.Node) ([]byte, error) {
-	g := &luaGen{buf: &strings.Builder{}}
+// GenerateV produces V source code from the given typed AST.
+// The "main" function is emitted as `fn main() { ... }`.
+func GenerateV(root ast.Node) ([]byte, error) {
+	g := &vGen{buf: &strings.Builder{}}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -20,20 +20,37 @@ func GenerateLua(root ast.Node) ([]byte, error) {
 	first := true
 	for _, d := range prog.Decls {
 		switch node := d.(type) {
-		case *ast.FunctionDecl:
-			if node.Name == "main" {
-				continue
-			}
+		case *ast.StructDecl:
 			if !first {
 				g.writeln("")
 			}
-			if err := g.emitFunctionDecl(node); err != nil {
+			if err := g.emitStructDecl(node); err != nil {
 				return nil, err
 			}
 			first = false
-		case *ast.StructDecl:
-			// Lua uses tables; no struct declaration needed.
+		case *ast.EnumDecl:
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitEnumDecl(node); err != nil {
+				return nil, err
+			}
+			first = false
 		}
+	}
+
+	for _, d := range prog.Decls {
+		fd, ok := d.(*ast.FunctionDecl)
+		if !ok || fd.Name == "main" {
+			continue
+		}
+		if !first {
+			g.writeln("")
+		}
+		if err := g.emitFunctionDecl(fd); err != nil {
+			return nil, err
+		}
+		first = false
 	}
 
 	for _, d := range prog.Decls {
@@ -44,26 +61,52 @@ func GenerateLua(root ast.Node) ([]byte, error) {
 		if !first {
 			g.writeln("")
 		}
-		for _, stmt := range fd.Body {
-			if err := g.emitNode(stmt); err != nil {
-				return nil, err
-			}
+		if err := g.emitFunctionDecl(fd); err != nil {
+			return nil, err
 		}
 	}
 
 	return []byte(g.buf.String()), nil
 }
 
-type luaGen struct {
+type vGen struct {
 	buf    *strings.Builder
 	indent int
+	muts   map[string]bool
 }
 
-func (g *luaGen) write(s string)   { g.buf.WriteString(s) }
-func (g *luaGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *luaGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *vGen) write(s string)   { g.buf.WriteString(s) }
+func (g *vGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
+func (g *vGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
-func (g *luaGen) emitNode(n ast.Node) error {
+func typeToV(t ast.TypeExpr) string {
+	switch t.KindName {
+	case "Int":
+		return "int"
+	case "Float":
+		return "f64"
+	case "String":
+		return "string"
+	case "Bool":
+		return "bool"
+	case "Void":
+		return ""
+	case "Array":
+		if t.Elem != nil {
+			return "[]" + typeToV(*t.Elem)
+		}
+		return "[]string"
+	case "Option":
+		if t.Elem != nil {
+			return "?" + typeToV(*t.Elem)
+		}
+		return "?string"
+	default:
+		return t.KindName
+	}
+}
+
+func (g *vGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.FunctionDecl:
 		return g.emitFunctionDecl(node)
@@ -84,26 +127,101 @@ func (g *luaGen) emitNode(n ast.Node) error {
 		g.writeln("break")
 		return nil
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: Lua does not support continue")
+		g.writeIndent()
+		g.writeln("continue")
+		return nil
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
-		return nil // Lua uses tables; no struct declaration needed.
+		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
 }
 
-func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+func (g *vGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.writeIndent()
-	g.write("function " + fd.Name + "(")
+	g.writeln("struct " + sd.Name + " {")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln(f.Name + " " + typeToV(f.Type))
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *vGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.writeln("enum " + ed.Name + " {")
+	g.indent++
+	for _, v := range ed.Variants {
+		g.writeIndent()
+		g.writeln(v)
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *vGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("match ")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(" {")
+	g.indent++
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.write("else")
+		} else {
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+		}
+		g.writeln(" {")
+		g.indent++
+		for _, stmt := range arm.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("}")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *vGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.muts = collectMutables(fd.Body)
+
+	g.writeIndent()
+	g.write("fn " + fd.Name + "(")
 	for i, p := range fd.Params {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name)
+		g.write(p.Name + " " + typeToV(p.Type))
 	}
-	g.writeln(")")
+	g.write(")")
+	rt := typeToV(fd.ReturnType)
+	if rt != "" {
+		g.write(" " + rt)
+	}
+	g.writeln(" {")
 	g.indent++
 	for _, stmt := range fd.Body {
 		if err := g.emitNode(stmt); err != nil {
@@ -112,11 +230,11 @@ func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitReturn(rs *ast.ReturnStmt) error {
+func (g *vGen) emitReturn(rs *ast.ReturnStmt) error {
 	g.writeIndent()
 	if rs.Value == nil {
 		g.writeln("return")
@@ -130,20 +248,31 @@ func (g *luaGen) emitReturn(rs *ast.ReturnStmt) error {
 	return nil
 }
 
-func (g *luaGen) emitVarDecl(vd *ast.VarDecl) error {
+func (g *vGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
-	g.write("local " + vd.Name)
+	if g.muts[vd.Name] {
+		g.write("mut " + vd.Name)
+	} else {
+		g.write(vd.Name)
+	}
 	if vd.Value != nil {
-		g.write(" = ")
+		g.write(" := ")
 		if err := g.emitExpr(vd.Value); err != nil {
 			return err
+		}
+	} else {
+		rt := typeToV(vd.Type)
+		if rt != "" {
+			g.write(" := " + rt + "{}")
+		} else {
+			g.write(" := 0")
 		}
 	}
 	g.writeln("")
 	return nil
 }
 
-func (g *luaGen) emitAssign(as *ast.AssignStmt) error {
+func (g *vGen) emitAssign(as *ast.AssignStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(as.Target); err != nil {
 		return err
@@ -156,13 +285,13 @@ func (g *luaGen) emitAssign(as *ast.AssignStmt) error {
 	return nil
 }
 
-func (g *luaGen) emitIf(is *ast.IfStmt) error {
+func (g *vGen) emitIf(is *ast.IfStmt) error {
 	g.writeIndent()
 	g.write("if ")
 	if err := g.emitExpr(is.Cond); err != nil {
 		return err
 	}
-	g.writeln(" then")
+	g.writeln(" {")
 	g.indent++
 	for _, s := range is.Then {
 		if err := g.emitNode(s); err != nil {
@@ -170,9 +299,10 @@ func (g *luaGen) emitIf(is *ast.IfStmt) error {
 		}
 	}
 	g.indent--
+	g.writeIndent()
+
 	if len(is.Else) > 0 {
-		g.writeIndent()
-		g.writeln("else")
+		g.writeln("} else {")
 		g.indent++
 		for _, s := range is.Else {
 			if err := g.emitNode(s); err != nil {
@@ -180,19 +310,19 @@ func (g *luaGen) emitIf(is *ast.IfStmt) error {
 			}
 		}
 		g.indent--
+		g.writeIndent()
 	}
-	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitWhile(ws *ast.WhileStmt) error {
+func (g *vGen) emitWhile(ws *ast.WhileStmt) error {
 	g.writeIndent()
-	g.write("while ")
+	g.write("for ")
 	if err := g.emitExpr(ws.Cond); err != nil {
 		return err
 	}
-	g.writeln(" do")
+	g.writeln(" {")
 	g.indent++
 	for _, s := range ws.Body {
 		if err := g.emitNode(s); err != nil {
@@ -201,31 +331,31 @@ func (g *luaGen) emitWhile(ws *ast.WhileStmt) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitForStmt(fs *ast.ForStmt) error {
+func (g *vGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		g.write("for " + fs.Var + " = ")
+		g.write("for " + fs.Var + " in ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write(", ")
+		g.write(" .. ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
-		g.writeln(" - 1 do")
+		g.writeln(" {")
 	case "each":
-		g.write("for _, " + fs.Var + " in ipairs(")
+		g.write("for " + fs.Var + " in ")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
 		}
-		g.writeln(") do")
+		g.writeln(" {")
 	default:
-		return fmt.Errorf("XQL_E401: unsupported for-loop form %q", fs.Form)
+		return fmt.Errorf("XQL_E401: unknown ForStmt form %q", fs.Form)
 	}
 	g.indent++
 	for _, s := range fs.Body {
@@ -235,11 +365,11 @@ func (g *luaGen) emitForStmt(fs *ast.ForStmt) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitExprStmt(es *ast.ExprStmt) error {
+func (g *vGen) emitExprStmt(es *ast.ExprStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(es.Expr); err != nil {
 		return err
@@ -248,7 +378,7 @@ func (g *luaGen) emitExprStmt(es *ast.ExprStmt) error {
 	return nil
 }
 
-func (g *luaGen) emitExpr(n ast.Node) error {
+func (g *vGen) emitExpr(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.Literal:
 		return g.emitLiteral(node)
@@ -260,19 +390,7 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 		if err := g.emitExpr(node.Left); err != nil {
 			return err
 		}
-		op := node.Op
-		switch op {
-		case "&&":
-			op = "and"
-		case "||":
-			op = "or"
-		case "!=":
-			op = "~="
-		}
-		if op == "+" && containsStringExpr(node) {
-			op = ".."
-		}
-		g.write(" " + op + " ")
+		g.write(" " + node.Op + " ")
 		if err := g.emitExpr(node.Right); err != nil {
 			return err
 		}
@@ -280,7 +398,7 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 		return nil
 	case *ast.UnaryExpr:
 		if node.Op == "!" {
-			g.write("not ")
+			g.write("!")
 		} else {
 			g.write(node.Op)
 		}
@@ -308,46 +426,62 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 	}
 }
 
-func (g *luaGen) emitIfExpr(ie *ast.IfExpr) error {
-	g.write("(")
+func (g *vGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("if ")
 	if err := g.emitExpr(ie.Cond); err != nil {
 		return err
 	}
-	g.write(" and ")
+	g.write(" { ")
 	if err := g.emitExpr(ie.Then); err != nil {
 		return err
 	}
-	g.write(" or ")
+	g.write(" } else { ")
 	if err := g.emitExpr(ie.Else); err != nil {
 		return err
 	}
-	g.write(")")
+	g.write(" }")
 	return nil
 }
 
-func (g *luaGen) emitLambda(lam *ast.Lambda) error {
-	g.write("function(")
+func (g *vGen) emitLambda(lam *ast.Lambda) error {
+	g.write("fn (")
 	for i, p := range lam.Params {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name)
+		g.write(p.Name + " " + typeToV(p.Type))
 	}
-	g.writeln(")")
-	g.indent++
-	for _, stmt := range lam.Body {
-		if err := g.emitNode(stmt); err != nil {
-			return err
+	g.write(")")
+	rt := typeToV(lam.ReturnType)
+	if rt != "" {
+		g.write(" " + rt)
+	}
+	g.write(" { ")
+	for i, stmt := range lam.Body {
+		if i > 0 {
+			g.write("; ")
+		}
+		if es, ok := stmt.(*ast.ExprStmt); ok {
+			if err := g.emitExpr(es.Expr); err != nil {
+				return err
+			}
+		} else if rs, ok := stmt.(*ast.ReturnStmt); ok && rs.Value != nil {
+			g.write("return ")
+			if err := g.emitExpr(rs.Value); err != nil {
+				return err
+			}
+		} else {
+			if err := g.emitExpr(stmt); err != nil {
+				return err
+			}
 		}
 	}
-	g.indent--
-	g.writeIndent()
-	g.write("end")
+	g.write(" }")
 	return nil
 }
 
-func (g *luaGen) emitArrayLit(al *ast.ArrayLit) error {
-	g.write("{")
+func (g *vGen) emitArrayLit(al *ast.ArrayLit) error {
+	g.write("[")
 	for i, elem := range al.Elements {
 		if i > 0 {
 			g.write(", ")
@@ -356,11 +490,11 @@ func (g *luaGen) emitArrayLit(al *ast.ArrayLit) error {
 			return err
 		}
 	}
-	g.write("}")
+	g.write("]")
 	return nil
 }
 
-func (g *luaGen) emitIndexExpr(ie *ast.IndexExpr) error {
+func (g *vGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
 	}
@@ -372,13 +506,13 @@ func (g *luaGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	return nil
 }
 
-func (g *luaGen) emitStructLit(sl *ast.StructLit) error {
-	g.write("{ ")
+func (g *vGen) emitStructLit(sl *ast.StructLit) error {
+	g.write(sl.TypeName + "{ ")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(f.Name + " = ")
+		g.write(f.Name + ": ")
 		if err := g.emitExpr(f.Value); err != nil {
 			return err
 		}
@@ -387,10 +521,10 @@ func (g *luaGen) emitStructLit(sl *ast.StructLit) error {
 	return nil
 }
 
-func (g *luaGen) emitCall(ce *ast.CallExpr) error {
+func (g *vGen) emitCall(ce *ast.CallExpr) error {
 	switch ce.Callee {
 	case "println":
-		g.write("print(")
+		g.write("println(")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
@@ -402,22 +536,26 @@ func (g *luaGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("io.write(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
+		g.write("print(")
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(arg); err != nil {
 				return err
 			}
 		}
 		g.write(")")
 		return nil
 	case "sprintf":
-		g.write("tostring(")
 		if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+			g.write(".str()")
+		} else {
+			g.write(`""`)
 		}
-		g.write(")")
 		return nil
 	default:
 		g.write(ce.Callee + "(")
@@ -434,11 +572,11 @@ func (g *luaGen) emitCall(ce *ast.CallExpr) error {
 	}
 }
 
-func (g *luaGen) emitLiteral(lit *ast.Literal) error {
+func (g *vGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("%q", s))
+		g.write(fmt.Sprintf("'%s'", s))
 	case "Int":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%d", int64(f)))

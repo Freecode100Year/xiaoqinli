@@ -7,43 +7,67 @@ import (
 	"xiaoqinli/ast"
 )
 
-// GeneratePHP produces PHP source code from the given typed AST.
-// The "main" function's body is emitted at top level after other functions.
-func GeneratePHP(root ast.Node) ([]byte, error) {
-	g := &phpGen{buf: &strings.Builder{}}
+// GeneratePowerShell produces PowerShell source code from the given typed AST.
+// The "main" function's body is emitted at top level after function definitions.
+func GeneratePowerShell(root ast.Node) ([]byte, error) {
+	g := &psGen{buf: &strings.Builder{}}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
-	g.writeln("<?php")
-	g.writeln("")
+	first := true
 
+	// Emit enum declarations.
 	for _, d := range prog.Decls {
-		if sd, ok := d.(*ast.StructDecl); ok {
-			if err := g.emitStructDecl(sd); err != nil {
+		if ed, ok := d.(*ast.EnumDecl); ok {
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitEnumDecl(ed); err != nil {
 				return nil, err
 			}
-			g.writeln("")
+			first = false
 		}
 	}
 
+	// Emit struct declarations as classes.
+	for _, d := range prog.Decls {
+		if sd, ok := d.(*ast.StructDecl); ok {
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitStructDecl(sd); err != nil {
+				return nil, err
+			}
+			first = false
+		}
+	}
+
+	// Emit non-main function declarations.
 	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name == "main" {
 			continue
 		}
+		if !first {
+			g.writeln("")
+		}
 		if err := g.emitFunctionDecl(fd); err != nil {
 			return nil, err
 		}
-		g.writeln("")
+		first = false
 	}
 
+	// Emit main body at top level.
 	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name != "main" {
 			continue
+		}
+		if !first {
+			g.writeln("")
 		}
 		for _, stmt := range fd.Body {
 			if err := g.emitNode(stmt); err != nil {
@@ -55,42 +79,35 @@ func GeneratePHP(root ast.Node) ([]byte, error) {
 	return []byte(g.buf.String()), nil
 }
 
-type phpGen struct {
+type psGen struct {
 	buf    *strings.Builder
 	indent int
 }
 
-func (g *phpGen) write(s string)   { g.buf.WriteString(s) }
-func (g *phpGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *phpGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *psGen) write(s string)   { g.buf.WriteString(s) }
+func (g *psGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
+func (g *psGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
-func typeToPHP(t ast.TypeExpr) string {
+func typeToPowerShell(t ast.TypeExpr) string {
 	switch t.KindName {
 	case "Int":
-		return "int"
+		return "[long]"
 	case "Float":
-		return "float"
+		return "[double]"
 	case "String":
-		return "string"
+		return "[string]"
 	case "Bool":
-		return "bool"
+		return "[bool]"
 	case "Void":
-		return "void"
+		return "[void]"
 	case "Array":
-		return "array"
-	case "Option":
-		if t.Elem != nil {
-			return "?" + typeToPHP(*t.Elem)
-		}
-		return "mixed"
-	case "Result":
-		return "mixed"
+		return "[array]"
 	default:
-		return t.KindName
+		return "[" + t.KindName + "]"
 	}
 }
 
-func (g *phpGen) emitNode(n ast.Node) error {
+func (g *psGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.FunctionDecl:
 		return g.emitFunctionDecl(node)
@@ -108,66 +125,103 @@ func (g *phpGen) emitNode(n ast.Node) error {
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
 		g.writeIndent()
-		g.writeln("break;")
+		g.writeln("break")
 		return nil
 	case *ast.ContinueStmt:
 		g.writeIndent()
-		g.writeln("continue;")
+		g.writeln("continue")
 		return nil
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
 }
 
-func (g *phpGen) emitStructDecl(sd *ast.StructDecl) error {
+func (g *psGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.writeIndent()
 	g.writeln("class " + sd.Name + " {")
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
-		g.writeln("public " + typeToPHP(f.Type) + " $" + f.Name + ";")
+		g.writeln(typeToPowerShell(f.Type) + "$" + f.Name)
 	}
-	g.writeIndent()
-	g.write("public function __construct(")
-	for i, f := range sd.Fields {
-		if i > 0 {
-			g.write(", ")
-		}
-		g.write(typeToPHP(f.Type) + " $" + f.Name)
-	}
-	g.writeln(") {")
-	g.indent++
-	for _, f := range sd.Fields {
-		g.writeIndent()
-		g.writeln("$this->" + f.Name + " = $" + f.Name + ";")
-	}
-	g.indent--
-	g.writeIndent()
-	g.writeln("}")
 	g.indent--
 	g.writeIndent()
 	g.writeln("}")
 	return nil
 }
 
-func (g *phpGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+func (g *psGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	g.writeIndent()
-	g.write("function " + fd.Name + "(")
-	for i, p := range fd.Params {
-		if i > 0 {
-			g.write(", ")
-		}
-		g.write(typeToPHP(p.Type) + " $" + p.Name)
-	}
-	g.write(")")
-	rt := typeToPHP(fd.ReturnType)
-	g.write(": " + rt)
-	g.writeln(" {")
+	g.writeln("enum " + ed.Name + " {")
 	g.indent++
+	for _, v := range ed.Variants {
+		g.writeIndent()
+		g.writeln(v)
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *psGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("switch (")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.writeln("default {")
+		} else {
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.writeln(" {")
+		}
+		g.indent++
+		for _, stmt := range arm.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("}")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *psGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.writeIndent()
+	g.write("function " + fd.Name + " {")
+	g.writeln("")
+	g.indent++
+	if len(fd.Params) > 0 {
+		g.writeIndent()
+		g.write("param(")
+		for i, p := range fd.Params {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.write(typeToPowerShell(p.Type) + "$" + p.Name)
+		}
+		g.writeln(")")
+	}
 	for _, stmt := range fd.Body {
 		if err := g.emitNode(stmt); err != nil {
 			return err
@@ -179,21 +233,21 @@ func (g *phpGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	return nil
 }
 
-func (g *phpGen) emitReturn(rs *ast.ReturnStmt) error {
+func (g *psGen) emitReturn(rs *ast.ReturnStmt) error {
 	g.writeIndent()
 	if rs.Value == nil {
-		g.writeln("return;")
+		g.writeln("return")
 		return nil
 	}
 	g.write("return ")
 	if err := g.emitExpr(rs.Value); err != nil {
 		return err
 	}
-	g.writeln(";")
+	g.writeln("")
 	return nil
 }
 
-func (g *phpGen) emitVarDecl(vd *ast.VarDecl) error {
+func (g *psGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
 	g.write("$" + vd.Name)
 	if vd.Value != nil {
@@ -202,13 +256,13 @@ func (g *phpGen) emitVarDecl(vd *ast.VarDecl) error {
 			return err
 		}
 	} else {
-		g.write(" = null")
+		g.write(" = $null")
 	}
-	g.writeln(";")
+	g.writeln("")
 	return nil
 }
 
-func (g *phpGen) emitAssign(as *ast.AssignStmt) error {
+func (g *psGen) emitAssign(as *ast.AssignStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(as.Target); err != nil {
 		return err
@@ -217,11 +271,11 @@ func (g *phpGen) emitAssign(as *ast.AssignStmt) error {
 	if err := g.emitExpr(as.Value); err != nil {
 		return err
 	}
-	g.writeln(";")
+	g.writeln("")
 	return nil
 }
 
-func (g *phpGen) emitIf(is *ast.IfStmt) error {
+func (g *psGen) emitIf(is *ast.IfStmt) error {
 	g.writeIndent()
 	g.write("if (")
 	if err := g.emitExpr(is.Cond); err != nil {
@@ -235,8 +289,8 @@ func (g *phpGen) emitIf(is *ast.IfStmt) error {
 		}
 	}
 	g.indent--
-	g.writeIndent()
 	if len(is.Else) > 0 {
+		g.writeIndent()
 		g.writeln("} else {")
 		g.indent++
 		for _, s := range is.Else {
@@ -245,13 +299,13 @@ func (g *phpGen) emitIf(is *ast.IfStmt) error {
 			}
 		}
 		g.indent--
-		g.writeIndent()
 	}
+	g.writeIndent()
 	g.writeln("}")
 	return nil
 }
 
-func (g *phpGen) emitWhile(ws *ast.WhileStmt) error {
+func (g *psGen) emitWhile(ws *ast.WhileStmt) error {
 	g.writeIndent()
 	g.write("while (")
 	if err := g.emitExpr(ws.Cond); err != nil {
@@ -270,7 +324,7 @@ func (g *phpGen) emitWhile(ws *ast.WhileStmt) error {
 	return nil
 }
 
-func (g *phpGen) emitForStmt(fs *ast.ForStmt) error {
+func (g *psGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
@@ -278,19 +332,19 @@ func (g *phpGen) emitForStmt(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("; $" + fs.Var + " < ")
+		g.write("; $" + fs.Var + " -lt ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
 		g.writeln("; $" + fs.Var + "++) {")
 	case "each":
-		g.write("foreach (")
+		g.write("foreach ($" + fs.Var + " in ")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
 		}
-		g.writeln(" as $" + fs.Var + ") {")
+		g.writeln(") {")
 	default:
-		return fmt.Errorf("XQL_E401: unknown ForStmt form %q", fs.Form)
+		return fmt.Errorf("XQL_E401: unsupported for-loop form %q", fs.Form)
 	}
 	g.indent++
 	for _, s := range fs.Body {
@@ -304,16 +358,16 @@ func (g *phpGen) emitForStmt(fs *ast.ForStmt) error {
 	return nil
 }
 
-func (g *phpGen) emitExprStmt(es *ast.ExprStmt) error {
+func (g *psGen) emitExprStmt(es *ast.ExprStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(es.Expr); err != nil {
 		return err
 	}
-	g.writeln(";")
+	g.writeln("")
 	return nil
 }
 
-func (g *phpGen) emitExpr(n ast.Node) error {
+func (g *psGen) emitExpr(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.Literal:
 		return g.emitLiteral(node)
@@ -326,8 +380,26 @@ func (g *phpGen) emitExpr(n ast.Node) error {
 			return err
 		}
 		op := node.Op
+		switch op {
+		case "==":
+			op = "-eq"
+		case "!=":
+			op = "-ne"
+		case "<":
+			op = "-lt"
+		case ">":
+			op = "-gt"
+		case "<=":
+			op = "-le"
+		case ">=":
+			op = "-ge"
+		case "&&":
+			op = "-and"
+		case "||":
+			op = "-or"
+		}
 		if op == "+" && containsStringExpr(node) {
-			op = "."
+			op = "+"
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {
@@ -336,7 +408,11 @@ func (g *phpGen) emitExpr(n ast.Node) error {
 		g.write(")")
 		return nil
 	case *ast.UnaryExpr:
-		g.write(node.Op)
+		if node.Op == "!" {
+			g.write("-not ")
+		} else {
+			g.write(node.Op)
+		}
 		return g.emitExpr(node.Operand)
 	case *ast.CallExpr:
 		return g.emitCall(node)
@@ -344,7 +420,7 @@ func (g *phpGen) emitExpr(n ast.Node) error {
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}
-		g.write("->" + node.Field)
+		g.write("." + node.Field)
 		return nil
 	case *ast.StructLit:
 		return g.emitStructLit(node)
@@ -361,46 +437,60 @@ func (g *phpGen) emitExpr(n ast.Node) error {
 	}
 }
 
-func (g *phpGen) emitIfExpr(ie *ast.IfExpr) error {
-	g.write("(")
+func (g *psGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("$(if (")
 	if err := g.emitExpr(ie.Cond); err != nil {
 		return err
 	}
-	g.write(" ? ")
+	g.write(") { ")
 	if err := g.emitExpr(ie.Then); err != nil {
 		return err
 	}
-	g.write(" : ")
+	g.write(" } else { ")
 	if err := g.emitExpr(ie.Else); err != nil {
 		return err
 	}
-	g.write(")")
+	g.write(" })")
 	return nil
 }
 
-func (g *phpGen) emitLambda(lam *ast.Lambda) error {
-	g.write("function(")
-	for i, p := range lam.Params {
+func (g *psGen) emitLambda(lam *ast.Lambda) error {
+	g.write("{ ")
+	if len(lam.Params) > 0 {
+		g.write("param(")
+		for i, p := range lam.Params {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.write(typeToPowerShell(p.Type) + "$" + p.Name)
+		}
+		g.write(") ")
+	}
+	for i, stmt := range lam.Body {
 		if i > 0 {
-			g.write(", ")
+			g.write("; ")
 		}
-		g.write("$" + p.Name)
-	}
-	g.writeln(") {")
-	g.indent++
-	for _, stmt := range lam.Body {
-		if err := g.emitNode(stmt); err != nil {
-			return err
+		if es, ok := stmt.(*ast.ExprStmt); ok {
+			if err := g.emitExpr(es.Expr); err != nil {
+				return err
+			}
+		} else if rs, ok := stmt.(*ast.ReturnStmt); ok && rs.Value != nil {
+			g.write("return ")
+			if err := g.emitExpr(rs.Value); err != nil {
+				return err
+			}
+		} else {
+			if err := g.emitExpr(stmt); err != nil {
+				return err
+			}
 		}
 	}
-	g.indent--
-	g.writeIndent()
-	g.write("}")
+	g.write(" }")
 	return nil
 }
 
-func (g *phpGen) emitArrayLit(al *ast.ArrayLit) error {
-	g.write("[")
+func (g *psGen) emitArrayLit(al *ast.ArrayLit) error {
+	g.write("@(")
 	for i, elem := range al.Elements {
 		if i > 0 {
 			g.write(", ")
@@ -409,11 +499,11 @@ func (g *phpGen) emitArrayLit(al *ast.ArrayLit) error {
 			return err
 		}
 	}
-	g.write("]")
+	g.write(")")
 	return nil
 }
 
-func (g *phpGen) emitIndexExpr(ie *ast.IndexExpr) error {
+func (g *psGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
 	}
@@ -425,36 +515,35 @@ func (g *phpGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	return nil
 }
 
-func (g *phpGen) emitStructLit(sl *ast.StructLit) error {
-	g.write("new " + sl.TypeName + "(")
+func (g *psGen) emitStructLit(sl *ast.StructLit) error {
+	g.write("[" + sl.TypeName + "]@{ ")
 	for i, f := range sl.Fields {
 		if i > 0 {
-			g.write(", ")
+			g.write("; ")
 		}
+		g.write(f.Name + " = ")
 		if err := g.emitExpr(f.Value); err != nil {
 			return err
 		}
 	}
-	g.write(")")
+	g.write(" }")
 	return nil
 }
 
-func (g *phpGen) emitCall(ce *ast.CallExpr) error {
+func (g *psGen) emitCall(ce *ast.CallExpr) error {
 	switch ce.Callee {
 	case "println":
-		g.write(`echo `)
-		for i, arg := range ce.Args {
-			if i > 0 {
-				g.write(` . `)
-			}
-			if err := g.emitExpr(arg); err != nil {
+		g.write("Write-Output ")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+		} else {
+			g.write("\"\"")
 		}
-		g.write(` . "\n"`)
 		return nil
 	case "printf":
-		g.write("echo ")
+		g.write("Write-Host -NoNewline ")
 		if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
@@ -462,7 +551,7 @@ func (g *phpGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	case "sprintf":
-		g.write("strval(")
+		g.write("[string]::Format(")
 		if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
@@ -471,21 +560,18 @@ func (g *phpGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	default:
-		g.write(ce.Callee + "(")
-		for i, arg := range ce.Args {
-			if i > 0 {
-				g.write(", ")
-			}
+		g.write(ce.Callee)
+		for _, arg := range ce.Args {
+			g.write(" ")
 			if err := g.emitExpr(arg); err != nil {
 				return err
 			}
 		}
-		g.write(")")
 		return nil
 	}
 }
 
-func (g *phpGen) emitLiteral(lit *ast.Literal) error {
+func (g *psGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
@@ -498,7 +584,11 @@ func (g *phpGen) emitLiteral(lit *ast.Literal) error {
 		g.write(fmt.Sprintf("%g", f))
 	case "Bool":
 		b, _ := lit.Value.(bool)
-		g.write(fmt.Sprintf("%t", b))
+		if b {
+			g.write("$true")
+		} else {
+			g.write("$false")
+		}
 	default:
 		g.write(fmt.Sprintf("%v", lit.Value))
 	}

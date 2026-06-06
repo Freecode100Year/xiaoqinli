@@ -7,8 +7,10 @@ import (
 	"xiaoqinli/ast"
 )
 
-func GenerateC(root ast.Node) ([]byte, error) {
-	g := &cGen{
+// GenerateObjC produces Objective-C source code from the given typed AST.
+// The "main" function wraps its body in int main() { @autoreleasepool { ... } return 0; }.
+func GenerateObjC(root ast.Node) ([]byte, error) {
+	g := &objcGen{
 		buf:      &strings.Builder{},
 		funcRets: make(map[string]string),
 		varTypes: make(map[string]string),
@@ -19,123 +21,119 @@ func GenerateC(root ast.Node) ([]byte, error) {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
-	if err := validateCTypes(prog); err != nil {
-		return nil, err
-	}
-
 	for _, d := range prog.Decls {
 		if fd, ok := d.(*ast.FunctionDecl); ok {
 			g.funcRets[fd.Name] = fd.ReturnType.KindName
 		}
 	}
 
-	var structs []*ast.StructDecl
-	var others []ast.Node
+	// Emit struct and enum declarations first.
+	var header strings.Builder
+	header.WriteString("#import <Foundation/Foundation.h>\n\n")
+
+	first := true
 	for _, d := range prog.Decls {
-		if sd, ok := d.(*ast.StructDecl); ok {
-			structs = append(structs, sd)
-		} else {
-			others = append(others, d)
+		switch node := d.(type) {
+		case *ast.StructDecl:
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitStructDecl(node); err != nil {
+				return nil, err
+			}
+			first = false
+		case *ast.EnumDecl:
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitEnumDecl(node); err != nil {
+				return nil, err
+			}
+			first = false
 		}
 	}
 
-	for _, sd := range structs {
-		if err := g.emitStructDecl(sd); err != nil {
-			return nil, err
+	// Emit non-main functions.
+	for _, d := range prog.Decls {
+		fd, ok := d.(*ast.FunctionDecl)
+		if !ok || fd.Name == "main" {
+			continue
 		}
-		g.writeln("")
-	}
-
-	for i, d := range others {
-		if i > 0 {
+		if !first {
 			g.writeln("")
 		}
-		if err := g.emitNode(d); err != nil {
+		if err := g.emitFunctionDecl(fd); err != nil {
 			return nil, err
 		}
+		first = false
 	}
 
-	var out strings.Builder
-	out.WriteString("#include <stdio.h>\n")
-	if g.needStdlib {
-		out.WriteString("#include <stdlib.h>\n")
-	}
-	if g.needString {
-		out.WriteString("#include <string.h>\n")
-	}
-	out.WriteString("\n")
-
-	if g.needStrcat {
-		out.WriteString("static char* _xql_strcat(const char* a, const char* b) {\n")
-		out.WriteString("    size_t la = strlen(a), lb = strlen(b);\n")
-		out.WriteString("    char* r = (char*)malloc(la + lb + 1);\n")
-		out.WriteString("    memcpy(r, a, la);\n")
-		out.WriteString("    memcpy(r + la, b, lb + 1);\n")
-		out.WriteString("    return r;\n")
-		out.WriteString("}\n\n")
-	}
-
-	out.WriteString(g.buf.String())
-	return []byte(out.String()), nil
-}
-
-func validateCTypes(prog *ast.Program) error {
-	var err error
+	// Emit main function.
 	for _, d := range prog.Decls {
-		walkTypes(d, func(t ast.TypeExpr, context string) {
-			if err != nil {
-				return
+		fd, ok := d.(*ast.FunctionDecl)
+		if !ok || fd.Name != "main" {
+			continue
+		}
+		if !first {
+			g.writeln("")
+		}
+		g.writeln("int main() {")
+		g.indent++
+		g.writeIndent()
+		g.writeln("@autoreleasepool {")
+		g.indent++
+		for _, p := range fd.Params {
+			g.varTypes[p.Name] = p.Type.KindName
+		}
+		for _, stmt := range fd.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return nil, err
 			}
-			switch t.KindName {
-			case "Option":
-				err = fmt.Errorf("XQL_E402: C target does not support Option<T> (used in %s)", context)
-			case "Map":
-				err = fmt.Errorf("XQL_E402: C target does not support Map<K,V> (used in %s)", context)
-			case "Result":
-				err = fmt.Errorf("XQL_E402: C target does not support Result<T> (used in %s)", context)
-			}
-		})
+		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("}")
+		g.writeIndent()
+		g.writeln("return 0;")
+		g.indent--
+		g.writeln("}")
 	}
-	return err
+
+	header.WriteString(g.buf.String())
+	return []byte(header.String()), nil
 }
 
-type cGen struct {
-	buf        *strings.Builder
-	indent     int
-	needStdlib bool
-	needString bool
-	needStrcat bool
-	funcRets   map[string]string
-	varTypes   map[string]string
+type objcGen struct {
+	buf      *strings.Builder
+	indent   int
+	funcRets map[string]string
+	varTypes map[string]string
 }
 
-func (g *cGen) write(s string)   { g.buf.WriteString(s) }
-func (g *cGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *cGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *objcGen) write(s string)   { g.buf.WriteString(s) }
+func (g *objcGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
+func (g *objcGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
-func typeToC(t ast.TypeExpr) string {
+func typeToObjC(t ast.TypeExpr) string {
 	switch t.KindName {
 	case "Int":
-		return "long"
+		return "NSInteger"
 	case "Float":
 		return "double"
 	case "String":
-		return "const char*"
+		return "NSString*"
 	case "Bool":
-		return "int"
+		return "BOOL"
 	case "Void":
 		return "void"
 	case "Array":
-		if t.Elem != nil {
-			return typeToC(*t.Elem)
-		}
-		return "long"
+		return "NSArray*"
 	default:
-		return "struct " + t.KindName
+		return t.KindName
 	}
 }
 
-func (g *cGen) inferTypeKind(n ast.Node) string {
+func (g *objcGen) inferTypeKind(n ast.Node) string {
 	switch node := n.(type) {
 	case *ast.Literal:
 		return node.ValueType
@@ -175,20 +173,7 @@ func (g *cGen) inferTypeKind(n ast.Node) string {
 	}
 }
 
-func (g *cGen) printfFmt(typeKind string) string {
-	switch typeKind {
-	case "String":
-		return "%s"
-	case "Float":
-		return "%g"
-	case "Bool":
-		return "%d"
-	default:
-		return "%ld"
-	}
-}
-
-func (g *cGen) emitNode(n ast.Node) error {
+func (g *objcGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.FunctionDecl:
 		return g.emitFunctionDecl(node)
@@ -225,37 +210,49 @@ func (g *cGen) emitNode(n ast.Node) error {
 	}
 }
 
-func (g *cGen) emitStructDecl(sd *ast.StructDecl) error {
+func (g *objcGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.writeln("typedef struct {")
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
-		g.writeln(typeToC(f.Type) + " " + f.Name + ";")
+		g.writeln(typeToObjC(f.Type) + " " + f.Name + ";")
 	}
 	g.indent--
 	g.writeln("} " + sd.Name + ";")
 	return nil
 }
 
-func (g *cGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+func (g *objcGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeln("typedef NS_ENUM(NSInteger, " + ed.Name + ") {")
+	g.indent++
+	for i, v := range ed.Variants {
+		g.writeIndent()
+		if i < len(ed.Variants)-1 {
+			g.writeln(ed.Name + v + ",")
+		} else {
+			g.writeln(ed.Name + v)
+		}
+	}
+	g.indent--
+	g.writeln("};")
+	return nil
+}
+
+func (g *objcGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	for _, p := range fd.Params {
 		g.varTypes[p.Name] = p.Type.KindName
 	}
 
 	g.writeIndent()
-	if fd.Name == "main" {
-		g.writeln("int main() {")
-	} else {
-		rt := typeToC(fd.ReturnType)
-		g.write(rt + " " + fd.Name + "(")
-		for i, p := range fd.Params {
-			if i > 0 {
-				g.write(", ")
-			}
-			g.write(typeToC(p.Type) + " " + p.Name)
+	rt := typeToObjC(fd.ReturnType)
+	g.write(rt + " " + fd.Name + "(")
+	for i, p := range fd.Params {
+		if i > 0 {
+			g.write(", ")
 		}
-		g.writeln(") {")
+		g.write(typeToObjC(p.Type) + " " + p.Name)
 	}
+	g.writeln(") {")
 
 	g.indent++
 	for _, stmt := range fd.Body {
@@ -263,19 +260,13 @@ func (g *cGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 			return err
 		}
 	}
-
-	if fd.Name == "main" {
-		g.writeIndent()
-		g.writeln("return 0;")
-	}
-
 	g.indent--
 	g.writeIndent()
 	g.writeln("}")
 	return nil
 }
 
-func (g *cGen) emitReturn(rs *ast.ReturnStmt) error {
+func (g *objcGen) emitReturn(rs *ast.ReturnStmt) error {
 	g.writeIndent()
 	if rs.Value == nil {
 		g.writeln("return;")
@@ -289,29 +280,10 @@ func (g *cGen) emitReturn(rs *ast.ReturnStmt) error {
 	return nil
 }
 
-func (g *cGen) emitVarDecl(vd *ast.VarDecl) error {
+func (g *objcGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.varTypes[vd.Name] = vd.Type.KindName
 	g.writeIndent()
-	if vd.Type.KindName == "Array" && vd.Value != nil {
-		if al, ok := vd.Value.(*ast.ArrayLit); ok {
-			elemT := typeToC(vd.Type)
-			if vd.Type.Elem != nil {
-				elemT = typeToC(*vd.Type.Elem)
-			}
-			g.write(elemT + " " + vd.Name + "[] = {")
-			for i, elem := range al.Elements {
-				if i > 0 {
-					g.write(", ")
-				}
-				if err := g.emitExpr(elem); err != nil {
-					return err
-				}
-			}
-			g.writeln("};")
-			return nil
-		}
-	}
-	g.write(typeToC(vd.Type) + " " + vd.Name)
+	g.write(typeToObjC(vd.Type) + " " + vd.Name)
 	if vd.Value != nil {
 		g.write(" = ")
 		if err := g.emitExpr(vd.Value); err != nil {
@@ -322,7 +294,7 @@ func (g *cGen) emitVarDecl(vd *ast.VarDecl) error {
 	return nil
 }
 
-func (g *cGen) emitAssign(as *ast.AssignStmt) error {
+func (g *objcGen) emitAssign(as *ast.AssignStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(as.Target); err != nil {
 		return err
@@ -335,7 +307,7 @@ func (g *cGen) emitAssign(as *ast.AssignStmt) error {
 	return nil
 }
 
-func (g *cGen) emitIf(is *ast.IfStmt) error {
+func (g *objcGen) emitIf(is *ast.IfStmt) error {
 	g.writeIndent()
 	g.write("if (")
 	if err := g.emitExpr(is.Cond); err != nil {
@@ -365,7 +337,7 @@ func (g *cGen) emitIf(is *ast.IfStmt) error {
 	return nil
 }
 
-func (g *cGen) emitWhile(ws *ast.WhileStmt) error {
+func (g *objcGen) emitWhile(ws *ast.WhileStmt) error {
 	g.writeIndent()
 	g.write("while (")
 	if err := g.emitExpr(ws.Cond); err != nil {
@@ -384,11 +356,11 @@ func (g *cGen) emitWhile(ws *ast.WhileStmt) error {
 	return nil
 }
 
-func (g *cGen) emitForStmt(fs *ast.ForStmt) error {
+func (g *objcGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		g.write("for (long " + fs.Var + " = ")
+		g.write("for (NSInteger " + fs.Var + " = ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
@@ -398,7 +370,11 @@ func (g *cGen) emitForStmt(fs *ast.ForStmt) error {
 		}
 		g.write("; " + fs.Var + "++)")
 	case "each":
-		return fmt.Errorf("XQL_E402: C target does not support for-each loops; use range form with index")
+		g.write("for (id " + fs.Var + " in ")
+		if err := g.emitExpr(fs.Iterable); err != nil {
+			return err
+		}
+		g.write(")")
 	default:
 		return fmt.Errorf("XQL_E401: unknown ForStmt form %q", fs.Form)
 	}
@@ -415,206 +391,7 @@ func (g *cGen) emitForStmt(fs *ast.ForStmt) error {
 	return nil
 }
 
-func (g *cGen) emitExprStmt(es *ast.ExprStmt) error {
-	g.writeIndent()
-	if err := g.emitExpr(es.Expr); err != nil {
-		return err
-	}
-	g.writeln(";")
-	return nil
-}
-
-func (g *cGen) emitExpr(n ast.Node) error {
-	switch node := n.(type) {
-	case *ast.Literal:
-		return g.emitLiteral(node)
-	case *ast.Ident:
-		g.write(node.Name)
-		return nil
-	case *ast.BinaryExpr:
-		return g.emitBinary(node)
-	case *ast.UnaryExpr:
-		g.write(node.Op)
-		return g.emitExpr(node.Operand)
-	case *ast.CallExpr:
-		return g.emitCall(node)
-	case *ast.MemberExpr:
-		if err := g.emitExpr(node.Object); err != nil {
-			return err
-		}
-		g.write("." + node.Field)
-		return nil
-	case *ast.StructLit:
-		return g.emitStructLit(node)
-	case *ast.ArrayLit:
-		return g.emitArrayLit(node)
-	case *ast.IndexExpr:
-		return g.emitIndexExpr(node)
-	case *ast.IfExpr:
-		return g.emitIfExpr(node)
-	case *ast.Lambda:
-		return g.emitLambda(node)
-	default:
-		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
-	}
-}
-
-func (g *cGen) emitBinary(be *ast.BinaryExpr) error {
-	if be.Op == "+" && (g.inferTypeKind(be.Left) == "String" || g.inferTypeKind(be.Right) == "String") {
-		g.needStrcat = true
-		g.needStdlib = true
-		g.needString = true
-		g.write("_xql_strcat(")
-		if err := g.emitExpr(be.Left); err != nil {
-			return err
-		}
-		g.write(", ")
-		if err := g.emitExpr(be.Right); err != nil {
-			return err
-		}
-		g.write(")")
-		return nil
-	}
-	g.write("(")
-	if err := g.emitExpr(be.Left); err != nil {
-		return err
-	}
-	g.write(" " + be.Op + " ")
-	if err := g.emitExpr(be.Right); err != nil {
-		return err
-	}
-	g.write(")")
-	return nil
-}
-
-func (g *cGen) emitCall(ce *ast.CallExpr) error {
-	switch ce.Callee {
-	case "println":
-		if len(ce.Args) == 0 {
-			g.write(`printf("\n")`)
-			return nil
-		}
-		tk := g.inferTypeKind(ce.Args[0])
-		g.write(`printf("` + g.printfFmt(tk) + `\n", `)
-		if err := g.emitExpr(ce.Args[0]); err != nil {
-			return err
-		}
-		g.write(")")
-		return nil
-	case "printf":
-		if len(ce.Args) == 0 {
-			return nil
-		}
-		if len(ce.Args) >= 2 {
-			g.write("printf(")
-			for i, arg := range ce.Args {
-				if i > 0 {
-					g.write(", ")
-				}
-				if err := g.emitExpr(arg); err != nil {
-					return err
-				}
-			}
-			g.write(")")
-			return nil
-		}
-		tk := g.inferTypeKind(ce.Args[0])
-		g.write(`printf("` + g.printfFmt(tk) + `", `)
-		if err := g.emitExpr(ce.Args[0]); err != nil {
-			return err
-		}
-		g.write(")")
-		return nil
-	case "sprintf":
-		g.needString = true
-		g.write("sprintf(")
-		for i, arg := range ce.Args {
-			if i > 0 {
-				g.write(", ")
-			}
-			if err := g.emitExpr(arg); err != nil {
-				return err
-			}
-		}
-		g.write(")")
-		return nil
-	default:
-		g.write(ce.Callee + "(")
-		for i, arg := range ce.Args {
-			if i > 0 {
-				g.write(", ")
-			}
-			if err := g.emitExpr(arg); err != nil {
-				return err
-			}
-		}
-		g.write(")")
-		return nil
-	}
-}
-
-func (g *cGen) emitLiteral(lit *ast.Literal) error {
-	switch lit.ValueType {
-	case "String":
-		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("%q", s))
-	case "Int":
-		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%d", int64(f)))
-	case "Float":
-		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%g", f))
-	case "Bool":
-		b, _ := lit.Value.(bool)
-		if b {
-			g.write("1")
-		} else {
-			g.write("0")
-		}
-	default:
-		g.write(fmt.Sprintf("%v", lit.Value))
-	}
-	return nil
-}
-
-func (g *cGen) emitIfExpr(ie *ast.IfExpr) error {
-	g.write("(")
-	if err := g.emitExpr(ie.Cond); err != nil {
-		return err
-	}
-	g.write(" ? ")
-	if err := g.emitExpr(ie.Then); err != nil {
-		return err
-	}
-	g.write(" : ")
-	if err := g.emitExpr(ie.Else); err != nil {
-		return err
-	}
-	g.write(")")
-	return nil
-}
-
-func (g *cGen) emitLambda(lam *ast.Lambda) error {
-	return fmt.Errorf("XQL_E401: C does not support Lambda expressions")
-}
-
-func (g *cGen) emitEnumDecl(ed *ast.EnumDecl) error {
-	g.writeln("typedef enum {")
-	g.indent++
-	for i, v := range ed.Variants {
-		g.writeIndent()
-		if i < len(ed.Variants)-1 {
-			g.writeln(ed.Name + "_" + v + ",")
-		} else {
-			g.writeln(ed.Name + "_" + v)
-		}
-	}
-	g.indent--
-	g.writeln("} " + ed.Name + ";")
-	return nil
-}
-
-func (g *cGen) emitMatchExpr(me *ast.MatchExpr) error {
+func (g *objcGen) emitMatchExpr(me *ast.MatchExpr) error {
 	g.writeIndent()
 	g.write("switch (")
 	if err := g.emitExpr(me.Value); err != nil {
@@ -651,7 +428,215 @@ func (g *cGen) emitMatchExpr(me *ast.MatchExpr) error {
 	return nil
 }
 
-func (g *cGen) emitStructLit(sl *ast.StructLit) error {
+func (g *objcGen) emitExprStmt(es *ast.ExprStmt) error {
+	g.writeIndent()
+	if err := g.emitExpr(es.Expr); err != nil {
+		return err
+	}
+	g.writeln(";")
+	return nil
+}
+
+func (g *objcGen) emitExpr(n ast.Node) error {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return g.emitLiteral(node)
+	case *ast.Ident:
+		g.write(node.Name)
+		return nil
+	case *ast.BinaryExpr:
+		return g.emitBinary(node)
+	case *ast.UnaryExpr:
+		g.write(node.Op)
+		return g.emitExpr(node.Operand)
+	case *ast.CallExpr:
+		return g.emitCall(node)
+	case *ast.MemberExpr:
+		if err := g.emitExpr(node.Object); err != nil {
+			return err
+		}
+		g.write("." + node.Field)
+		return nil
+	case *ast.StructLit:
+		return g.emitStructLit(node)
+	case *ast.ArrayLit:
+		return g.emitArrayLit(node)
+	case *ast.IndexExpr:
+		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
+	default:
+		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
+	}
+}
+
+func (g *objcGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("(")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" ? ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" : ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *objcGen) emitLambda(lam *ast.Lambda) error {
+	g.write("^(")
+	for i, p := range lam.Params {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(typeToObjC(p.Type) + " " + p.Name)
+	}
+	g.write(") { ")
+	for i, stmt := range lam.Body {
+		if i > 0 {
+			g.write("; ")
+		}
+		if es, ok := stmt.(*ast.ExprStmt); ok {
+			if err := g.emitExpr(es.Expr); err != nil {
+				return err
+			}
+		} else if rs, ok := stmt.(*ast.ReturnStmt); ok && rs.Value != nil {
+			g.write("return ")
+			if err := g.emitExpr(rs.Value); err != nil {
+				return err
+			}
+			g.write(";")
+		} else {
+			if err := g.emitExpr(stmt); err != nil {
+				return err
+			}
+		}
+	}
+	g.write(" }")
+	return nil
+}
+
+func (g *objcGen) emitBinary(be *ast.BinaryExpr) error {
+	if be.Op == "+" && (g.inferTypeKind(be.Left) == "String" || g.inferTypeKind(be.Right) == "String") {
+		g.write("[")
+		if err := g.emitExpr(be.Left); err != nil {
+			return err
+		}
+		g.write(" stringByAppendingString:")
+		if err := g.emitExpr(be.Right); err != nil {
+			return err
+		}
+		g.write("]")
+		return nil
+	}
+	g.write("(")
+	if err := g.emitExpr(be.Left); err != nil {
+		return err
+	}
+	g.write(" " + be.Op + " ")
+	if err := g.emitExpr(be.Right); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *objcGen) emitCall(ce *ast.CallExpr) error {
+	switch ce.Callee {
+	case "println":
+		if len(ce.Args) == 0 {
+			g.write(`NSLog(@"")`)
+			return nil
+		}
+		tk := g.inferTypeKind(ce.Args[0])
+		switch tk {
+		case "String":
+			g.write(`NSLog(@"%@", `)
+		case "Float":
+			g.write(`NSLog(@"%g", `)
+		case "Bool":
+			g.write(`NSLog(@"%d", `)
+		default:
+			g.write(`NSLog(@"%ld", (long)`)
+		}
+		if err := g.emitExpr(ce.Args[0]); err != nil {
+			return err
+		}
+		g.write(")")
+		return nil
+	case "printf":
+		if len(ce.Args) == 0 {
+			return nil
+		}
+		tk := g.inferTypeKind(ce.Args[0])
+		switch tk {
+		case "String":
+			g.write(`NSLog(@"%@", `)
+		case "Float":
+			g.write(`NSLog(@"%g", `)
+		default:
+			g.write(`NSLog(@"%ld", (long)`)
+		}
+		if err := g.emitExpr(ce.Args[0]); err != nil {
+			return err
+		}
+		g.write(")")
+		return nil
+	case "sprintf":
+		g.write("[NSString stringWithFormat:@\"%@\", ")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write("]")
+		return nil
+	default:
+		g.write(ce.Callee + "(")
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(arg); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	}
+}
+
+func (g *objcGen) emitLiteral(lit *ast.Literal) error {
+	switch lit.ValueType {
+	case "String":
+		s, _ := lit.Value.(string)
+		g.write(fmt.Sprintf("@%q", s))
+	case "Int":
+		f, _ := lit.Value.(float64)
+		g.write(fmt.Sprintf("%d", int64(f)))
+	case "Float":
+		f, _ := lit.Value.(float64)
+		g.write(fmt.Sprintf("%g", f))
+	case "Bool":
+		b, _ := lit.Value.(bool)
+		if b {
+			g.write("YES")
+		} else {
+			g.write("NO")
+		}
+	default:
+		g.write(fmt.Sprintf("%v", lit.Value))
+	}
+	return nil
+}
+
+func (g *objcGen) emitStructLit(sl *ast.StructLit) error {
 	g.write("(" + sl.TypeName + "){")
 	for i, f := range sl.Fields {
 		if i > 0 {
@@ -666,8 +651,8 @@ func (g *cGen) emitStructLit(sl *ast.StructLit) error {
 	return nil
 }
 
-func (g *cGen) emitArrayLit(al *ast.ArrayLit) error {
-	g.write("{")
+func (g *objcGen) emitArrayLit(al *ast.ArrayLit) error {
+	g.write("@[")
 	for i, elem := range al.Elements {
 		if i > 0 {
 			g.write(", ")
@@ -676,11 +661,11 @@ func (g *cGen) emitArrayLit(al *ast.ArrayLit) error {
 			return err
 		}
 	}
-	g.write("}")
+	g.write("]")
 	return nil
 }
 
-func (g *cGen) emitIndexExpr(ie *ast.IndexExpr) error {
+func (g *objcGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
 	}

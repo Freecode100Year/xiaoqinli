@@ -7,42 +7,60 @@ import (
 	"xiaoqinli/ast"
 )
 
-// GenerateLua produces Lua source code from the given typed AST.
-// The "main" function's body is emitted at top level.
-func GenerateLua(root ast.Node) ([]byte, error) {
-	g := &luaGen{buf: &strings.Builder{}}
+// GenerateAwk produces AWK source code from the given typed AST.
+// All code is wrapped in a BEGIN { ... } block.
+func GenerateAwk(root ast.Node) ([]byte, error) {
+	g := &awkGen{buf: &strings.Builder{}, funcBuf: &strings.Builder{}}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
-	first := true
+	// Collect function declarations (non-main) into funcBuf.
 	for _, d := range prog.Decls {
-		switch node := d.(type) {
-		case *ast.FunctionDecl:
-			if node.Name == "main" {
-				continue
-			}
-			if !first {
-				g.writeln("")
-			}
-			if err := g.emitFunctionDecl(node); err != nil {
+		fd, ok := d.(*ast.FunctionDecl)
+		if !ok || fd.Name == "main" {
+			continue
+		}
+		origBuf := g.buf
+		g.buf = g.funcBuf
+		if g.funcBuf.Len() > 0 {
+			g.writeln("")
+		}
+		if err := g.emitFunctionDecl(fd); err != nil {
+			return nil, err
+		}
+		g.buf = origBuf
+	}
+
+	// Emit BEGIN block with enum constants, main body, etc.
+	g.writeln("BEGIN {")
+	g.indent++
+
+	// Emit enum declarations as integer constants.
+	for _, d := range prog.Decls {
+		if ed, ok := d.(*ast.EnumDecl); ok {
+			if err := g.emitEnumDecl(ed); err != nil {
 				return nil, err
 			}
-			first = false
-		case *ast.StructDecl:
-			// Lua uses tables; no struct declaration needed.
 		}
 	}
 
+	// Emit struct declarations as comments.
+	for _, d := range prog.Decls {
+		if sd, ok := d.(*ast.StructDecl); ok {
+			if err := g.emitStructDecl(sd); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Emit main body.
 	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name != "main" {
 			continue
-		}
-		if !first {
-			g.writeln("")
 		}
 		for _, stmt := range fd.Body {
 			if err := g.emitNode(stmt); err != nil {
@@ -51,19 +69,31 @@ func GenerateLua(root ast.Node) ([]byte, error) {
 		}
 	}
 
-	return []byte(g.buf.String()), nil
+	g.indent--
+	g.writeln("}")
+
+	// Append function definitions after BEGIN block.
+	var out strings.Builder
+	out.WriteString(g.buf.String())
+	if g.funcBuf.Len() > 0 {
+		out.WriteByte('\n')
+		out.WriteString(g.funcBuf.String())
+	}
+
+	return []byte(out.String()), nil
 }
 
-type luaGen struct {
-	buf    *strings.Builder
-	indent int
+type awkGen struct {
+	buf     *strings.Builder
+	funcBuf *strings.Builder
+	indent  int
 }
 
-func (g *luaGen) write(s string)   { g.buf.WriteString(s) }
-func (g *luaGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *luaGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *awkGen) write(s string)   { g.buf.WriteString(s) }
+func (g *awkGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
+func (g *awkGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
-func (g *luaGen) emitNode(n ast.Node) error {
+func (g *awkGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.FunctionDecl:
 		return g.emitFunctionDecl(node)
@@ -84,17 +114,86 @@ func (g *luaGen) emitNode(n ast.Node) error {
 		g.writeln("break")
 		return nil
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: Lua does not support continue")
+		g.writeIndent()
+		g.writeln("continue")
+		return nil
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
-		return nil // Lua uses tables; no struct declaration needed.
+		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
 }
 
-func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+func (g *awkGen) emitStructDecl(sd *ast.StructDecl) error {
+	// AWK has no struct support; emit a comment.
+	g.writeIndent()
+	g.write("# struct " + sd.Name + ": ")
+	for i, f := range sd.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(f.Name)
+	}
+	g.writeln("")
+	return nil
+}
+
+func (g *awkGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	for i, v := range ed.Variants {
+		g.writeIndent()
+		g.writeln(fmt.Sprintf("%s = %d", v, i))
+	}
+	return nil
+}
+
+func (g *awkGen) emitMatchExpr(me *ast.MatchExpr) error {
+	// AWK has no switch/case; emit as if/else if chain.
+	first := true
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			if !first {
+				g.write("} else {")
+			} else {
+				g.write("if (1) {")
+			}
+		} else {
+			if first {
+				g.write("if (")
+			} else {
+				g.write("} else if (")
+			}
+			if err := g.emitExpr(me.Value); err != nil {
+				return err
+			}
+			g.write(" == ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.write(") {")
+		}
+		g.writeln("")
+		g.indent++
+		for _, stmt := range arm.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		first = false
+	}
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *awkGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.writeIndent()
 	g.write("function " + fd.Name + "(")
 	for i, p := range fd.Params {
@@ -103,7 +202,7 @@ func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		}
 		g.write(p.Name)
 	}
-	g.writeln(")")
+	g.writeln(") {")
 	g.indent++
 	for _, stmt := range fd.Body {
 		if err := g.emitNode(stmt); err != nil {
@@ -112,11 +211,11 @@ func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitReturn(rs *ast.ReturnStmt) error {
+func (g *awkGen) emitReturn(rs *ast.ReturnStmt) error {
 	g.writeIndent()
 	if rs.Value == nil {
 		g.writeln("return")
@@ -130,20 +229,21 @@ func (g *luaGen) emitReturn(rs *ast.ReturnStmt) error {
 	return nil
 }
 
-func (g *luaGen) emitVarDecl(vd *ast.VarDecl) error {
+func (g *awkGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
-	g.write("local " + vd.Name)
+	g.write(vd.Name + " = ")
 	if vd.Value != nil {
-		g.write(" = ")
 		if err := g.emitExpr(vd.Value); err != nil {
 			return err
 		}
+	} else {
+		g.write("\"\"")
 	}
 	g.writeln("")
 	return nil
 }
 
-func (g *luaGen) emitAssign(as *ast.AssignStmt) error {
+func (g *awkGen) emitAssign(as *ast.AssignStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(as.Target); err != nil {
 		return err
@@ -156,13 +256,13 @@ func (g *luaGen) emitAssign(as *ast.AssignStmt) error {
 	return nil
 }
 
-func (g *luaGen) emitIf(is *ast.IfStmt) error {
+func (g *awkGen) emitIf(is *ast.IfStmt) error {
 	g.writeIndent()
-	g.write("if ")
+	g.write("if (")
 	if err := g.emitExpr(is.Cond); err != nil {
 		return err
 	}
-	g.writeln(" then")
+	g.writeln(") {")
 	g.indent++
 	for _, s := range is.Then {
 		if err := g.emitNode(s); err != nil {
@@ -172,7 +272,7 @@ func (g *luaGen) emitIf(is *ast.IfStmt) error {
 	g.indent--
 	if len(is.Else) > 0 {
 		g.writeIndent()
-		g.writeln("else")
+		g.writeln("} else {")
 		g.indent++
 		for _, s := range is.Else {
 			if err := g.emitNode(s); err != nil {
@@ -182,17 +282,17 @@ func (g *luaGen) emitIf(is *ast.IfStmt) error {
 		g.indent--
 	}
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitWhile(ws *ast.WhileStmt) error {
+func (g *awkGen) emitWhile(ws *ast.WhileStmt) error {
 	g.writeIndent()
-	g.write("while ")
+	g.write("while (")
 	if err := g.emitExpr(ws.Cond); err != nil {
 		return err
 	}
-	g.writeln(" do")
+	g.writeln(") {")
 	g.indent++
 	for _, s := range ws.Body {
 		if err := g.emitNode(s); err != nil {
@@ -201,29 +301,29 @@ func (g *luaGen) emitWhile(ws *ast.WhileStmt) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitForStmt(fs *ast.ForStmt) error {
+func (g *awkGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		g.write("for " + fs.Var + " = ")
+		g.write("for (" + fs.Var + " = ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write(", ")
+		g.write("; " + fs.Var + " < ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
-		g.writeln(" - 1 do")
+		g.writeln("; " + fs.Var + "++) {")
 	case "each":
-		g.write("for _, " + fs.Var + " in ipairs(")
+		g.write("for (" + fs.Var + " in ")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
 		}
-		g.writeln(") do")
+		g.writeln(") {")
 	default:
 		return fmt.Errorf("XQL_E401: unsupported for-loop form %q", fs.Form)
 	}
@@ -235,11 +335,11 @@ func (g *luaGen) emitForStmt(fs *ast.ForStmt) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitExprStmt(es *ast.ExprStmt) error {
+func (g *awkGen) emitExprStmt(es *ast.ExprStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(es.Expr); err != nil {
 		return err
@@ -248,7 +348,7 @@ func (g *luaGen) emitExprStmt(es *ast.ExprStmt) error {
 	return nil
 }
 
-func (g *luaGen) emitExpr(n ast.Node) error {
+func (g *awkGen) emitExpr(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.Literal:
 		return g.emitLiteral(node)
@@ -261,16 +361,14 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 			return err
 		}
 		op := node.Op
-		switch op {
-		case "&&":
-			op = "and"
-		case "||":
-			op = "or"
-		case "!=":
-			op = "~="
-		}
 		if op == "+" && containsStringExpr(node) {
-			op = ".."
+			// AWK string concatenation: use space
+			g.write(" ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {
@@ -279,19 +377,16 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 		g.write(")")
 		return nil
 	case *ast.UnaryExpr:
-		if node.Op == "!" {
-			g.write("not ")
-		} else {
-			g.write(node.Op)
-		}
+		g.write(node.Op)
 		return g.emitExpr(node.Operand)
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// Not directly supported in AWK; use simple approach.
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}
-		g.write("." + node.Field)
+		g.write("[\"" + node.Field + "\"]")
 		return nil
 	case *ast.StructLit:
 		return g.emitStructLit(node)
@@ -308,16 +403,16 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 	}
 }
 
-func (g *luaGen) emitIfExpr(ie *ast.IfExpr) error {
+func (g *awkGen) emitIfExpr(ie *ast.IfExpr) error {
 	g.write("(")
 	if err := g.emitExpr(ie.Cond); err != nil {
 		return err
 	}
-	g.write(" and ")
+	g.write(" ? ")
 	if err := g.emitExpr(ie.Then); err != nil {
 		return err
 	}
-	g.write(" or ")
+	g.write(" : ")
 	if err := g.emitExpr(ie.Else); err != nil {
 		return err
 	}
@@ -325,42 +420,18 @@ func (g *luaGen) emitIfExpr(ie *ast.IfExpr) error {
 	return nil
 }
 
-func (g *luaGen) emitLambda(lam *ast.Lambda) error {
-	g.write("function(")
-	for i, p := range lam.Params {
-		if i > 0 {
-			g.write(", ")
-		}
-		g.write(p.Name)
-	}
-	g.writeln(")")
-	g.indent++
-	for _, stmt := range lam.Body {
-		if err := g.emitNode(stmt); err != nil {
-			return err
-		}
-	}
-	g.indent--
-	g.writeIndent()
-	g.write("end")
+func (g *awkGen) emitLambda(lam *ast.Lambda) error {
+	return fmt.Errorf("XQL_E401: AWK does not support Lambda expressions")
+}
+
+func (g *awkGen) emitArrayLit(al *ast.ArrayLit) error {
+	// AWK doesn't have array literals; emit as a comment-placeholder.
+	// In practice, arrays are built by assignment.
+	g.write("0")
 	return nil
 }
 
-func (g *luaGen) emitArrayLit(al *ast.ArrayLit) error {
-	g.write("{")
-	for i, elem := range al.Elements {
-		if i > 0 {
-			g.write(", ")
-		}
-		if err := g.emitExpr(elem); err != nil {
-			return err
-		}
-	}
-	g.write("}")
-	return nil
-}
-
-func (g *luaGen) emitIndexExpr(ie *ast.IndexExpr) error {
+func (g *awkGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
 	}
@@ -372,25 +443,16 @@ func (g *luaGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	return nil
 }
 
-func (g *luaGen) emitStructLit(sl *ast.StructLit) error {
-	g.write("{ ")
-	for i, f := range sl.Fields {
-		if i > 0 {
-			g.write(", ")
-		}
-		g.write(f.Name + " = ")
-		if err := g.emitExpr(f.Value); err != nil {
-			return err
-		}
-	}
-	g.write(" }")
+func (g *awkGen) emitStructLit(sl *ast.StructLit) error {
+	// AWK has no struct literals; emit as 0 placeholder.
+	g.write("0")
 	return nil
 }
 
-func (g *luaGen) emitCall(ce *ast.CallExpr) error {
+func (g *awkGen) emitCall(ce *ast.CallExpr) error {
 	switch ce.Callee {
 	case "println":
-		g.write("print(")
+		g.write("print ")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
@@ -399,21 +461,25 @@ func (g *luaGen) emitCall(ce *ast.CallExpr) error {
 				return err
 			}
 		}
-		g.write(")")
 		return nil
 	case "printf":
-		g.write("io.write(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
+		g.write("printf ")
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(arg); err != nil {
 				return err
 			}
 		}
-		g.write(")")
 		return nil
 	case "sprintf":
-		g.write("tostring(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
+		g.write("sprintf(")
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(arg); err != nil {
 				return err
 			}
 		}
@@ -434,7 +500,7 @@ func (g *luaGen) emitCall(ce *ast.CallExpr) error {
 	}
 }
 
-func (g *luaGen) emitLiteral(lit *ast.Literal) error {
+func (g *awkGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
@@ -447,7 +513,11 @@ func (g *luaGen) emitLiteral(lit *ast.Literal) error {
 		g.write(fmt.Sprintf("%g", f))
 	case "Bool":
 		b, _ := lit.Value.(bool)
-		g.write(fmt.Sprintf("%t", b))
+		if b {
+			g.write("1")
+		} else {
+			g.write("0")
+		}
 	default:
 		g.write(fmt.Sprintf("%v", lit.Value))
 	}

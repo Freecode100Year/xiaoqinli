@@ -10,13 +10,15 @@ import (
 	"xiaoqinli/server"
 )
 
-const Version = "2.5.0"
+const Version = "3.0.0"
 
 var allTargets = []string{
 	"go", "rust", "ts", "kotlin", "swift", "py",
 	"java", "csharp", "dart", "lua", "ruby", "php",
 	"zig", "nim", "julia", "cpp", "c", "scala", "haskell",
 	"mql4", "mql5",
+	"ada", "awk", "bash", "crystal", "d", "fortran",
+	"objc", "pascal", "perl", "powershell", "tcl", "v",
 }
 
 const usage = `xiaoqinli - AST-First transpiler v` + Version + `
@@ -28,7 +30,7 @@ Usage:
   xiaoqinli stdio                           MCP stdio mode
   xiaoqinli http [<:port>] [--mode rest]    MCP/REST HTTP mode (default :8080)
 
-Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | mql4 | mql5 (default: go)
+Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | mql4 | mql5 | ada | awk | bash | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v (default: go)
 
 Exit codes: 0=success 1=validation failed 2=compilation error 3=argument error`
 

@@ -7,42 +7,57 @@ import (
 	"xiaoqinli/ast"
 )
 
-// GenerateLua produces Lua source code from the given typed AST.
-// The "main" function's body is emitted at top level.
-func GenerateLua(root ast.Node) ([]byte, error) {
-	g := &luaGen{buf: &strings.Builder{}}
+// GeneratePerl produces Perl source code from the given typed AST.
+// The "main" function's body is emitted at top level after sub definitions.
+func GeneratePerl(root ast.Node) ([]byte, error) {
+	g := &perlGen{buf: &strings.Builder{}}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
-	first := true
+	g.writeln("use strict;")
+	g.writeln("use warnings;")
+	g.writeln("")
+
+	// Emit enum declarations as use constant.
 	for _, d := range prog.Decls {
-		switch node := d.(type) {
-		case *ast.FunctionDecl:
-			if node.Name == "main" {
-				continue
-			}
-			if !first {
-				g.writeln("")
-			}
-			if err := g.emitFunctionDecl(node); err != nil {
+		if ed, ok := d.(*ast.EnumDecl); ok {
+			if err := g.emitEnumDecl(ed); err != nil {
 				return nil, err
 			}
-			first = false
-		case *ast.StructDecl:
-			// Lua uses tables; no struct declaration needed.
+			g.writeln("")
 		}
 	}
 
+	// Emit struct declarations as comments (Perl uses hash refs).
+	for _, d := range prog.Decls {
+		if sd, ok := d.(*ast.StructDecl); ok {
+			if err := g.emitStructDecl(sd); err != nil {
+				return nil, err
+			}
+			g.writeln("")
+		}
+	}
+
+	// Emit non-main sub declarations.
+	for _, d := range prog.Decls {
+		fd, ok := d.(*ast.FunctionDecl)
+		if !ok || fd.Name == "main" {
+			continue
+		}
+		if err := g.emitFunctionDecl(fd); err != nil {
+			return nil, err
+		}
+		g.writeln("")
+	}
+
+	// Emit main body at top level.
 	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name != "main" {
 			continue
-		}
-		if !first {
-			g.writeln("")
 		}
 		for _, stmt := range fd.Body {
 			if err := g.emitNode(stmt); err != nil {
@@ -54,16 +69,16 @@ func GenerateLua(root ast.Node) ([]byte, error) {
 	return []byte(g.buf.String()), nil
 }
 
-type luaGen struct {
+type perlGen struct {
 	buf    *strings.Builder
 	indent int
 }
 
-func (g *luaGen) write(s string)   { g.buf.WriteString(s) }
-func (g *luaGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *luaGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *perlGen) write(s string)   { g.buf.WriteString(s) }
+func (g *perlGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
+func (g *perlGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
-func (g *luaGen) emitNode(n ast.Node) error {
+func (g *perlGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.FunctionDecl:
 		return g.emitFunctionDecl(node)
@@ -81,30 +96,108 @@ func (g *luaGen) emitNode(n ast.Node) error {
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
 		g.writeIndent()
-		g.writeln("break")
+		g.writeln("last;")
 		return nil
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: Lua does not support continue")
+		g.writeIndent()
+		g.writeln("next;")
+		return nil
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
-		return nil // Lua uses tables; no struct declaration needed.
+		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
 }
 
-func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+func (g *perlGen) emitStructDecl(sd *ast.StructDecl) error {
+	// Perl uses hash refs for structs; emit a comment.
 	g.writeIndent()
-	g.write("function " + fd.Name + "(")
-	for i, p := range fd.Params {
+	g.write("# struct " + sd.Name + ": ")
+	for i, f := range sd.Fields {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name)
+		g.write(f.Name)
 	}
-	g.writeln(")")
+	g.writeln("")
+	return nil
+}
+
+func (g *perlGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.write("use constant { ")
+	for i, v := range ed.Variants {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(fmt.Sprintf("%s => %d", v, i))
+	}
+	g.writeln(" };")
+	return nil
+}
+
+func (g *perlGen) emitMatchExpr(me *ast.MatchExpr) error {
+	// Perl: use if/elsif chain (given/when is experimental).
+	first := true
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			if !first {
+				g.write("} else {")
+			} else {
+				g.write("if (1) {")
+			}
+		} else {
+			if first {
+				g.write("if (")
+			} else {
+				g.write("} elsif (")
+			}
+			if err := g.emitExpr(me.Value); err != nil {
+				return err
+			}
+			g.write(" == ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.write(") {")
+		}
+		g.writeln("")
+		g.indent++
+		for _, stmt := range arm.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		first = false
+	}
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *perlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.writeIndent()
+	g.writeln("sub " + fd.Name + " {")
 	g.indent++
+	if len(fd.Params) > 0 {
+		g.writeIndent()
+		g.write("my (")
+		for i, p := range fd.Params {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.write("$" + p.Name)
+		}
+		g.writeln(") = @_;")
+	}
 	for _, stmt := range fd.Body {
 		if err := g.emitNode(stmt); err != nil {
 			return err
@@ -112,38 +205,38 @@ func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitReturn(rs *ast.ReturnStmt) error {
+func (g *perlGen) emitReturn(rs *ast.ReturnStmt) error {
 	g.writeIndent()
 	if rs.Value == nil {
-		g.writeln("return")
+		g.writeln("return;")
 		return nil
 	}
 	g.write("return ")
 	if err := g.emitExpr(rs.Value); err != nil {
 		return err
 	}
-	g.writeln("")
+	g.writeln(";")
 	return nil
 }
 
-func (g *luaGen) emitVarDecl(vd *ast.VarDecl) error {
+func (g *perlGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
-	g.write("local " + vd.Name)
+	g.write("my $" + vd.Name)
 	if vd.Value != nil {
 		g.write(" = ")
 		if err := g.emitExpr(vd.Value); err != nil {
 			return err
 		}
 	}
-	g.writeln("")
+	g.writeln(";")
 	return nil
 }
 
-func (g *luaGen) emitAssign(as *ast.AssignStmt) error {
+func (g *perlGen) emitAssign(as *ast.AssignStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(as.Target); err != nil {
 		return err
@@ -152,17 +245,17 @@ func (g *luaGen) emitAssign(as *ast.AssignStmt) error {
 	if err := g.emitExpr(as.Value); err != nil {
 		return err
 	}
-	g.writeln("")
+	g.writeln(";")
 	return nil
 }
 
-func (g *luaGen) emitIf(is *ast.IfStmt) error {
+func (g *perlGen) emitIf(is *ast.IfStmt) error {
 	g.writeIndent()
-	g.write("if ")
+	g.write("if (")
 	if err := g.emitExpr(is.Cond); err != nil {
 		return err
 	}
-	g.writeln(" then")
+	g.writeln(") {")
 	g.indent++
 	for _, s := range is.Then {
 		if err := g.emitNode(s); err != nil {
@@ -172,7 +265,7 @@ func (g *luaGen) emitIf(is *ast.IfStmt) error {
 	g.indent--
 	if len(is.Else) > 0 {
 		g.writeIndent()
-		g.writeln("else")
+		g.writeln("} else {")
 		g.indent++
 		for _, s := range is.Else {
 			if err := g.emitNode(s); err != nil {
@@ -182,17 +275,17 @@ func (g *luaGen) emitIf(is *ast.IfStmt) error {
 		g.indent--
 	}
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitWhile(ws *ast.WhileStmt) error {
+func (g *perlGen) emitWhile(ws *ast.WhileStmt) error {
 	g.writeIndent()
-	g.write("while ")
+	g.write("while (")
 	if err := g.emitExpr(ws.Cond); err != nil {
 		return err
 	}
-	g.writeln(" do")
+	g.writeln(") {")
 	g.indent++
 	for _, s := range ws.Body {
 		if err := g.emitNode(s); err != nil {
@@ -201,29 +294,29 @@ func (g *luaGen) emitWhile(ws *ast.WhileStmt) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitForStmt(fs *ast.ForStmt) error {
+func (g *perlGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		g.write("for " + fs.Var + " = ")
+		g.write("for (my $" + fs.Var + " = ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write(", ")
+		g.write("; $" + fs.Var + " < ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
-		g.writeln(" - 1 do")
+		g.writeln("; $" + fs.Var + "++) {")
 	case "each":
-		g.write("for _, " + fs.Var + " in ipairs(")
+		g.write("for my $" + fs.Var + " (")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
 		}
-		g.writeln(") do")
+		g.writeln(") {")
 	default:
 		return fmt.Errorf("XQL_E401: unsupported for-loop form %q", fs.Form)
 	}
@@ -235,25 +328,25 @@ func (g *luaGen) emitForStmt(fs *ast.ForStmt) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	g.writeln("}")
 	return nil
 }
 
-func (g *luaGen) emitExprStmt(es *ast.ExprStmt) error {
+func (g *perlGen) emitExprStmt(es *ast.ExprStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(es.Expr); err != nil {
 		return err
 	}
-	g.writeln("")
+	g.writeln(";")
 	return nil
 }
 
-func (g *luaGen) emitExpr(n ast.Node) error {
+func (g *perlGen) emitExpr(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.Literal:
 		return g.emitLiteral(node)
 	case *ast.Ident:
-		g.write(node.Name)
+		g.write("$" + node.Name)
 		return nil
 	case *ast.BinaryExpr:
 		g.write("(")
@@ -261,16 +354,8 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 			return err
 		}
 		op := node.Op
-		switch op {
-		case "&&":
-			op = "and"
-		case "||":
-			op = "or"
-		case "!=":
-			op = "~="
-		}
 		if op == "+" && containsStringExpr(node) {
-			op = ".."
+			op = "."
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {
@@ -279,11 +364,7 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 		g.write(")")
 		return nil
 	case *ast.UnaryExpr:
-		if node.Op == "!" {
-			g.write("not ")
-		} else {
-			g.write(node.Op)
-		}
+		g.write(node.Op)
 		return g.emitExpr(node.Operand)
 	case *ast.CallExpr:
 		return g.emitCall(node)
@@ -291,7 +372,7 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}
-		g.write("." + node.Field)
+		g.write("->{" + node.Field + "}")
 		return nil
 	case *ast.StructLit:
 		return g.emitStructLit(node)
@@ -308,16 +389,16 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 	}
 }
 
-func (g *luaGen) emitIfExpr(ie *ast.IfExpr) error {
+func (g *perlGen) emitIfExpr(ie *ast.IfExpr) error {
 	g.write("(")
 	if err := g.emitExpr(ie.Cond); err != nil {
 		return err
 	}
-	g.write(" and ")
+	g.write(" ? ")
 	if err := g.emitExpr(ie.Then); err != nil {
 		return err
 	}
-	g.write(" or ")
+	g.write(" : ")
 	if err := g.emitExpr(ie.Else); err != nil {
 		return err
 	}
@@ -325,29 +406,33 @@ func (g *luaGen) emitIfExpr(ie *ast.IfExpr) error {
 	return nil
 }
 
-func (g *luaGen) emitLambda(lam *ast.Lambda) error {
-	g.write("function(")
-	for i, p := range lam.Params {
+func (g *perlGen) emitLambda(lam *ast.Lambda) error {
+	g.write("sub { ")
+	for i, stmt := range lam.Body {
 		if i > 0 {
-			g.write(", ")
+			g.write("; ")
 		}
-		g.write(p.Name)
-	}
-	g.writeln(")")
-	g.indent++
-	for _, stmt := range lam.Body {
-		if err := g.emitNode(stmt); err != nil {
-			return err
+		if es, ok := stmt.(*ast.ExprStmt); ok {
+			if err := g.emitExpr(es.Expr); err != nil {
+				return err
+			}
+		} else if rs, ok := stmt.(*ast.ReturnStmt); ok && rs.Value != nil {
+			g.write("return ")
+			if err := g.emitExpr(rs.Value); err != nil {
+				return err
+			}
+		} else {
+			if err := g.emitExpr(stmt); err != nil {
+				return err
+			}
 		}
 	}
-	g.indent--
-	g.writeIndent()
-	g.write("end")
+	g.write(" }")
 	return nil
 }
 
-func (g *luaGen) emitArrayLit(al *ast.ArrayLit) error {
-	g.write("{")
+func (g *perlGen) emitArrayLit(al *ast.ArrayLit) error {
+	g.write("[")
 	for i, elem := range al.Elements {
 		if i > 0 {
 			g.write(", ")
@@ -356,15 +441,15 @@ func (g *luaGen) emitArrayLit(al *ast.ArrayLit) error {
 			return err
 		}
 	}
-	g.write("}")
+	g.write("]")
 	return nil
 }
 
-func (g *luaGen) emitIndexExpr(ie *ast.IndexExpr) error {
+func (g *perlGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
 	}
-	g.write("[")
+	g.write("->[")
 	if err := g.emitExpr(ie.Index); err != nil {
 		return err
 	}
@@ -372,13 +457,13 @@ func (g *luaGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	return nil
 }
 
-func (g *luaGen) emitStructLit(sl *ast.StructLit) error {
+func (g *perlGen) emitStructLit(sl *ast.StructLit) error {
 	g.write("{ ")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(f.Name + " = ")
+		g.write(f.Name + " => ")
 		if err := g.emitExpr(f.Value); err != nil {
 			return err
 		}
@@ -387,10 +472,22 @@ func (g *luaGen) emitStructLit(sl *ast.StructLit) error {
 	return nil
 }
 
-func (g *luaGen) emitCall(ce *ast.CallExpr) error {
+func (g *perlGen) emitCall(ce *ast.CallExpr) error {
 	switch ce.Callee {
 	case "println":
 		g.write("print(")
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(" . ")
+			}
+			if err := g.emitExpr(arg); err != nil {
+				return err
+			}
+		}
+		g.write(` . "\n")`)
+		return nil
+	case "printf":
+		g.write("printf(")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
@@ -401,19 +498,13 @@ func (g *luaGen) emitCall(ce *ast.CallExpr) error {
 		}
 		g.write(")")
 		return nil
-	case "printf":
-		g.write("io.write(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
-			}
-		}
-		g.write(")")
-		return nil
 	case "sprintf":
-		g.write("tostring(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
+		g.write("sprintf(")
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(arg); err != nil {
 				return err
 			}
 		}
@@ -434,7 +525,7 @@ func (g *luaGen) emitCall(ce *ast.CallExpr) error {
 	}
 }
 
-func (g *luaGen) emitLiteral(lit *ast.Literal) error {
+func (g *perlGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
@@ -447,7 +538,11 @@ func (g *luaGen) emitLiteral(lit *ast.Literal) error {
 		g.write(fmt.Sprintf("%g", f))
 	case "Bool":
 		b, _ := lit.Value.(bool)
-		g.write(fmt.Sprintf("%t", b))
+		if b {
+			g.write("1")
+		} else {
+			g.write("0")
+		}
 	default:
 		g.write(fmt.Sprintf("%v", lit.Value))
 	}

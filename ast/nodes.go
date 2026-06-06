@@ -237,6 +237,24 @@ type IndexExpr struct {
 
 func (*IndexExpr) Kind() string { return "IndexExpr" }
 
+// IfExpr represents a ternary/conditional expression (value, not statement).
+type IfExpr struct {
+	Cond Node
+	Then Node
+	Else Node
+}
+
+func (*IfExpr) Kind() string { return "IfExpr" }
+
+// Lambda represents an anonymous function / closure expression.
+type Lambda struct {
+	Params     []Param
+	ReturnType TypeExpr
+	Body       []Node
+}
+
+func (*Lambda) Kind() string { return "Lambda" }
+
 // ===================== JSON Parsing =====================
 
 // Parse parses .xql.json bytes into a typed AST tree.
@@ -288,6 +306,10 @@ func parseNode(raw map[string]interface{}) (Node, error) {
 		return parseArrayLit(raw)
 	case "IndexExpr":
 		return parseIndexExpr(raw)
+	case "IfExpr":
+		return parseIfExpr(raw)
+	case "Lambda":
+		return parseLambda(raw)
 	case "BinaryExpr":
 		return parseBinaryExpr(raw)
 	case "UnaryExpr":
@@ -851,4 +873,70 @@ func parseIndexExpr(raw map[string]interface{}) (*IndexExpr, error) {
 	}
 	ie.Index = index
 	return ie, nil
+}
+
+func parseIfExpr(raw map[string]interface{}) (*IfExpr, error) {
+	ie := &IfExpr{}
+	cond, err := parseChildNode(raw, "cond")
+	if err != nil {
+		return nil, err
+	}
+	if cond == nil {
+		return nil, fmt.Errorf("XQL_E101: IfExpr missing 'cond'")
+	}
+	ie.Cond = cond
+	thenN, err := parseChildNode(raw, "then")
+	if err != nil {
+		return nil, err
+	}
+	if thenN == nil {
+		return nil, fmt.Errorf("XQL_E101: IfExpr missing 'then'")
+	}
+	ie.Then = thenN
+	elseN, err := parseChildNode(raw, "else")
+	if err != nil {
+		return nil, err
+	}
+	if elseN == nil {
+		return nil, fmt.Errorf("XQL_E101: IfExpr missing 'else'")
+	}
+	ie.Else = elseN
+	return ie, nil
+}
+
+func parseLambda(raw map[string]interface{}) (*Lambda, error) {
+	lam := &Lambda{}
+	if params, ok := raw["params"].([]interface{}); ok {
+		for _, p := range params {
+			pm, ok := p.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("XQL_E101: Lambda param is not an object")
+			}
+			param := Param{}
+			param.Name, _ = pm["name"].(string)
+			if t, ok := pm["type"]; ok {
+				te, err := parseTypeExpr(t)
+				if err != nil {
+					return nil, err
+				}
+				param.Type = te
+			}
+			lam.Params = append(lam.Params, param)
+		}
+	}
+	if rt, ok := raw["returnType"]; ok {
+		te, err := parseTypeExpr(rt)
+		if err != nil {
+			return nil, err
+		}
+		lam.ReturnType = te
+	}
+	if body, ok := raw["body"].([]interface{}); ok {
+		nodes, err := parseNodeList(body)
+		if err != nil {
+			return nil, err
+		}
+		lam.Body = nodes
+	}
+	return lam, nil
 }

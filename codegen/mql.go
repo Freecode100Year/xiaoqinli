@@ -510,9 +510,34 @@ func (g *mqlGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *mqlGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("(")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" ? ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" : ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *mqlGen) emitLambda(lam *ast.Lambda) error {
+	return fmt.Errorf("XQL_E401: MQL does not support Lambda expressions")
 }
 
 func (g *mqlGen) emitArrayLit(al *ast.ArrayLit) error {

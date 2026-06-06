@@ -311,9 +311,71 @@ func (g *rbGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *rbGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("(")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" ? ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" : ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *rbGen) emitLambda(lam *ast.Lambda) error {
+	g.write("lambda { ")
+	if len(lam.Params) > 0 {
+		g.write("|")
+		for i, p := range lam.Params {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.write(p.Name)
+		}
+		g.write("| ")
+	}
+	if len(lam.Body) == 1 {
+		if rs, ok := lam.Body[0].(*ast.ReturnStmt); ok && rs.Value != nil {
+			if err := g.emitExpr(rs.Value); err != nil {
+				return err
+			}
+			g.write(" }")
+			return nil
+		}
+		if es, ok := lam.Body[0].(*ast.ExprStmt); ok {
+			if err := g.emitExpr(es.Expr); err != nil {
+				return err
+			}
+			g.write(" }")
+			return nil
+		}
+	}
+	g.writeln("")
+	g.indent++
+	for _, stmt := range lam.Body {
+		if err := g.emitNode(stmt); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.write("}")
+	return nil
 }
 
 func (g *rbGen) emitArrayLit(al *ast.ArrayLit) error {

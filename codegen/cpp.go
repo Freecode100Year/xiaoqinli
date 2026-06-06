@@ -464,6 +464,10 @@ func (g *cppGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
@@ -493,6 +497,44 @@ func (g *cppGen) emitIndexExpr(ie *ast.IndexExpr) error {
 		return err
 	}
 	g.write("]")
+	return nil
+}
+
+func (g *cppGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("(")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" ? ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" : ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *cppGen) emitLambda(lam *ast.Lambda) error {
+	g.write("[](")
+	for i, p := range lam.Params {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(g.typeStr(p.Type) + " " + p.Name)
+	}
+	g.write(") -> " + g.typeStr(lam.ReturnType) + " { ")
+	for i, stmt := range lam.Body {
+		if i > 0 {
+			g.write(" ")
+		}
+		if err := g.emitNode(stmt); err != nil {
+			return err
+		}
+	}
+	g.write("}")
 	return nil
 }
 

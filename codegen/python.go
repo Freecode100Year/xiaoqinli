@@ -409,9 +409,60 @@ func (g *pyGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *pyGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("(")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" if ")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" else ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *pyGen) emitLambda(lam *ast.Lambda) error {
+	g.write("lambda ")
+	for i, p := range lam.Params {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(p.Name)
+	}
+	g.write(": ")
+	if len(lam.Body) > 0 {
+		last := lam.Body[len(lam.Body)-1]
+		if es, ok := last.(*ast.ExprStmt); ok {
+			if err := g.emitExpr(es.Expr); err != nil {
+				return err
+			}
+		} else if rs, ok := last.(*ast.ReturnStmt); ok && rs.Value != nil {
+			if err := g.emitExpr(rs.Value); err != nil {
+				return err
+			}
+		} else {
+			if err := g.emitExpr(last); err != nil {
+				return err
+			}
+		}
+	} else {
+		g.write("None")
+	}
+	return nil
 }
 
 func (g *pyGen) emitArrayLit(al *ast.ArrayLit) error {

@@ -325,6 +325,10 @@ func (g *tsGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
@@ -435,5 +439,50 @@ func (g *tsGen) emitLiteral(lit *ast.Literal) error {
 	default:
 		g.write(fmt.Sprintf("%v", lit.Value))
 	}
+	return nil
+}
+
+func (g *tsGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("(")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" ? ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" : ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *tsGen) emitLambda(lam *ast.Lambda) error {
+	g.write("(")
+	for i, p := range lam.Params {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(p.Name + ": " + typeToTS(p.Type))
+	}
+	g.write(")")
+	g.write(": " + typeToTS(lam.ReturnType))
+	g.write(" => {")
+	if len(lam.Body) == 0 {
+		g.write("}")
+		return nil
+	}
+	g.writeln("")
+	g.indent++
+	for _, stmt := range lam.Body {
+		if err := g.emitNode(stmt); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.write("}")
 	return nil
 }

@@ -336,6 +336,22 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 	case *ast.MatchExpr:
 		tc.inferType(node.Value, scope)
 		return none
+	case *ast.IfExpr:
+		condType := tc.inferType(node.Cond, scope)
+		if condType.KindName != "" && condType.KindName != "Bool" {
+			tc.addError(fmt.Sprintf("IfExpr condition must be Bool, got %s", condType.KindName))
+		}
+		thenType := tc.inferType(node.Then, scope)
+		elseType := tc.inferType(node.Else, scope)
+		if thenType.KindName != "" && elseType.KindName != "" && thenType.KindName != elseType.KindName {
+			tc.addError(fmt.Sprintf("IfExpr branches must have same type, got %s and %s", thenType.KindName, elseType.KindName))
+		}
+		if thenType.KindName != "" {
+			return thenType
+		}
+		return elseType
+	case *ast.Lambda:
+		return none
 	default:
 		return none
 	}
@@ -525,6 +541,14 @@ func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]as
 			for _, s := range arm.Body {
 				collectEffects(s, seen, funcBodies, result, resolving)
 			}
+		}
+	case *ast.IfExpr:
+		collectEffects(node.Cond, seen, funcBodies, result, resolving)
+		collectEffects(node.Then, seen, funcBodies, result, resolving)
+		collectEffects(node.Else, seen, funcBodies, result, resolving)
+	case *ast.Lambda:
+		for _, s := range node.Body {
+			collectEffects(s, seen, funcBodies, result, resolving)
 		}
 	}
 }

@@ -324,9 +324,60 @@ func (g *jlGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *jlGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("(")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" ? ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" : ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *jlGen) emitLambda(lam *ast.Lambda) error {
+	g.write("(")
+	for i, p := range lam.Params {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(p.Name)
+	}
+	g.write(") -> ")
+	if len(lam.Body) == 1 {
+		if rs, ok := lam.Body[0].(*ast.ReturnStmt); ok && rs.Value != nil {
+			return g.emitExpr(rs.Value)
+		}
+		if es, ok := lam.Body[0].(*ast.ExprStmt); ok {
+			return g.emitExpr(es.Expr)
+		}
+	}
+	g.writeln("begin")
+	g.indent++
+	for _, stmt := range lam.Body {
+		if err := g.emitNode(stmt); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.write("end")
+	return nil
 }
 
 func (g *jlGen) emitArrayLit(al *ast.ArrayLit) error {

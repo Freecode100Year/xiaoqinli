@@ -54,6 +54,30 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateScala(root)
 	case "haskell":
 		return GenerateHaskell(root)
+	case "ada":
+		return GenerateAda(root)
+	case "awk":
+		return GenerateAwk(root)
+	case "bash":
+		return GenerateBash(root)
+	case "crystal":
+		return GenerateCrystal(root)
+	case "d":
+		return GenerateD(root)
+	case "fortran":
+		return GenerateFortran(root)
+	case "objc":
+		return GenerateObjC(root)
+	case "pascal":
+		return GeneratePascal(root)
+	case "perl":
+		return GeneratePerl(root)
+	case "powershell":
+		return GeneratePowerShell(root)
+	case "tcl":
+		return GenerateTcl(root)
+	case "v":
+		return GenerateV(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}
@@ -156,6 +180,18 @@ func walkTypes(n ast.Node, fn func(ast.TypeExpr, string)) {
 			for _, s := range arm.Body {
 				walkTypes(s, fn)
 			}
+		}
+	case *ast.IfExpr:
+		walkTypes(node.Cond, fn)
+		walkTypes(node.Then, fn)
+		walkTypes(node.Else, fn)
+	case *ast.Lambda:
+		for _, p := range node.Params {
+			fn(p.Type, fmt.Sprintf("lambda param '%s'", p.Name))
+		}
+		fn(node.ReturnType, "lambda return type")
+		for _, s := range node.Body {
+			walkTypes(s, fn)
 		}
 	}
 }

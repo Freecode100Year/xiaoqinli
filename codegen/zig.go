@@ -351,9 +351,33 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 		return g.emitArrayLit(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
+	case *ast.IfExpr:
+		return g.emitIfExpr(node)
+	case *ast.Lambda:
+		return g.emitLambda(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported expression %s", n.Kind())
 	}
+}
+
+func (g *zigGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("if (")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(") ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(" else ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (g *zigGen) emitLambda(lam *ast.Lambda) error {
+	return fmt.Errorf("XQL_E401: Zig does not support Lambda expressions")
 }
 
 func (g *zigGen) emitArrayLit(al *ast.ArrayLit) error {

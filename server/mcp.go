@@ -372,12 +372,24 @@ func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
 		{"flag": "julia", "ext": ".jl", "name": "Julia"},
 		{"flag": "mql4", "ext": ".mq4", "name": "MQL4"},
 		{"flag": "mql5", "ext": ".mq5", "name": "MQL5"},
+		{"flag": "ada", "ext": ".adb", "name": "Ada"},
+		{"flag": "awk", "ext": ".awk", "name": "AWK"},
+		{"flag": "bash", "ext": ".sh", "name": "Bash"},
+		{"flag": "crystal", "ext": ".cr", "name": "Crystal"},
+		{"flag": "d", "ext": ".d", "name": "D"},
+		{"flag": "fortran", "ext": ".f90", "name": "Fortran"},
+		{"flag": "objc", "ext": ".m", "name": "Objective-C"},
+		{"flag": "pascal", "ext": ".pas", "name": "Pascal"},
+		{"flag": "perl", "ext": ".pl", "name": "Perl"},
+		{"flag": "powershell", "ext": ".ps1", "name": "PowerShell"},
+		{"flag": "tcl", "ext": ".tcl", "name": "Tcl"},
+		{"flag": "v", "ext": ".v", "name": "V"},
 	}
 	lines := make([]string, len(targets))
 	for i, t := range targets {
 		lines[i] = t["flag"] + " (" + t["name"] + ", " + t["ext"] + ")"
 	}
-	text := "Supported targets (21 languages):\n"
+	text := "Supported targets (33 languages):\n"
 	for _, l := range lines {
 		text += "  " + l + "\n"
 	}
