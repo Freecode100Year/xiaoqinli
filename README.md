@@ -665,6 +665,16 @@ Round-trip tests automatically skip when the toolchain is not installed:
 - **Secure by default** — All validation at compile time; `os/exec` never runs user code
 - **Two-layer pipeline** — Check (types + effects + capabilities) then codegen, single-pass AST traversal, no IR
 
+## Version History
+
+| Version | Languages | AST Nodes | Highlights |
+|---------|-----------|-----------|------------|
+| **3.0.0** | 33 | 24 | +12 backends (Ada/AWK/Bash/Crystal/D/Fortran/ObjC/Pascal/Perl/PowerShell/Tcl/V), IfExpr, Lambda |
+| 2.5.0 | 21 | 22 | +C/Scala/Haskell, EnumDecl, MatchExpr |
+| 2.2.0 | 18 | 20 | +C++/MQL4/MQL5, ArrayLit, IndexExpr, StructDecl |
+| 2.0.0 | 15 | 16 | +Dart/Lua/Ruby/PHP/Zig/Nim/Julia, ForStmt |
+| 1.0.0 | 8 | 12 | Initial release: Go/Rust/TS/Python/Kotlin/Swift/Java/C# |
+
 ## License
 
 MIT
