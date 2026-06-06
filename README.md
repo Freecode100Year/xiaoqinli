@@ -9,6 +9,22 @@
 
 AI agents write structured `.xql.json` directly — no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
 
+### Install
+
+```bash
+# From source
+go build -o xql .
+
+# Or download the binary from GitHub Releases
+```
+
+### Why?
+
+- **AI agents produce AST, not text.** JSON AST eliminates syntax errors, ambiguous parses, and language-specific formatting.
+- **One source of truth.** Write logic once as `.xql.json`, deploy to 33 platforms — from Go microservices to MQL5 trading scripts.
+- **Compile-time safety.** Type checking, effect inference, and capability verification happen before any code is generated.
+- **MCP-native.** Runs as an MCP server for Claude Code, Cursor, and any MCP-compatible editor.
+
 ## Supported Languages (33)
 
 **Systems** — `go` `rust` `c` `cpp` `zig` `d` `v` `nim`
