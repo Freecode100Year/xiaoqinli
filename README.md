@@ -56,6 +56,19 @@ AI agents write structured `.xql.json` directly — no parser, no syntax errors.
 
 > **—** = returns compile error (language limitation). All 33 targets support the full statement set (VarDecl, IfStmt, WhileStmt, ForStmt, etc.).
 
+### Backend Notes
+
+- **C** — `long` for Int, `_xql_strcat` helper for string concatenation. Rejects Lambda, Option, Map, Result.
+- **Haskell** — Pure functions use expression-based if/then/else; IO functions use `do` notation. Rejects mutable patterns (AssignStmt, WhileStmt).
+- **Scala** — Wraps code in `object Main`. Uses `val`/`var` based on reassignment analysis.
+- **Go** — IfExpr uses IIFE pattern since Go lacks ternary expressions.
+- **Fortran** — IfExpr uses `merge()` intrinsic. Rejects Lambda.
+- **Bash** — Rejects both IfExpr and Lambda (shell limitations in expression context).
+- **Pascal** — Rejects both IfExpr and Lambda (language limitations).
+- **MQL4/MQL5** — Script mode only (`OnStart` entry). Rejects Lambda, Map, Option, Result, for-each.
+- **D** — Uses `~` for string concatenation, `long` for Int.
+- **Objective-C** — Uses Foundation types (`NSString*`), `@autoreleasepool` in main, block syntax for Lambda.
+
 ## Quick Start
 
 ```bash
