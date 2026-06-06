@@ -647,6 +647,43 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 | `validate` | `source` | Validate AST without generating code |
 | `targets` | — | List all 33 supported target languages |
 
+### Claude Code Integration
+
+Add to `~/.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "xiaoqinli": {
+      "command": "/path/to/xql",
+      "args": ["stdio"]
+    }
+  }
+}
+```
+
+Then Claude Code can directly call `compile` and `validate` as MCP tools:
+
+```
+> Use xiaoqinli to compile this AST to Rust
+> Validate my .xql.json file
+```
+
+### Cursor / VS Code Integration
+
+Add to `.cursor/mcp.json` or VS Code MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "xiaoqinli": {
+      "command": "/path/to/xql",
+      "args": ["stdio"]
+    }
+  }
+}
+```
+
 ## Error Codes
 
 | Range | Category | Example |
