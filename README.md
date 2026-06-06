@@ -509,6 +509,57 @@ void OnStart() {
 
 > Lambda is not supported in: C, Zig, MQL4/5, Ada, AWK, Bash, Fortran, Pascal, Tcl.
 
+### StructDecl + StructLit
+
+```json
+{
+  "kind": "StructDecl",
+  "name": "Point",
+  "fields": [
+    { "name": "x", "type": { "kind": "Int" } },
+    { "name": "y", "type": { "kind": "Int" } }
+  ]
+}
+```
+
+```json
+{
+  "kind": "StructLit",
+  "typeName": "Point",
+  "fields": [
+    { "name": "x", "value": { "kind": "Literal", "valueType": "Int", "value": 10 } },
+    { "name": "y", "value": { "kind": "Literal", "valueType": "Int", "value": 20 } }
+  ]
+}
+```
+
+### EnumDecl + MatchExpr
+
+```json
+{
+  "kind": "EnumDecl",
+  "name": "Color",
+  "variants": ["Red", "Green", "Blue"]
+}
+```
+
+```json
+{
+  "kind": "MatchExpr",
+  "value": { "kind": "Ident", "name": "c" },
+  "arms": [
+    {
+      "pattern": { "kind": "Ident", "name": "ColorRed" },
+      "body": [{ "kind": "ExprStmt", "expr": { "kind": "CallExpr", "callee": "println", "args": [{ "kind": "Literal", "valueType": "String", "value": "red" }] } }]
+    },
+    {
+      "pattern": { "kind": "Ident", "name": "_" },
+      "body": [{ "kind": "ExprStmt", "expr": { "kind": "CallExpr", "callee": "println", "args": [{ "kind": "Literal", "valueType": "String", "value": "other" }] } }]
+    }
+  ]
+}
+```
+
 ### Built-in Functions
 
 | Function | Effect | Description |
