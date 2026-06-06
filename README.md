@@ -1,48 +1,51 @@
 # Xiaoqinli (xql)
 
-**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out — 21 languages, single Go binary, zero dependencies.
+**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out — 33 languages, single Go binary, zero dependencies.
 
 ```
   .xql.json  ──▶  Type Check  ──▶  Effect Inference  ──▶  Capability Enforcement  ──▶  Source Code
-  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (21 targets)
+  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (33 targets)
 ```
 
 AI agents write structured `.xql.json` directly — no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
 
-## Supported Languages
+## Supported Languages (33)
 
-| Target | Flag | Extension | Verified | Entry Point |
-|--------|------|-----------|----------|-------------|
-| Go | `go` | `.go` | yes | `func main()` |
-| Rust | `rust` | `.rs` | yes | `fn main()` |
-| TypeScript | `ts` | `.ts` | yes | `main()` call |
-| Python | `py` | `.py` | yes | `if __name__` |
-| C++ | `cpp` | `.cpp` | yes | `int main()` |
-| C | `c` | `.c` | — | `int main()` |
-| Kotlin | `kotlin` | `.kt` | — | `fun main()` |
-| Swift | `swift` | `.swift` | — | top-level |
-| Java | `java` | `.java` | — | `public static void main` |
-| C# | `csharp` | `.cs` | — | `static void Main` |
-| Scala | `scala` | `.scala` | — | `object Main { def main }` |
-| Haskell | `haskell` | `.hs` | — | `main :: IO ()` |
-| Dart | `dart` | `.dart` | — | `void main()` |
-| Lua | `lua` | `.lua` | — | top-level |
-| Ruby | `ruby` | `.rb` | — | top-level |
-| PHP | `php` | `.php` | — | top-level |
-| Zig | `zig` | `.zig` | — | `pub fn main()` |
-| Nim | `nim` | `.nim` | — | top-level |
-| Julia | `julia` | `.jl` | — | `main()` call |
-| MQL4 | `mql4` | `.mq4` | no* | `void OnStart()` |
-| MQL5 | `mql5` | `.mq5` | no* | `void OnStart()` |
-
-**Verified** = round-trip tested in CI (generate → compile → run → compare stdout).
-
-> \* **MQL4/MQL5:** Script mode only. Generates language skeleton with `OnStart` entry and `Print` output — no trading API (`OrderSend`, `CTrade`, `OnTick`, `OnCalculate`). Cannot be CI-verified (MetaEditor is closed-source). Map, Option, and Result types emit `XQL_E403`.
-
-**Backend notes:**
-- **C** — Uses `long` for Int, `_xql_strcat` helper for string concatenation (`malloc`+`memcpy`). Rejects Option/Map/Result types and for-each loops (`XQL_E402`).
-- **Haskell** — Pure functions use expression-based if/then/else; IO functions use `do` notation. Rejects mutable patterns: `AssignStmt`, `WhileStmt`, `BreakStmt`, `ContinueStmt` (`XQL_E401`).
-- **Scala** — Wraps all code in `object Main`. Uses `val`/`var` based on reassignment analysis. `Long` for Int with `L` suffixes.
+| # | Target | Flag | Extension | Entry Point |
+|---|--------|------|-----------|-------------|
+| 1 | Go | `go` | `.go` | `func main()` |
+| 2 | Rust | `rust` | `.rs` | `fn main()` |
+| 3 | TypeScript | `ts` | `.ts` | `main()` call |
+| 4 | Python | `py` | `.py` | `if __name__` |
+| 5 | C++ | `cpp` | `.cpp` | `int main()` |
+| 6 | C | `c` | `.c` | `int main()` |
+| 7 | Kotlin | `kotlin` | `.kt` | `fun main()` |
+| 8 | Swift | `swift` | `.swift` | top-level |
+| 9 | Java | `java` | `.java` | `public static void main` |
+| 10 | C# | `csharp` | `.cs` | `static void Main` |
+| 11 | Scala | `scala` | `.scala` | `object Main` |
+| 12 | Haskell | `haskell` | `.hs` | `main :: IO ()` |
+| 13 | Dart | `dart` | `.dart` | `void main()` |
+| 14 | Lua | `lua` | `.lua` | top-level |
+| 15 | Ruby | `ruby` | `.rb` | top-level |
+| 16 | PHP | `php` | `.php` | top-level |
+| 17 | Zig | `zig` | `.zig` | `pub fn main()` |
+| 18 | Nim | `nim` | `.nim` | top-level |
+| 19 | Julia | `julia` | `.jl` | `main()` call |
+| 20 | MQL4 | `mql4` | `.mq4` | `void OnStart()` |
+| 21 | MQL5 | `mql5` | `.mq5` | `void OnStart()` |
+| 22 | Ada | `ada` | `.adb` | `procedure Main` |
+| 23 | AWK | `awk` | `.awk` | `BEGIN {}` |
+| 24 | Bash | `bash` | `.sh` | top-level |
+| 25 | Crystal | `crystal` | `.cr` | top-level |
+| 26 | D | `d` | `.d` | `void main()` |
+| 27 | Fortran | `fortran` | `.f90` | `program main` |
+| 28 | Objective-C | `objc` | `.m` | `int main()` |
+| 29 | Pascal | `pascal` | `.pas` | `program Main` |
+| 30 | Perl | `perl` | `.pl` | top-level |
+| 31 | PowerShell | `powershell` | `.ps1` | top-level |
+| 32 | Tcl | `tcl` | `.tcl` | top-level |
+| 33 | V | `v` | `.v` | `fn main()` |
 
 ## Quick Start
 
@@ -54,10 +57,13 @@ go build -o xql .
 
 # Compile to any target
 ./xql compile --file examples/hello.xql.json --target go
-./xql compile --file examples/hello.xql.json --target cpp    --out main.cpp
 ./xql compile --file examples/hello.xql.json --target rust   --out main.rs
 ./xql compile --file examples/hello.xql.json --target py     --out main.py
-./xql compile --file examples/hello.xql.json --target mql5   --out script.mq5
+./xql compile --file examples/hello.xql.json --target ada    --out main.adb
+./xql compile --file examples/hello.xql.json --target crystal --out main.cr
+
+# List all supported targets
+./xql targets
 ```
 
 ## One AST, Many Languages
@@ -139,6 +145,21 @@ fn main() {
 </details>
 
 <details>
+<summary><strong>Python</strong></summary>
+
+```python
+def greet(name: str) -> str:
+    return ("Hello, " + name)
+
+def main() -> None:
+    print(greet("World"))
+
+if __name__ == "__main__":
+    main()
+```
+</details>
+
+<details>
 <summary><strong>C++</strong></summary>
 
 ```cpp
@@ -153,21 +174,6 @@ int main() {
     std::cout << greet("World") << std::endl;
     return 0;
 }
-```
-</details>
-
-<details>
-<summary><strong>Python</strong></summary>
-
-```python
-def greet(name: str) -> str:
-    return ("Hello, " + name)
-
-def main() -> None:
-    print(greet("World"))
-
-if __name__ == "__main__":
-    main()
 ```
 </details>
 
@@ -272,6 +278,102 @@ main = do
 </details>
 
 <details>
+<summary><strong>Ada</strong></summary>
+
+```ada
+with Ada.Text_IO; use Ada.Text_IO;
+with Ada.Integer_Text_IO; use Ada.Integer_Text_IO;
+
+function greet(name : String) return String is
+begin
+    return ("Hello, " & name);
+end greet;
+
+procedure Main is
+begin
+    Put_Line(greet("World"));
+end Main;
+```
+</details>
+
+<details>
+<summary><strong>Crystal</strong></summary>
+
+```crystal
+def greet(name : String) : String
+  return ("Hello, " + name)
+end
+
+puts(greet("World"))
+```
+</details>
+
+<details>
+<summary><strong>D</strong></summary>
+
+```d
+import std.stdio;
+
+string greet(string name) {
+    return ("Hello, " ~ name);
+}
+
+void main() {
+    writeln(greet("World"));
+}
+```
+</details>
+
+<details>
+<summary><strong>Objective-C</strong></summary>
+
+```objc
+#import <Foundation/Foundation.h>
+
+NSString* greet(NSString* name) {
+    return [@"Hello, " stringByAppendingString:name];
+}
+
+int main() {
+    @autoreleasepool {
+        NSLog(@"%@", greet(@"World"));
+    }
+    return 0;
+}
+```
+</details>
+
+<details>
+<summary><strong>Perl</strong></summary>
+
+```perl
+use strict;
+use warnings;
+
+sub greet {
+    my ($name) = @_;
+    return ("Hello, " . $name);
+}
+
+print(greet("World") . "\n");
+```
+</details>
+
+<details>
+<summary><strong>V</strong></summary>
+
+```v
+fn greet(name string) string {
+    return ('Hello, ' + name)
+}
+
+fn main() {
+    println(greet('World'))
+}
+```
+</details>
+
+<details>
 <summary><strong>MQL5</strong></summary>
 
 ```mql5
@@ -287,49 +389,7 @@ void OnStart() {
 ```
 </details>
 
-## Static Analysis Pipeline
-
-All checks run before code generation. If any check fails, no code is emitted.
-
-```
-  Parse JSON  ──▶  Type Check  ──▶  Effect Check  ──▶  Capability Check  ──▶  Codegen
-  (XQL_E1xx)      (XQL_E2xx)      (XQL_E2xx)         (XQL_E3xx)             (XQL_E4xx)
-```
-
-| Phase | What it validates |
-|-------|-------------------|
-| **Type check** | Variable types, function signatures, return types, operator compatibility, array element types, struct field types, index expression types |
-| **Effect inference** | Side effects (`network`/`filesystem`/`state`), purity violations, transitive propagation through call chains |
-| **Capability check** | `@grant` enforcement — callee capabilities must be subset of caller's, checked through all control flow paths including for-loops |
-
-### Type Inference
-
-The type checker tracks full generic type information through expressions:
-
-- `Array<Int>` indexing returns `Int` (not unknown)
-- `for-each` loop variable inherits the array's element type
-- Struct field access returns the field's declared type
-- Binary operators propagate types through the expression tree
-
-### Scoped Type Checking
-
-Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosing scope. Each block creates a child scope that inherits parent bindings but isolates its own declarations.
-
-## Type System
-
-| XQL Kind | Go | Rust | C | C++ | Scala | Haskell | Python | MQL4/5 |
-|----------|-----|------|---|-----|-------|---------|--------|--------|
-| `Int` | `int` | `i64` | `long` | `long` | `Long` | `Int` | `int` | `long` |
-| `Float` | `float64` | `f64` | `double` | `double` | `Double` | `Double` | `float` | `double` |
-| `String` | `string` | `String` | `const char*` | `std::string` | `String` | `String` | `str` | `string` |
-| `Bool` | `bool` | `bool` | `int` | `bool` | `Boolean` | `Bool` | `bool` | `bool` |
-| `Void` | — | — | `void` | `void` | `Unit` | `()` | `None` | `void` |
-| `Array<T>` | `[]T` | `Vec<T>` | `T[]` | `std::vector<T>` | `Array[T]` | `[T]` | `list[T]` | `T[]` |
-| `Option<T>` | `*T` | `Option<T>` | E402 | `std::optional<T>` | `Option[T]` | `Maybe T` | `Optional[T]` | E403 |
-| `Map<K,V>` | `map[K]V` | `HashMap<K,V>` | E402 | `std::unordered_map<K,V>` | `Map[K,V]` | — | `dict[K,V]` | E403 |
-| `Result<T>` | `(T, error)` | `Result<T,E>` | E402 | E402 | `Either[Throwable,T]` | — | E402 | E403 |
-
-## .xql.json Node Reference
+## AST Node Reference
 
 ### Program
 
@@ -350,7 +410,7 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 | Node | Fields | Description |
 |------|--------|-------------|
 | `VarDecl` | `name`, `type`, `value` | Variable declaration |
-| `AssignStmt` | `target`, `value` | Assignment (target: string, `IndexExpr`, or `MemberExpr`) |
+| `AssignStmt` | `target`, `value` | Assignment |
 | `ReturnStmt` | `value` (optional) | Return from function |
 | `IfStmt` | `cond`, `then[]`, `else[]` | Conditional branch |
 | `WhileStmt` | `cond`, `body[]` | While loop |
@@ -372,17 +432,70 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 | `StructLit` | `typeName`, `fields[]` | Struct construction |
 | `ArrayLit` | `elemType`, `elements[]` | Array literal |
 | `IndexExpr` | `target`, `index` | Index access (`arr[i]`) |
-| `MatchExpr` | `value`, `arms[]` | Pattern match / switch expression |
+| `MatchExpr` | `value`, `arms[]` | Pattern match / switch |
+| `IfExpr` | `cond`, `then`, `else` | Ternary / conditional expression |
+| `Lambda` | `params[]`, `returnType`, `body[]` | Anonymous function / closure |
+
+### IfExpr (Ternary Expression)
+
+```json
+{
+  "kind": "IfExpr",
+  "cond": { "kind": "BinaryExpr", "op": ">", "left": ..., "right": ... },
+  "then": { "kind": "Literal", "valueType": "String", "value": "big" },
+  "else": { "kind": "Literal", "valueType": "String", "value": "small" }
+}
+```
+
+| Language | Output |
+|----------|--------|
+| Go | `func() interface{} { if x > 5 { return "big" }; return "small" }()` |
+| Rust | `if (x > 5) { "big" } else { "small" }` |
+| Python | `("big" if (x > 5) else "small")` |
+| C / C++ / Java / C# | `((x > 5) ? "big" : "small")` |
+| Haskell | `(if (x > 5) then "big" else "small")` |
+| Ada | `(if (x > 5) then "big" else "small")` |
+| Fortran | `merge("big", "small", (x > 5))` |
+| V | `if (x > 5) { 'big' } else { 'small' }` |
+| PowerShell | `$(if (($x -gt 5)) { "big" } else { "small" })` |
+
+### Lambda (Anonymous Function)
+
+```json
+{
+  "kind": "Lambda",
+  "params": [{ "name": "x", "type": { "kind": "Int" } }],
+  "returnType": { "kind": "Int" },
+  "body": [{ "kind": "ReturnStmt", "value": ... }]
+}
+```
+
+| Language | Output |
+|----------|--------|
+| Go | `func(x int) int { return ... }` |
+| Rust | `\|x: i64\| -> i64 { return ...; }` |
+| Python | `lambda x: ...` |
+| TypeScript | `(x: number): number => { return ...; }` |
+| C++ | `[](long x) -> long { return ...; }` |
+| Java | `(long x) -> { return ...; }` |
+| Kotlin | `{ x: Long -> ... }` |
+| Swift | `{ (x: Int) -> Int in return ... }` |
+| Ruby | `lambda { \|x\| return ... }` |
+| Lua | `function(x) return ... end` |
+| Crystal | `->(x : Int64) { return ... }` |
+| Objective-C | `^(long x) { return ...; }` |
+
+> Lambda is not supported in: C, Zig, MQL4/5, Ada, AWK, Bash, Fortran, Pascal, Tcl.
 
 ### Built-in Functions
 
-| Function | Effect | Maps to |
-|----------|--------|---------|
-| `println` | state | `fmt.Println` / `println!` / `std::cout << ... << std::endl` / `print()` / `Print()` |
-| `printf` | state | `fmt.Printf` / `print!` / `std::cout << ...` / `Print()` |
-| `sprintf` | pure | `fmt.Sprintf` / `format!` / `std::to_string` |
+| Function | Effect | Description |
+|----------|--------|-------------|
+| `println` | state | Print with newline |
+| `printf` | state | Formatted print |
+| `sprintf` | pure | Formatted string (returns String) |
 
-## ForStmt
+### ForStmt
 
 **Range form** — iterate from start to end (exclusive):
 
@@ -395,8 +508,6 @@ Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosi
 }
 ```
 
-Generates: `for i := 0; i < 10; i++` (Go) / `for i in 0..10` (Rust) / `for (long i = 0; i < 10; i++)` (C++/MQL)
-
 **Each form** — iterate over array elements:
 
 ```json
@@ -407,9 +518,45 @@ Generates: `for i := 0; i < 10; i++` (Go) / `for i in 0..10` (Rust) / `for (long
 }
 ```
 
-Generates: `for _, item := range items` (Go) / `for item in &items` (Rust) / `for (const auto& item : items)` (C++)
+## Static Analysis Pipeline
 
-> MQL4/MQL5 does not support for-each — use range form with index access instead.
+All checks run before code generation. If any check fails, no code is emitted.
+
+```
+  Parse JSON  ──▶  Type Check  ──▶  Effect Check  ──▶  Capability Check  ──▶  Codegen
+  (XQL_E1xx)      (XQL_E2xx)      (XQL_E2xx)         (XQL_E3xx)             (XQL_E4xx)
+```
+
+| Phase | What it validates |
+|-------|-------------------|
+| **Type check** | Variable types, function signatures, return types, operator compatibility, array element types, struct field types, index types, IfExpr branch types |
+| **Effect inference** | Side effects (`network`/`filesystem`/`state`), purity violations, transitive propagation through call chains, Lambda body effects |
+| **Capability check** | `@grant` enforcement — callee capabilities must be subset of caller's |
+
+### Type Inference
+
+- `Array<Int>` indexing returns `Int` (not unknown)
+- `for-each` loop variable inherits the array's element type
+- Struct field access returns the field's declared type
+- `IfExpr` branches must have the same type
+- Binary operators propagate types through the expression tree
+
+### Scoped Type Checking
+
+Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosing scope. Each block creates a child scope that inherits parent bindings but isolates its own declarations.
+
+## Type System
+
+| XQL Kind | Go | Rust | C | C++ | Python | Java | Haskell |
+|----------|-----|------|---|-----|--------|------|---------|
+| `Int` | `int` | `i64` | `long` | `long` | `int` | `long` | `Int` |
+| `Float` | `float64` | `f64` | `double` | `double` | `float` | `double` | `Double` |
+| `String` | `string` | `String` | `const char*` | `std::string` | `str` | `String` | `String` |
+| `Bool` | `bool` | `bool` | `int` | `bool` | `bool` | `boolean` | `Bool` |
+| `Void` | — | — | `void` | `void` | `None` | `void` | `()` |
+| `Array<T>` | `[]T` | `Vec<T>` | `T[]` | `std::vector<T>` | `list[T]` | `T[]` | `[T]` |
+| `Option<T>` | `*T` | `Option<T>` | E402 | `std::optional<T>` | `Optional[T]` | `T` | `Maybe T` |
+| `Result<T>` | `(T, error)` | `Result<T,E>` | E402 | E402 | E402 | E402 | — |
 
 ## MCP Server
 
@@ -425,82 +572,58 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 |------|------|-------------|
 | `compile` | `source`, `target` | Compile `.xql.json` AST to target language |
 | `validate` | `source` | Validate AST without generating code |
-| `targets` | — | List all 21 supported target languages |
+| `targets` | — | List all 33 supported target languages |
 
 ## Error Codes
 
-| Range | Category | Phase | Example |
-|-------|----------|-------|---------|
-| `XQL_E1xx` | Parse / AST structure | Input | Missing `kind` field, invalid JSON |
-| `XQL_E2xx` | Type / effect violations | Static check | Return type mismatch, purity violation |
-| `XQL_E3xx` | Capability violations | Static check | Missing `@grant` for callee |
-| `XQL_E4xx` | Codegen errors | Code generation | Unsupported node, unsupported type for target |
-
-### Target-Specific Rejections
-
-| Error | Targets | Cause |
-|-------|---------|-------|
-| `XQL_E402` | C++, TS, Dart, Nim, Julia, Lua, Ruby | `Result<T>` type not supported |
-| `XQL_E403` | MQL4, MQL5 | `Map`, `Option`, `Result` type or `for-each` loop not supported |
+| Range | Category | Example |
+|-------|----------|---------|
+| `XQL_E1xx` | Parse / AST structure | Missing `kind` field, invalid JSON |
+| `XQL_E2xx` | Type / effect violations | Return type mismatch, purity violation, IfExpr branch type mismatch |
+| `XQL_E3xx` | Capability violations | Missing `@grant` for callee |
+| `XQL_E4xx` | Codegen errors | Unsupported node for target (e.g. Lambda in C) |
 
 ## Project Structure
 
 ```
 xiaoqinli/
-  main.go                    CLI entry + version (2.5.0)
+  main.go                    CLI entry + version (3.0.0)
   ast/
-    nodes.go                 AST node definitions + JSON parser
-    hash.go                  Content-addressable hashing
+    nodes.go                 24 AST node types + JSON parser
   check/
-    types.go                 Type checker + scoped inference + effect system
-    capability.go            Capability checker (@grant enforcement)
+    types.go                 Type checker + effect system
+    capability.go            @grant enforcement
     check.go                 RunAll orchestrator
   codegen/
-    golang.go                Go backend
-    rust.go                  Rust backend
-    typescript.go            TypeScript backend
-    python.go                Python backend
-    cpp.go                   C++17 backend (auto #include)
-    kotlin.go                Kotlin backend
-    swift.go                 Swift backend
-    java.go                  Java backend
-    csharp.go                C# backend
-    dart.go                  Dart backend
-    lua.go                   Lua backend
-    ruby.go                  Ruby backend
-    php.go                   PHP backend
-    zig.go                   Zig backend
-    nim.go                   Nim backend
-    julia.go                 Julia backend
-    c.go                     C99 backend (printf, _xql_strcat)
-    scala.go                 Scala backend (object Main wrapper)
-    haskell.go               Haskell backend (pure + IO, do notation)
-    mql.go                   MQL4/MQL5 shared backend (script mode)
+    golang.go   rust.go      typescript.go   python.go
+    cpp.go      c.go         kotlin.go       swift.go
+    java.go     csharp.go    scala.go        haskell.go
+    dart.go     lua.go       ruby.go         php.go
+    zig.go      nim.go       julia.go        mql.go
+    ada.go      awk.go       bash.go         crystal.go
+    d.go        fortran.go   objc.go         pascal.go
+    perl.go     powershell.go  tcl.go        v.go
     util.go                  Generate() dispatcher + shared utilities
-    codegen_test.go          124 tests across all 21 backends
-    roundtrip_test.go        Compile-and-run verification (Go, Rust, Python, TS, C++)
+    codegen_test.go          222 tests across all 33 backends
+    roundtrip_test.go        Compile-and-run verification
   server/
-    mcp.go                   MCP server (stdio + streamable HTTP)
+    mcp.go                   MCP server (stdio + HTTP)
     rest.go                  REST API server
-    skills.go                Skills dispatcher
-  vfs/
-    workspace.go             In-memory virtual filesystem
-  skills/
-    *.md                     Embedded skill documents
   examples/
-    hello.xql.json           Hello world (greet + println)
+    hello.xql.json           Hello world
     example.xql.json         Fibonacci + arithmetic
-    clock.xql.json           System clock with live output
-    loop.xql.json            For-loop with array indexing
-    struct.xql.json          Struct declaration and field access
-    collections.xql.json     Array literals and indexing
+    clock.xql.json           System clock
+    loop.xql.json            For-loop + array indexing
+    struct.xql.json          Struct declaration + field access
+    collections.xql.json     Array literals + indexing
+    lambda_ifexpr.xql.json   IfExpr + Lambda demo
 ```
 
 ## Tests
 
 ```bash
-go test ./... -v              # run all tests (124 tests)
-go build -o xql . && go test ./... -v   # build + test
+go test ./...                    # run all 222 tests
+go build -o xql . && go test ./... -v   # build + test verbose
 ```
 
 Round-trip tests automatically skip when the toolchain is not installed:
@@ -516,7 +639,7 @@ Round-trip tests automatically skip when the toolchain is not installed:
 ## Design Principles
 
 - **Zero dependencies** — Single language (Go), single binary, no third-party imports
-- **Deterministic** — Same AST always produces same output, no randomness
+- **Deterministic** — Same AST always produces same output
 - **Secure by default** — All validation at compile time; `os/exec` never runs user code
 - **Two-layer pipeline** — Check (types + effects + capabilities) then codegen, single-pass AST traversal, no IR
 
