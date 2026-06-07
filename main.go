@@ -17,8 +17,11 @@ var allTargets = []string{
 	"java", "csharp", "dart", "lua", "ruby", "php",
 	"zig", "nim", "julia", "cpp", "c", "scala", "haskell",
 	"mql4", "mql5",
+	"ocaml", "fsharp", "elixir", "clojure",
 	"ada", "awk", "bash", "crystal", "d", "fortran",
 	"objc", "pascal", "perl", "powershell", "tcl", "v",
+	"vala",
+	"groovy",
 }
 
 const usage = `xiaoqinli - AST-First transpiler v` + Version + `
@@ -30,7 +33,7 @@ Usage:
   xiaoqinli stdio                           MCP stdio mode
   xiaoqinli http [<:port>] [--mode rest]    MCP/REST HTTP mode (default :8080)
 
-Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | mql4 | mql5 | ada | awk | bash | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v (default: go)
+Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | ocaml | fsharp | elixir | clojure | mql4 | mql5 | ada | awk | bash | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v | vala | groovy (default: go)
 
 Exit codes: 0=success 1=validation failed 2=compilation error 3=argument error`
 

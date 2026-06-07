@@ -54,6 +54,10 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateScala(root)
 	case "haskell":
 		return GenerateHaskell(root)
+	case "ocaml":
+		return GenerateOCaml(root)
+	case "fsharp":
+		return GenerateFSharp(root)
 	case "ada":
 		return GenerateAda(root)
 	case "awk":
@@ -78,6 +82,14 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateTcl(root)
 	case "v":
 		return GenerateV(root)
+	case "elixir":
+		return GenerateElixir(root)
+	case "clojure":
+		return GenerateClojure(root)
+	case "vala":
+		return GenerateVala(root)
+	case "groovy":
+		return GenerateGroovy(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}

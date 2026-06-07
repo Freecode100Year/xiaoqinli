@@ -10,7 +10,7 @@ Xiaoqinli (xql) is an AST-First transpiler that converts `.xql.json` files into 
 # Build
 go build -o xql .
 
-# Compile .xql.json to any of 33 targets
+# Compile .xql.json to any of 37 targets
 xql compile --file program.xql.json --target go
 xql compile --file program.xql.json --target rust --out main.rs
 
@@ -26,14 +26,14 @@ xql http :8080                 # HTTP mode
 xql http :8080 --mode rest     # REST API mode
 ```
 
-## Supported Targets (33)
+## Supported Targets (37)
 
 **Systems:** `go` `rust` `c` `cpp` `zig` `d` `v` `nim`
-**JVM/CLR:** `java` `kotlin` `scala` `csharp` `dart`
+**JVM/CLR:** `java` `kotlin` `scala` `csharp` `dart` `groovy`
 **Scripting:** `py` `ts` `ruby` `lua` `php` `perl` `julia` `crystal` `awk`
-**Functional:** `haskell`
+**Functional:** `haskell` `ocaml` `fsharp` `elixir` `clojure`
 **Shell:** `bash` `powershell` `tcl`
-**Legacy/Niche:** `ada` `fortran` `pascal` `objc` `mql4` `mql5`
+**Legacy/Niche:** `ada` `fortran` `pascal` `objc` `vala` `mql4` `mql5`
 
 ## .xql.json Format
 
