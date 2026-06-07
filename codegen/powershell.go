@@ -560,6 +560,7 @@ func (g *psGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	default:
+		g.write("(")
 		g.write(ce.Callee)
 		for _, arg := range ce.Args {
 			g.write(" ")
@@ -567,6 +568,7 @@ func (g *psGen) emitCall(ce *ast.CallExpr) error {
 				return err
 			}
 		}
+		g.write(")")
 		return nil
 	}
 }
