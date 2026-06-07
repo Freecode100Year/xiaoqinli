@@ -1,10 +1,10 @@
 # Xiaoqinli (xql)
 
-**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out -- 39 languages, single Go binary, zero dependencies.
+**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out -- 40 languages, single Go binary, zero dependencies.
 
 ```
   .xql.json  -->  Type Check  -->  Effect Inference  -->  Capability Enforcement  -->  Source Code
-  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (39 targets)
+  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (40 targets)
 ```
 
 AI agents write structured `.xql.json` directly -- no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
@@ -18,7 +18,7 @@ go build -o xql .
 ### Why?
 
 - **AI agents produce AST, not text.** JSON AST eliminates syntax errors, ambiguous parses, and language-specific formatting.
-- **One source of truth.** Write logic once as `.xql.json`, deploy to 39 platforms -- from Go microservices to MQL5 trading scripts to Elixir pipelines.
+- **One source of truth.** Write logic once as `.xql.json`, deploy to 40 platforms -- from Go microservices to MQL5 trading scripts to Elixir pipelines.
 - **Compile-time safety.** Type checking, effect inference, and capability verification happen before any code is generated.
 - **MCP-native.** Runs as an MCP server for Claude Code, Cursor, and any MCP-compatible editor.
 
@@ -30,7 +30,7 @@ go build -o xql .
 | **JVM/CLR** | `java` `kotlin` `scala` `csharp` `dart` `groovy` |
 | **Scripting** | `py` `ts` `ruby` `lua` `php` `perl` `julia` `crystal` `awk` |
 | **Functional** | `haskell` `ocaml` `fsharp` `elixir` `clojure` |
-| **Shell** | `bash` `powershell` `tcl` |
+| **Shell** | `bash` `bat` `powershell` `tcl` |
 | **Legacy/Niche** | `ada` `fortran` `pascal` `objc` `mql4` `mql5` |
 
 <details>
@@ -69,14 +69,15 @@ go build -o xql .
 | 29 | Ada | `ada` | `.adb` | if-expr | -- |
 | 30 | AWK | `awk` | `.awk` | ternary | -- |
 | 31 | Bash | `bash` | `.sh` | -- | -- |
-| 32 | Fortran | `fortran` | `.f90` | `merge()` | -- |
-| 33 | Objective-C | `objc` | `.m` | ternary | block `^(){}` |
-| 34 | Pascal | `pascal` | `.pas` | -- | -- |
-| 35 | Perl | `perl` | `.pl` | ternary | `sub {}` |
-| 36 | PowerShell | `powershell` | `.ps1` | `$(if)` | scriptblock |
-| 37 | Tcl | `tcl` | `.tcl` | `[expr]` | -- |
-| 38 | MQL4 | `mql4` | `.mq4` | ternary | -- |
-| 39 | MQL5 | `mql5` | `.mq5` | ternary | -- |
+| 32 | Batch | `bat` | `.bat` | -- | -- |
+| 33 | Fortran | `fortran` | `.f90` | `merge()` | -- |
+| 34 | Objective-C | `objc` | `.m` | ternary | block `^(){}` |
+| 35 | Pascal | `pascal` | `.pas` | -- | -- |
+| 36 | Perl | `perl` | `.pl` | ternary | `sub {}` |
+| 37 | PowerShell | `powershell` | `.ps1` | `$(if)` | scriptblock |
+| 38 | Tcl | `tcl` | `.tcl` | `[expr]` | -- |
+| 39 | MQL4 | `mql4` | `.mq4` | ternary | -- |
+| 40 | MQL5 | `mql5` | `.mq5` | ternary | -- |
 
 **--** = returns compile error (language limitation).
 
@@ -90,7 +91,7 @@ go build -o xql .
 # Validate AST
 ./xql validate --file examples/hello.xql.json
 
-# Compile to any of 39 targets
+# Compile to any of 40 targets
 ./xql compile --file examples/hello.xql.json --target go
 ./xql compile --file examples/hello.xql.json --target rust   --out main.rs
 ./xql compile --file examples/hello.xql.json --target py     --out main.py
@@ -618,9 +619,9 @@ xiaoqinli/
     d.go        fortran.go   objc.go         pascal.go
     perl.go     powershell.go  tcl.go        v.go
     ada.go      awk.go       bash.go         mql.go
-    vala.go     groovy.go
+    vala.go     groovy.go    bat.go
     util.go                  Generate() dispatcher + shared utilities
-    codegen_test.go          124 tests across all 39 backends
+    codegen_test.go          124 tests across all 40 backends
     roundtrip_test.go        Compile-and-run verification
   server/
     mcp.go                   MCP server (stdio + HTTP)
@@ -649,7 +650,7 @@ go build -o xql . && go test ./... -v   # build + test verbose
 
 | Version | Languages | Highlights |
 |---------|-----------|------------|
-| **3.1.0** | 39 | +OCaml/F#/Elixir/Clojure/Vala/Groovy |
+| **3.1.0** | 40 | +OCaml/F#/Elixir/Clojure/Vala/Groovy/Batch |
 | 3.0.0 | 33 | +Ada/AWK/Bash/Crystal/D/Fortran/ObjC/Pascal/Perl/PowerShell/Tcl/V, IfExpr, Lambda |
 | 2.5.0 | 21 | +C/Scala/Haskell, EnumDecl, MatchExpr |
 | 2.2.0 | 18 | +C++/MQL4/MQL5, ArrayLit, IndexExpr, StructDecl |
