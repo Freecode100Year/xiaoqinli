@@ -1,38 +1,40 @@
 # Xiaoqinli (xql)
 
-**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out — 33 languages, single Go binary, zero dependencies.
+**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out -- 39 languages, single Go binary, zero dependencies.
 
 ```
-  .xql.json  ──▶  Type Check  ──▶  Effect Inference  ──▶  Capability Enforcement  ──▶  Source Code
-  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (33 targets)
+  .xql.json  -->  Type Check  -->  Effect Inference  -->  Capability Enforcement  -->  Source Code
+  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (39 targets)
 ```
 
-AI agents write structured `.xql.json` directly — no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
+AI agents write structured `.xql.json` directly -- no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
 
 ### Install
 
 ```bash
-# From source
 go build -o xql .
-
-# Or download the binary from GitHub Releases
 ```
 
 ### Why?
 
 - **AI agents produce AST, not text.** JSON AST eliminates syntax errors, ambiguous parses, and language-specific formatting.
-- **One source of truth.** Write logic once as `.xql.json`, deploy to 33 platforms — from Go microservices to MQL5 trading scripts.
+- **One source of truth.** Write logic once as `.xql.json`, deploy to 39 platforms -- from Go microservices to MQL5 trading scripts to Elixir pipelines.
 - **Compile-time safety.** Type checking, effect inference, and capability verification happen before any code is generated.
 - **MCP-native.** Runs as an MCP server for Claude Code, Cursor, and any MCP-compatible editor.
 
-## Supported Languages (33)
+## Supported Languages (39)
 
-**Systems** — `go` `rust` `c` `cpp` `zig` `d` `v` `nim`
-**JVM/CLR** — `java` `kotlin` `scala` `csharp` `dart`
-**Scripting** — `py` `ts` `ruby` `lua` `php` `perl` `julia` `crystal` `awk`
-**Functional** — `haskell`
-**Shell** — `bash` `powershell` `tcl`
-**Legacy/Niche** — `ada` `fortran` `pascal` `objc` `mql4` `mql5`
+| Family | Targets |
+|--------|---------|
+| **Systems** | `go` `rust` `c` `cpp` `zig` `d` `v` `nim` `vala` |
+| **JVM/CLR** | `java` `kotlin` `scala` `csharp` `dart` `groovy` |
+| **Scripting** | `py` `ts` `ruby` `lua` `php` `perl` `julia` `crystal` `awk` |
+| **Functional** | `haskell` `ocaml` `fsharp` `elixir` `clojure` |
+| **Shell** | `bash` `powershell` `tcl` |
+| **Legacy/Niche** | `ada` `fortran` `pascal` `objc` `mql4` `mql5` |
+
+<details>
+<summary><strong>Full language table</strong></summary>
 
 | # | Target | Flag | Ext | IfExpr | Lambda |
 |---|--------|------|-----|--------|--------|
@@ -41,64 +43,59 @@ go build -o xql .
 | 3 | TypeScript | `ts` | `.ts` | ternary | arrow fn |
 | 4 | Python | `py` | `.py` | inline if | lambda |
 | 5 | C++ | `cpp` | `.cpp` | ternary | `[](){}` |
-| 6 | C | `c` | `.c` | ternary | — |
+| 6 | C | `c` | `.c` | ternary | -- |
 | 7 | Kotlin | `kotlin` | `.kt` | if-expr | `{}` |
 | 8 | Swift | `swift` | `.swift` | ternary | closure |
 | 9 | Java | `java` | `.java` | ternary | `->` |
 | 10 | C# | `csharp` | `.cs` | ternary | `=>` |
 | 11 | Scala | `scala` | `.scala` | if-expr | `=>` |
 | 12 | Haskell | `haskell` | `.hs` | if-then-else | `\->` |
-| 13 | Dart | `dart` | `.dart` | ternary | arrow/block |
-| 14 | Lua | `lua` | `.lua` | and/or | `function() end` |
-| 15 | Ruby | `ruby` | `.rb` | ternary | `lambda {}` |
-| 16 | PHP | `php` | `.php` | ternary | `function(){}` |
-| 17 | Zig | `zig` | `.zig` | if-expr | — |
-| 18 | Nim | `nim` | `.nim` | if-expr | `proc()` |
-| 19 | Julia | `julia` | `.jl` | ternary | `->` |
-| 20 | MQL4 | `mql4` | `.mq4` | ternary | — |
-| 21 | MQL5 | `mql5` | `.mq5` | ternary | — |
-| 22 | Ada | `ada` | `.adb` | if-expr | — |
-| 23 | AWK | `awk` | `.awk` | ternary | — |
-| 24 | Bash | `bash` | `.sh` | — | — |
-| 25 | Crystal | `crystal` | `.cr` | ternary | `->(){}` |
-| 26 | D | `d` | `.d` | ternary | `(){}` |
-| 27 | Fortran | `fortran` | `.f90` | `merge()` | — |
-| 28 | Objective-C | `objc` | `.m` | ternary | block `^(){}` |
-| 29 | Pascal | `pascal` | `.pas` | — | — |
-| 30 | Perl | `perl` | `.pl` | ternary | `sub {}` |
-| 31 | PowerShell | `powershell` | `.ps1` | `$(if)` | scriptblock |
-| 32 | Tcl | `tcl` | `.tcl` | `[expr]` | — |
-| 33 | V | `v` | `.v` | if-expr | `fn(){}` |
+| 13 | OCaml | `ocaml` | `.ml` | if-then-else | `fun ->` |
+| 14 | F# | `fsharp` | `.fs` | if-then-else | `fun ->` |
+| 15 | Elixir | `elixir` | `.ex` | if-do-else | `fn -> end` |
+| 16 | Clojure | `clojure` | `.clj` | `if` | `fn` |
+| 17 | Dart | `dart` | `.dart` | ternary | arrow/block |
+| 18 | Lua | `lua` | `.lua` | and/or | `function() end` |
+| 19 | Ruby | `ruby` | `.rb` | ternary | `lambda {}` |
+| 20 | PHP | `php` | `.php` | ternary | `function(){}` |
+| 21 | Zig | `zig` | `.zig` | if-expr | -- |
+| 22 | Nim | `nim` | `.nim` | if-expr | `proc()` |
+| 23 | Julia | `julia` | `.jl` | ternary | `->` |
+| 24 | Groovy | `groovy` | `.groovy` | ternary | `{ -> }` |
+| 25 | Vala | `vala` | `.vala` | ternary | `() => {}` |
+| 26 | Crystal | `crystal` | `.cr` | ternary | `->(){}` |
+| 27 | D | `d` | `.d` | ternary | `(){}` |
+| 28 | V | `v` | `.v` | if-expr | `fn(){}` |
+| 29 | Ada | `ada` | `.adb` | if-expr | -- |
+| 30 | AWK | `awk` | `.awk` | ternary | -- |
+| 31 | Bash | `bash` | `.sh` | -- | -- |
+| 32 | Fortran | `fortran` | `.f90` | `merge()` | -- |
+| 33 | Objective-C | `objc` | `.m` | ternary | block `^(){}` |
+| 34 | Pascal | `pascal` | `.pas` | -- | -- |
+| 35 | Perl | `perl` | `.pl` | ternary | `sub {}` |
+| 36 | PowerShell | `powershell` | `.ps1` | `$(if)` | scriptblock |
+| 37 | Tcl | `tcl` | `.tcl` | `[expr]` | -- |
+| 38 | MQL4 | `mql4` | `.mq4` | ternary | -- |
+| 39 | MQL5 | `mql5` | `.mq5` | ternary | -- |
 
-> **—** = returns compile error (language limitation). All 33 targets support the full statement set (VarDecl, IfStmt, WhileStmt, ForStmt, etc.).
+**--** = returns compile error (language limitation).
 
-### Backend Notes
-
-- **C** — `long` for Int, `_xql_strcat` helper for string concatenation. Rejects Lambda, Option, Map, Result.
-- **Haskell** — Pure functions use expression-based if/then/else; IO functions use `do` notation. Rejects mutable patterns (AssignStmt, WhileStmt).
-- **Scala** — Wraps code in `object Main`. Uses `val`/`var` based on reassignment analysis.
-- **Go** — IfExpr uses IIFE pattern since Go lacks ternary expressions.
-- **Fortran** — IfExpr uses `merge()` intrinsic. Rejects Lambda.
-- **Bash** — Rejects both IfExpr and Lambda (shell limitations in expression context).
-- **Pascal** — Rejects both IfExpr and Lambda (language limitations).
-- **MQL4/MQL5** — Script mode only (`OnStart` entry). Rejects Lambda, Map, Option, Result, for-each.
-- **D** — Uses `~` for string concatenation, `long` for Int.
-- **Objective-C** — Uses Foundation types (`NSString*`), `@autoreleasepool` in main, block syntax for Lambda.
+</details>
 
 ## Quick Start
 
 ```bash
 go build -o xql .
 
-# Validate AST without generating code
+# Validate AST
 ./xql validate --file examples/hello.xql.json
 
-# Compile to any target
+# Compile to any of 39 targets
 ./xql compile --file examples/hello.xql.json --target go
 ./xql compile --file examples/hello.xql.json --target rust   --out main.rs
 ./xql compile --file examples/hello.xql.json --target py     --out main.py
-./xql compile --file examples/hello.xql.json --target ada    --out main.adb
-./xql compile --file examples/hello.xql.json --target crystal --out main.cr
+./xql compile --file examples/hello.xql.json --target ocaml  --out main.ml
+./xql compile --file examples/hello.xql.json --target elixir --out main.ex
 
 # List all supported targets
 ./xql targets
@@ -198,36 +195,78 @@ if __name__ == "__main__":
 </details>
 
 <details>
-<summary><strong>C++</strong></summary>
+<summary><strong>Haskell</strong></summary>
 
-```cpp
-#include <iostream>
-#include <string>
+```haskell
+module Main where
 
-std::string greet(std::string name) {
-    return ("Hello, " + name);
-}
+greet :: String -> String
+greet name = ("Hello, " ++ name)
 
-int main() {
-    std::cout << greet("World") << std::endl;
-    return 0;
-}
+main :: IO ()
+main = do
+    putStrLn (greet "World")
 ```
 </details>
 
 <details>
-<summary><strong>Java</strong></summary>
+<summary><strong>OCaml</strong></summary>
 
-```java
-public class Main {
-    static String greet(String name) {
-        return ("Hello, " + name);
-    }
+```ocaml
+let greet (name: string) : string =
+    ("Hello, " ^ name)
 
-    public static void main(String[] args) {
-        System.out.println(greet("World"));
-    }
-}
+let main () =
+    print_endline (greet "World");
+
+let () = main ()
+```
+</details>
+
+<details>
+<summary><strong>F#</strong></summary>
+
+```fsharp
+let greet (name: string) : string =
+    ("Hello, " + name)
+
+[<EntryPoint>]
+let main argv =
+    printfn "%O" (greet "World")
+    0
+```
+</details>
+
+<details>
+<summary><strong>Elixir</strong></summary>
+
+```elixir
+defmodule Main do
+  def greet(name) do
+    ("Hello, " <> name)
+  end
+
+  def main() do
+    IO.puts(greet("World"))
+  end
+end
+Main.main()
+```
+</details>
+
+<details>
+<summary><strong>Clojure</strong></summary>
+
+```clojure
+(defn greet [name]
+  (str "Hello, " name)
+)
+
+(defn -main []
+  (println (greet "World"))
+)
+
+(-main)
 ```
 </details>
 
@@ -254,6 +293,38 @@ func greet(_ name: String) -> String {
 }
 
 print(greet("World"))
+```
+</details>
+
+<details>
+<summary><strong>Java</strong></summary>
+
+```java
+public class Main {
+    static String greet(String name) {
+        return ("Hello, " + name);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(greet("World"));
+    }
+}
+```
+</details>
+
+<details>
+<summary><strong>Scala</strong></summary>
+
+```scala
+object Main {
+    def greet(name: String): String = {
+        return ("Hello, " + name)
+    }
+
+    def main(args: Array[String]): Unit = {
+        println(greet("World"))
+    }
+}
 ```
 </details>
 
@@ -285,64 +356,47 @@ int main() {
 </details>
 
 <details>
-<summary><strong>Scala</strong></summary>
+<summary><strong>C++</strong></summary>
 
-```scala
-object Main {
-    def greet(name: String): String = {
-        return ("Hello, " + name)
-    }
+```cpp
+#include <iostream>
+#include <string>
 
-    def main(args: Array[String]): Unit = {
-        println(greet("World"))
-    }
+std::string greet(std::string name) {
+    return ("Hello, " + name);
+}
+
+int main() {
+    std::cout << greet("World") << std::endl;
+    return 0;
 }
 ```
 </details>
 
 <details>
-<summary><strong>Haskell</strong></summary>
+<summary><strong>Vala</strong></summary>
 
-```haskell
-module Main where
+```vala
+static string greet(string name) {
+    return ("Hello, " + name);
+}
 
-greet :: String -> String
-greet name = ("Hello, " ++ name)
-
-main :: IO ()
-main = do
-    putStrLn (greet "World")
+static int main(string[] args) {
+    stdout.printf("%s\n", greet("World").to_string());
+    return 0;
+}
 ```
 </details>
 
 <details>
-<summary><strong>Ada</strong></summary>
+<summary><strong>Groovy</strong></summary>
 
-```ada
-with Ada.Text_IO; use Ada.Text_IO;
-with Ada.Integer_Text_IO; use Ada.Integer_Text_IO;
+```groovy
+String greet(String name) {
+    return ("Hello, " + name)
+}
 
-function greet(name : String) return String is
-begin
-    return ("Hello, " & name);
-end greet;
-
-procedure Main is
-begin
-    Put_Line(greet("World"));
-end Main;
-```
-</details>
-
-<details>
-<summary><strong>Crystal</strong></summary>
-
-```crystal
-def greet(name : String) : String
-  return ("Hello, " + name)
-end
-
-puts(greet("World"))
+println(greet("World"))
 ```
 </details>
 
@@ -363,21 +417,14 @@ void main() {
 </details>
 
 <details>
-<summary><strong>Objective-C</strong></summary>
+<summary><strong>Crystal</strong></summary>
 
-```objc
-#import <Foundation/Foundation.h>
+```crystal
+def greet(name : String) : String
+  return ("Hello, " + name)
+end
 
-NSString* greet(NSString* name) {
-    return [@"Hello, " stringByAppendingString:name];
-}
-
-int main() {
-    @autoreleasepool {
-        NSLog(@"%@", greet(@"World"));
-    }
-    return 0;
-}
+puts(greet("World"))
 ```
 </details>
 
@@ -394,20 +441,6 @@ sub greet {
 }
 
 print(greet("World") . "\n");
-```
-</details>
-
-<details>
-<summary><strong>V</strong></summary>
-
-```v
-fn greet(name string) string {
-    return ('Hello, ' + name)
-}
-
-fn main() {
-    println(greet('World'))
-}
 ```
 </details>
 
@@ -453,8 +486,8 @@ void OnStart() {
 | `IfStmt` | `cond`, `then[]`, `else[]` | Conditional branch |
 | `WhileStmt` | `cond`, `body[]` | While loop |
 | `ForStmt` | `form`, `var`, `start`/`end` or `iterable`, `body[]` | For loop (range or each) |
-| `BreakStmt` | — | Exit innermost loop |
-| `ContinueStmt` | — | Skip to next iteration |
+| `BreakStmt` | -- | Exit innermost loop |
+| `ContinueStmt` | -- | Skip to next iteration |
 | `ExprStmt` | `expr` | Expression as statement |
 
 ### Expressions
@@ -474,108 +507,6 @@ void OnStart() {
 | `IfExpr` | `cond`, `then`, `else` | Ternary / conditional expression |
 | `Lambda` | `params[]`, `returnType`, `body[]` | Anonymous function / closure |
 
-### IfExpr (Ternary Expression)
-
-```json
-{
-  "kind": "IfExpr",
-  "cond": { "kind": "BinaryExpr", "op": ">", "left": ..., "right": ... },
-  "then": { "kind": "Literal", "valueType": "String", "value": "big" },
-  "else": { "kind": "Literal", "valueType": "String", "value": "small" }
-}
-```
-
-| Language | Output |
-|----------|--------|
-| Go | `func() interface{} { if x > 5 { return "big" }; return "small" }()` |
-| Rust | `if (x > 5) { "big" } else { "small" }` |
-| Python | `("big" if (x > 5) else "small")` |
-| C / C++ / Java / C# | `((x > 5) ? "big" : "small")` |
-| Haskell | `(if (x > 5) then "big" else "small")` |
-| Ada | `(if (x > 5) then "big" else "small")` |
-| Fortran | `merge("big", "small", (x > 5))` |
-| V | `if (x > 5) { 'big' } else { 'small' }` |
-| PowerShell | `$(if (($x -gt 5)) { "big" } else { "small" })` |
-
-### Lambda (Anonymous Function)
-
-```json
-{
-  "kind": "Lambda",
-  "params": [{ "name": "x", "type": { "kind": "Int" } }],
-  "returnType": { "kind": "Int" },
-  "body": [{ "kind": "ReturnStmt", "value": ... }]
-}
-```
-
-| Language | Output |
-|----------|--------|
-| Go | `func(x int) int { return ... }` |
-| Rust | `\|x: i64\| -> i64 { return ...; }` |
-| Python | `lambda x: ...` |
-| TypeScript | `(x: number): number => { return ...; }` |
-| C++ | `[](long x) -> long { return ...; }` |
-| Java | `(long x) -> { return ...; }` |
-| Kotlin | `{ x: Long -> ... }` |
-| Swift | `{ (x: Int) -> Int in return ... }` |
-| Ruby | `lambda { \|x\| return ... }` |
-| Lua | `function(x) return ... end` |
-| Crystal | `->(x : Int64) { return ... }` |
-| Objective-C | `^(long x) { return ...; }` |
-
-> Lambda is not supported in: C, Zig, MQL4/5, Ada, AWK, Bash, Fortran, Pascal, Tcl.
-
-### StructDecl + StructLit
-
-```json
-{
-  "kind": "StructDecl",
-  "name": "Point",
-  "fields": [
-    { "name": "x", "type": { "kind": "Int" } },
-    { "name": "y", "type": { "kind": "Int" } }
-  ]
-}
-```
-
-```json
-{
-  "kind": "StructLit",
-  "typeName": "Point",
-  "fields": [
-    { "name": "x", "value": { "kind": "Literal", "valueType": "Int", "value": 10 } },
-    { "name": "y", "value": { "kind": "Literal", "valueType": "Int", "value": 20 } }
-  ]
-}
-```
-
-### EnumDecl + MatchExpr
-
-```json
-{
-  "kind": "EnumDecl",
-  "name": "Color",
-  "variants": ["Red", "Green", "Blue"]
-}
-```
-
-```json
-{
-  "kind": "MatchExpr",
-  "value": { "kind": "Ident", "name": "c" },
-  "arms": [
-    {
-      "pattern": { "kind": "Ident", "name": "ColorRed" },
-      "body": [{ "kind": "ExprStmt", "expr": { "kind": "CallExpr", "callee": "println", "args": [{ "kind": "Literal", "valueType": "String", "value": "red" }] } }]
-    },
-    {
-      "pattern": { "kind": "Ident", "name": "_" },
-      "body": [{ "kind": "ExprStmt", "expr": { "kind": "CallExpr", "callee": "println", "args": [{ "kind": "Literal", "valueType": "String", "value": "other" }] } }]
-    }
-  ]
-}
-```
-
 ### Built-in Functions
 
 | Function | Effect | Description |
@@ -584,35 +515,12 @@ void OnStart() {
 | `printf` | state | Formatted print |
 | `sprintf` | pure | Formatted string (returns String) |
 
-### ForStmt
-
-**Range form** — iterate from start to end (exclusive):
-
-```json
-{
-  "kind": "ForStmt", "form": "range", "var": "i",
-  "start": { "kind": "Literal", "valueType": "Int", "value": 0 },
-  "end": { "kind": "Literal", "valueType": "Int", "value": 10 },
-  "body": [...]
-}
-```
-
-**Each form** — iterate over array elements:
-
-```json
-{
-  "kind": "ForStmt", "form": "each", "var": "item",
-  "iterable": { "kind": "Ident", "name": "items" },
-  "body": [...]
-}
-```
-
 ## Static Analysis Pipeline
 
 All checks run before code generation. If any check fails, no code is emitted.
 
 ```
-  Parse JSON  ──▶  Type Check  ──▶  Effect Check  ──▶  Capability Check  ──▶  Codegen
+  Parse JSON  -->  Type Check  -->  Effect Check  -->  Capability Check  -->  Codegen
   (XQL_E1xx)      (XQL_E2xx)      (XQL_E2xx)         (XQL_E3xx)             (XQL_E4xx)
 ```
 
@@ -620,32 +528,19 @@ All checks run before code generation. If any check fails, no code is emitted.
 |-------|-------------------|
 | **Type check** | Variable types, function signatures, return types, operator compatibility, array element types, struct field types, index types, IfExpr branch types |
 | **Effect inference** | Side effects (`network`/`filesystem`/`state`), purity violations, transitive propagation through call chains, Lambda body effects |
-| **Capability check** | `@grant` enforcement — callee capabilities must be subset of caller's |
-
-### Type Inference
-
-- `Array<Int>` indexing returns `Int` (not unknown)
-- `for-each` loop variable inherits the array's element type
-- Struct field access returns the field's declared type
-- `IfExpr` branches must have the same type
-- Binary operators propagate types through the expression tree
-
-### Scoped Type Checking
-
-Variables declared inside `if`/`while`/`for` blocks do not leak into the enclosing scope. Each block creates a child scope that inherits parent bindings but isolates its own declarations.
+| **Capability check** | `@grant` enforcement -- callee capabilities must be subset of caller's |
 
 ## Type System
 
-| XQL Kind | Go | Rust | C | C++ | Python | Java | Haskell |
-|----------|-----|------|---|-----|--------|------|---------|
-| `Int` | `int` | `i64` | `long` | `long` | `int` | `long` | `Int` |
-| `Float` | `float64` | `f64` | `double` | `double` | `float` | `double` | `Double` |
-| `String` | `string` | `String` | `const char*` | `std::string` | `str` | `String` | `String` |
-| `Bool` | `bool` | `bool` | `int` | `bool` | `bool` | `boolean` | `Bool` |
-| `Void` | — | — | `void` | `void` | `None` | `void` | `()` |
-| `Array<T>` | `[]T` | `Vec<T>` | `T[]` | `std::vector<T>` | `list[T]` | `T[]` | `[T]` |
-| `Option<T>` | `*T` | `Option<T>` | E402 | `std::optional<T>` | `Optional[T]` | `T` | `Maybe T` |
-| `Result<T>` | `(T, error)` | `Result<T,E>` | E402 | E402 | E402 | E402 | — |
+| XQL Kind | Go | Rust | C | Python | Java | Haskell | OCaml | F# |
+|----------|-----|------|---|--------|------|---------|-------|----|
+| `Int` | `int` | `i64` | `long` | `int` | `long` | `Int` | `int` | `int` |
+| `Float` | `float64` | `f64` | `double` | `float` | `double` | `Double` | `float` | `float` |
+| `String` | `string` | `String` | `const char*` | `str` | `String` | `String` | `string` | `string` |
+| `Bool` | `bool` | `bool` | `int` | `bool` | `boolean` | `Bool` | `bool` | `bool` |
+| `Void` | -- | -- | `void` | `None` | `void` | `()` | `unit` | `unit` |
+| `Array<T>` | `[]T` | `Vec<T>` | `T[]` | `list[T]` | `T[]` | `[T]` | `T list` | `T list` |
+| `Option<T>` | `*T` | `Option<T>` | E402 | `Optional[T]` | `T` | `Maybe T` | `T option` | `T option` |
 
 ## MCP Server
 
@@ -661,7 +556,7 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 |------|------|-------------|
 | `compile` | `source`, `target` | Compile `.xql.json` AST to target language |
 | `validate` | `source` | Validate AST without generating code |
-| `targets` | — | List all 33 supported target languages |
+| `targets` | -- | List all 39 supported target languages |
 
 ### Claude Code Integration
 
@@ -676,13 +571,6 @@ Add to `~/.mcp.json`:
     }
   }
 }
-```
-
-Then Claude Code can directly call `compile` and `validate` as MCP tools:
-
-```
-> Use xiaoqinli to compile this AST to Rust
-> Validate my .xql.json file
 ```
 
 ### Cursor / VS Code Integration
@@ -705,7 +593,7 @@ Add to `.cursor/mcp.json` or VS Code MCP settings:
 | Range | Category | Example |
 |-------|----------|---------|
 | `XQL_E1xx` | Parse / AST structure | Missing `kind` field, invalid JSON |
-| `XQL_E2xx` | Type / effect violations | Return type mismatch, purity violation, IfExpr branch type mismatch |
+| `XQL_E2xx` | Type / effect violations | Return type mismatch, purity violation |
 | `XQL_E3xx` | Capability violations | Missing `@grant` for callee |
 | `XQL_E4xx` | Codegen errors | Unsupported node for target (e.g. Lambda in C) |
 
@@ -713,7 +601,7 @@ Add to `.cursor/mcp.json` or VS Code MCP settings:
 
 ```
 xiaoqinli/
-  main.go                    CLI entry + version (3.0.0)
+  main.go                    CLI entry + version (3.1.0)
   ast/
     nodes.go                 24 AST node types + JSON parser
   check/
@@ -724,13 +612,15 @@ xiaoqinli/
     golang.go   rust.go      typescript.go   python.go
     cpp.go      c.go         kotlin.go       swift.go
     java.go     csharp.go    scala.go        haskell.go
+    ocaml.go    fsharp.go    elixir.go       clojure.go
     dart.go     lua.go       ruby.go         php.go
-    zig.go      nim.go       julia.go        mql.go
-    ada.go      awk.go       bash.go         crystal.go
+    zig.go      nim.go       julia.go        crystal.go
     d.go        fortran.go   objc.go         pascal.go
     perl.go     powershell.go  tcl.go        v.go
+    ada.go      awk.go       bash.go         mql.go
+    vala.go     groovy.go
     util.go                  Generate() dispatcher + shared utilities
-    codegen_test.go          222 tests across all 33 backends
+    codegen_test.go          124 tests across all 39 backends
     roundtrip_test.go        Compile-and-run verification
   server/
     mcp.go                   MCP server (stdio + HTTP)
@@ -739,45 +629,32 @@ xiaoqinli/
     hello.xql.json           Hello world
     example.xql.json         Fibonacci + arithmetic
     clock.xql.json           System clock
-    loop.xql.json            For-loop + array indexing
-    struct.xql.json          Struct declaration + field access
-    collections.xql.json     Array literals + indexing
-    lambda_ifexpr.xql.json   IfExpr + Lambda demo
 ```
 
 ## Tests
 
 ```bash
-go test ./...                    # run all 222 tests
+go test ./...                    # run all 124 tests
 go build -o xql . && go test ./... -v   # build + test verbose
 ```
 
-Round-trip tests automatically skip when the toolchain is not installed:
-
-| Target | Toolchain | Round-trip |
-|--------|-----------|------------|
-| Go | `go` | compile + run |
-| Rust | `rustc` | compile + run |
-| Python | `python` | interpret |
-| TypeScript | `node` | strip types + run |
-| C++ | `g++` | compile (-std=c++17) + run |
-
 ## Design Principles
 
-- **Zero dependencies** — Single language (Go), single binary, no third-party imports
-- **Deterministic** — Same AST always produces same output
-- **Secure by default** — All validation at compile time; `os/exec` never runs user code
-- **Two-layer pipeline** — Check (types + effects + capabilities) then codegen, single-pass AST traversal, no IR
+- **Zero dependencies** -- Single language (Go), single binary, no third-party imports
+- **Deterministic** -- Same AST always produces same output
+- **Secure by default** -- All validation at compile time; `os/exec` never runs user code
+- **Two-layer pipeline** -- Check (types + effects + capabilities) then codegen, single-pass AST traversal, no IR
 
 ## Version History
 
-| Version | Languages | AST Nodes | Highlights |
-|---------|-----------|-----------|------------|
-| **3.0.0** | 33 | 24 | +12 backends (Ada/AWK/Bash/Crystal/D/Fortran/ObjC/Pascal/Perl/PowerShell/Tcl/V), IfExpr, Lambda |
-| 2.5.0 | 21 | 22 | +C/Scala/Haskell, EnumDecl, MatchExpr |
-| 2.2.0 | 18 | 20 | +C++/MQL4/MQL5, ArrayLit, IndexExpr, StructDecl |
-| 2.0.0 | 15 | 16 | +Dart/Lua/Ruby/PHP/Zig/Nim/Julia, ForStmt |
-| 1.0.0 | 8 | 12 | Initial release: Go/Rust/TS/Python/Kotlin/Swift/Java/C# |
+| Version | Languages | Highlights |
+|---------|-----------|------------|
+| **3.1.0** | 39 | +OCaml/F#/Elixir/Clojure/Vala/Groovy |
+| 3.0.0 | 33 | +Ada/AWK/Bash/Crystal/D/Fortran/ObjC/Pascal/Perl/PowerShell/Tcl/V, IfExpr, Lambda |
+| 2.5.0 | 21 | +C/Scala/Haskell, EnumDecl, MatchExpr |
+| 2.2.0 | 18 | +C++/MQL4/MQL5, ArrayLit, IndexExpr, StructDecl |
+| 2.0.0 | 15 | +Dart/Lua/Ruby/PHP/Zig/Nim/Julia, ForStmt |
+| 1.0.0 | 8 | Go/Rust/TS/Python/Kotlin/Swift/Java/C# |
 
 ## License
 
