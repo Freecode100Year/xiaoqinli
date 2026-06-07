@@ -90,6 +90,8 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateVala(root)
 	case "groovy":
 		return GenerateGroovy(root)
+	case "bat":
+		return GenerateBat(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}
