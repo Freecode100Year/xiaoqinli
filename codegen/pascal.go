@@ -90,15 +90,30 @@ func typeToPascal(t ast.TypeExpr) string {
 	}
 }
 
-// collectVarDecls gathers all VarDecl nodes from a statement list (non-recursive into nested blocks).
 func collectVarDecls(stmts []ast.Node) []*ast.VarDecl {
 	var vars []*ast.VarDecl
+	scanVarDecls(stmts, &vars)
+	return vars
+}
+
+func scanVarDecls(stmts []ast.Node, vars *[]*ast.VarDecl) {
 	for _, s := range stmts {
-		if vd, ok := s.(*ast.VarDecl); ok {
-			vars = append(vars, vd)
+		switch n := s.(type) {
+		case *ast.VarDecl:
+			*vars = append(*vars, n)
+		case *ast.IfStmt:
+			scanVarDecls(n.Then, vars)
+			scanVarDecls(n.Else, vars)
+		case *ast.WhileStmt:
+			scanVarDecls(n.Body, vars)
+		case *ast.ForStmt:
+			scanVarDecls(n.Body, vars)
+		case *ast.MatchExpr:
+			for _, arm := range n.Arms {
+				scanVarDecls(arm.Body, vars)
+			}
 		}
 	}
-	return vars
 }
 
 func (g *pascalGen) emitMainBlock(fd *ast.FunctionDecl) error {
@@ -293,8 +308,8 @@ func (g *pascalGen) emitIf(is *ast.IfStmt) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
 	if len(is.Else) > 0 {
+		g.writeln("end")
 		g.writeIndent()
 		g.writeln("else")
 		g.writeIndent()
@@ -309,8 +324,7 @@ func (g *pascalGen) emitIf(is *ast.IfStmt) error {
 		g.writeIndent()
 		g.writeln("end;")
 	} else {
-		// Rewrite the last "end\n" to "end;\n"
-		// Actually just append the semicolon properly.
+		g.writeln("end;")
 	}
 	return nil
 }
@@ -452,8 +466,12 @@ func (g *pascalGen) emitExpr(n ast.Node) error {
 			op = "and"
 		case "||":
 			op = "or"
+		case "==":
+			op = "="
 		case "!=":
 			op = "<>"
+		case "%":
+			op = "mod"
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {

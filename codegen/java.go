@@ -384,12 +384,8 @@ func (g *javaGen) emitLambda(lam *ast.Lambda) error {
 		g.write(g.typeStr(p.Type) + " " + p.Name)
 	}
 	g.write(") -> {")
-	for i, stmt := range lam.Body {
-		if i > 0 {
-			g.write(" ")
-		} else {
-			g.write(" ")
-		}
+	for _, stmt := range lam.Body {
+		g.write(" ")
 		if es, ok := stmt.(*ast.ExprStmt); ok {
 			if err := g.emitExpr(es.Expr); err != nil {
 				return err
@@ -402,10 +398,9 @@ func (g *javaGen) emitLambda(lam *ast.Lambda) error {
 			}
 			g.write(";")
 		} else {
-			if err := g.emitExpr(stmt); err != nil {
+			if err := g.emitNode(stmt); err != nil {
 				return err
 			}
-			g.write(";")
 		}
 	}
 	g.write(" }")
@@ -459,7 +454,7 @@ func (g *javaGen) emitCall(ce *ast.CallExpr) error {
 		g.write("System.out.println(")
 		for i, arg := range ce.Args {
 			if i > 0 {
-				g.write(", ")
+				g.write(" + \" \" + ")
 			}
 			if err := g.emitExpr(arg); err != nil {
 				return err

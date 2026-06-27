@@ -131,7 +131,7 @@ func typeToC(t ast.TypeExpr) string {
 		}
 		return "long"
 	default:
-		return "struct " + t.KindName
+		return t.KindName
 	}
 }
 

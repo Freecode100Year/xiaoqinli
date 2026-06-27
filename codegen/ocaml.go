@@ -423,7 +423,11 @@ func (g *ocamlGen) emitLiteral(lit *ast.Literal) error {
 		g.write(fmt.Sprintf("%d", int64(f)))
 	case "Float":
 		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%g", f))
+		s := fmt.Sprintf("%g", f)
+		if !strings.Contains(s, ".") && !strings.Contains(s, "e") && !strings.Contains(s, "E") {
+			s += ".0"
+		}
+		g.write(s)
 	case "Bool":
 		b, _ := lit.Value.(bool)
 		if b {
@@ -504,6 +508,10 @@ func (g *ocamlGen) emitCall(ce *ast.CallExpr) error {
 		isStr := g.isStringExpr(ce.Args[0])
 		if isStr {
 			g.write("print_endline ")
+		} else if g.isBoolExpr(ce.Args[0]) {
+			g.write("print_endline (string_of_bool ")
+		} else if g.isFloatExpr(ce.Args[0]) {
+			g.write("print_endline (string_of_float ")
 		} else {
 			g.write("print_endline (string_of_int ")
 		}
@@ -568,6 +576,33 @@ func (g *ocamlGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	}
+}
+
+func (g *ocamlGen) isBoolExpr(n ast.Node) bool {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return node.ValueType == "Bool"
+	case *ast.BinaryExpr:
+		switch node.Op {
+		case "==", "!=", "<", ">", "<=", ">=", "&&", "||":
+			return true
+		}
+	case *ast.UnaryExpr:
+		return node.Op == "!"
+	}
+	return false
+}
+
+func (g *ocamlGen) isFloatExpr(n ast.Node) bool {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return node.ValueType == "Float"
+	case *ast.CallExpr:
+		if ret, ok := g.funcRets[node.Callee]; ok {
+			return ret == "Float"
+		}
+	}
+	return false
 }
 
 func (g *ocamlGen) isStringExpr(n ast.Node) bool {

@@ -407,6 +407,8 @@ func (g *adaGen) emitExpr(n ast.Node) error {
 			op = "and"
 		case "||":
 			op = "or"
+		case "==":
+			op = "="
 		case "!=":
 			op = "/="
 		}

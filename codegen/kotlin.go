@@ -370,7 +370,7 @@ func (g *ktGen) emitLambda(lam *ast.Lambda) error {
 				return err
 			}
 		} else {
-			if err := g.emitExpr(stmt); err != nil {
+			if err := g.emitNode(stmt); err != nil {
 				return err
 			}
 		}
@@ -426,7 +426,10 @@ func (g *ktGen) emitCall(ce *ast.CallExpr) error {
 		g.write("println(")
 		for i, arg := range ce.Args {
 			if i > 0 {
-				g.write(", ")
+				g.write(` + " " + `)
+			}
+			if i == 0 && len(ce.Args) > 1 {
+				g.write(`"" + `)
 			}
 			if err := g.emitExpr(arg); err != nil {
 				return err

@@ -11,11 +11,17 @@ import (
 // Structs are emitted before functions. The main function is wrapped
 // with int main() { ...; return 0; }. Includes are deduced from types used.
 func GenerateCpp(root ast.Node) ([]byte, error) {
-	g := &cppGen{buf: &strings.Builder{}}
+	g := &cppGen{buf: &strings.Builder{}, enums: make(map[string]bool)}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	for _, d := range prog.Decls {
+		if ed, ok := d.(*ast.EnumDecl); ok {
+			g.enums[ed.Name] = true
+		}
 	}
 
 	// Separate structs from functions so structs come first.
@@ -70,6 +76,7 @@ type cppGen struct {
 	buf       *strings.Builder
 	indent    int
 	muts      map[string]bool
+	enums     map[string]bool
 	needStr   bool // <string>
 	needVec   bool // <vector>
 	needOpt   bool // <optional>
@@ -453,10 +460,14 @@ func (g *cppGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
-		if err := g.emitExpr(node.Object); err != nil {
-			return err
+		if ident, ok := node.Object.(*ast.Ident); ok && g.enums[ident.Name] {
+			g.write(ident.Name + "::" + node.Field)
+		} else {
+			if err := g.emitExpr(node.Object); err != nil {
+				return err
+			}
+			g.write("." + node.Field)
 		}
-		g.write("." + node.Field)
 		return nil
 	case *ast.StructLit:
 		return g.emitStructLit(node)

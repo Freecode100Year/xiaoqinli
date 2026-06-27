@@ -217,11 +217,19 @@ func (g *batGen) emitAssign(as *ast.AssignStmt) error {
 	} else {
 		return fmt.Errorf("XQL_E401: bat only supports simple variable assignment targets")
 	}
-	g.write("set /a \"" + varName + "=")
-	if err := g.emitArithExpr(as.Value); err != nil {
-		return err
+	if containsStringExpr(as.Value) {
+		g.write("set \"" + varName + "=")
+		if err := g.emitValExpr(as.Value); err != nil {
+			return err
+		}
+		g.writeln("\"")
+	} else {
+		g.write("set /a \"" + varName + "=")
+		if err := g.emitArithExpr(as.Value); err != nil {
+			return err
+		}
+		g.writeln("\"")
 	}
-	g.writeln("\"")
 	return nil
 }
 
@@ -352,6 +360,12 @@ func (g *batGen) emitForStmt(fs *ast.ForStmt) error {
 }
 
 func (g *batGen) emitMatchStmt(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("set \"_match_val=")
+	if err := g.emitValExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln("\"")
 	for i, arm := range me.Arms {
 		g.writeIndent()
 		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {

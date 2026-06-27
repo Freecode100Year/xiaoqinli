@@ -345,6 +345,8 @@ func (g *nimGen) emitExpr(n ast.Node) error {
 			op = "and"
 		case "||":
 			op = "or"
+		case "%":
+			op = "mod"
 		}
 		if op == "+" && containsStringExpr(node) {
 			op = "&"

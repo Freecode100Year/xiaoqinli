@@ -577,16 +577,24 @@ func (g *objcGen) emitCall(ce *ast.CallExpr) error {
 		tk := g.inferTypeKind(ce.Args[0])
 		switch tk {
 		case "String":
-			g.write(`NSLog(@"%@", `)
+			g.write(`printf("%s", [`)
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(" UTF8String])")
 		case "Float":
-			g.write(`NSLog(@"%g", `)
+			g.write(`printf("%g", `)
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(")")
 		default:
-			g.write(`NSLog(@"%ld", (long)`)
+			g.write(`printf("%ld", (long)`)
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(")")
 		}
-		if err := g.emitExpr(ce.Args[0]); err != nil {
-			return err
-		}
-		g.write(")")
 		return nil
 	case "sprintf":
 		g.write("[NSString stringWithFormat:@\"%@\", ")

@@ -596,10 +596,11 @@ func (g *mqlGen) emitCall(ce *ast.CallExpr) error {
 		return nil
 	case "sprintf":
 		if len(ce.Args) > 0 {
-			// Emit the argument directly; MQL Print handles implicit conversion.
+			g.write("(string)(")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+			g.write(")")
 		}
 		return nil
 	default:

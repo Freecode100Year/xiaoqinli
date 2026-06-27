@@ -65,7 +65,13 @@ func (s *MCPServer) handlePromptsGet(req *jsonRPCRequest) jsonRPCResponse {
 	var params struct {
 		Name string `json:"name"`
 	}
-	json.Unmarshal(req.Params, &params)
+	if err := json.Unmarshal(req.Params, &params); err != nil || params.Name == "" {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &rpcError{Code: -32602, Message: "missing required param 'name'"},
+		}
+	}
 
 	content, ok := GetSkill(params.Name)
 	if !ok {

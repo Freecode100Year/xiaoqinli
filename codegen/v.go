@@ -576,7 +576,9 @@ func (g *vGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("'%s'", s))
+		s = strings.ReplaceAll(s, "\\", "\\\\")
+		s = strings.ReplaceAll(s, "'", "\\'")
+		g.write("'" + s + "'")
 	case "Int":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%d", int64(f)))

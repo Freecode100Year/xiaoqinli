@@ -425,7 +425,10 @@ func (g *dartGen) emitCall(ce *ast.CallExpr) error {
 		g.write("print(")
 		for i, arg := range ce.Args {
 			if i > 0 {
-				g.write(", ")
+				g.write(` + " " + `)
+			}
+			if i == 0 && len(ce.Args) > 1 {
+				g.write(`"" + `)
 			}
 			if err := g.emitExpr(arg); err != nil {
 				return err

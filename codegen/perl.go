@@ -162,7 +162,7 @@ func (g *perlGen) emitMatchExpr(me *ast.MatchExpr) error {
 			if err := g.emitExpr(me.Value); err != nil {
 				return err
 			}
-			g.write(" == ")
+			g.write(" eq ")
 			if err := g.emitExpr(arm.Pattern); err != nil {
 				return err
 			}

@@ -443,7 +443,11 @@ func (g *fsGen) emitLiteral(lit *ast.Literal) error {
 		g.write(fmt.Sprintf("%d", int64(f)))
 	case "Float":
 		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%g", f))
+		s := fmt.Sprintf("%g", f)
+		if !strings.Contains(s, ".") && !strings.Contains(s, "e") && !strings.Contains(s, "E") {
+			s += ".0"
+		}
+		g.write(s)
 	case "Bool":
 		b, _ := lit.Value.(bool)
 		if b {

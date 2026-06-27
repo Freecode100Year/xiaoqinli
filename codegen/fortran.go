@@ -419,6 +419,18 @@ func (g *fortranGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		if node.Op == "%" {
+			g.write("mod(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(", ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err
@@ -595,7 +607,11 @@ func (g *fortranGen) emitLiteral(lit *ast.Literal) error {
 		g.write(fmt.Sprintf("%d", int64(f)))
 	case "Float":
 		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%g", f))
+		s := fmt.Sprintf("%g", f)
+		if !strings.Contains(s, ".") && !strings.Contains(s, "e") && !strings.Contains(s, "E") {
+			s += ".0"
+		}
+		g.write(s)
 	case "Bool":
 		b, _ := lit.Value.(bool)
 		if b {

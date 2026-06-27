@@ -26,7 +26,7 @@ func (s *RESTServer) Serve(addr string) error {
 	mux.HandleFunc("/skills/", handleSkillsREST)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "2.5.0"})
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3.1.1"})
 	})
 
 	fmt.Fprintf(os.Stderr, "REST API listening on %s\n", addr)
@@ -50,12 +50,13 @@ func (s *RESTServer) handleCompile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defer r.Body.Close()
+	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, compileResponse{Error: "bad request"})
 		return
 	}
-	defer r.Body.Close()
 
 	var req compileRequest
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -92,12 +93,13 @@ func (s *RESTServer) handleValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defer r.Body.Close()
+	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, compileResponse{Error: "bad request"})
 		return
 	}
-	defer r.Body.Close()
 
 	var req compileRequest
 	if err := json.Unmarshal(body, &req); err != nil {

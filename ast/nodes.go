@@ -882,6 +882,12 @@ func parseIfExpr(raw map[string]interface{}) (*IfExpr, error) {
 		return nil, err
 	}
 	if cond == nil {
+		cond, err = parseChildNode(raw, "condition")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if cond == nil {
 		return nil, fmt.Errorf("XQL_E101: IfExpr missing 'cond'")
 	}
 	ie.Cond = cond

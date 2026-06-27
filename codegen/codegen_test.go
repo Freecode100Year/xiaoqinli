@@ -1160,12 +1160,12 @@ func TestCollectionCodegenAll(t *testing.T) {
 		{"java", []string{"java.util.List.of(10L, 20L, 30L)", "nums.get("}},
 		{"csharp", []string{"new List<long>", "{ 10L, 20L, 30L }", "nums[(int)"}},
 		{"dart", []string{"[10, 20, 30]", "nums[0]"}},
-		{"lua", []string{"{10, 20, 30}", "nums[0]"}},
+		{"lua", []string{"{10, 20, 30}", "nums[(0) + 1]"}},
 		{"ruby", []string{"[10, 20, 30]", "nums[0]"}},
 		{"php", []string{"[10, 20, 30]", "$nums[0]"}},
 		{"zig", []string{"&[_]i64{", "nums[@intCast(0)]"}},
 		{"nim", []string{"@[10'i64", "nums[0'i64]"}},
-		{"julia", []string{"Int64[Int64(10)", "nums[Int64(0)]"}},
+		{"julia", []string{"Int64[Int64(10)", "nums[(Int64(0)) + 1]"}},
 		{"cpp", []string{"std::vector<long>{10, 20, 30}", "nums[0]"}},
 	}
 

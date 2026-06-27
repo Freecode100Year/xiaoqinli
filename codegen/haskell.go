@@ -597,18 +597,39 @@ func (g *hsGen) emitCall(ce *ast.CallExpr) error {
 		return nil
 	case "printf":
 		if len(ce.Args) > 0 {
-			g.write("putStr (show ")
+			tk := g.inferTypeKind(ce.Args[0])
+			if tk == "String" {
+				g.write("putStr ")
+			} else {
+				g.write("putStr (show ")
+			}
+			needParen := g.needParens(ce.Args[0])
+			if needParen {
+				g.write("(")
+			}
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
-			g.write(")")
+			if needParen {
+				g.write(")")
+			}
+			if tk != "String" {
+				g.write(")")
+			}
 		}
 		return nil
 	case "sprintf":
 		if len(ce.Args) > 0 {
-			g.write("show ")
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+			tk := g.inferTypeKind(ce.Args[0])
+			if tk == "String" {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			} else {
+				g.write("show ")
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
 			}
 		} else {
 			g.write(`""`)

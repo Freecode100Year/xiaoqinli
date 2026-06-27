@@ -364,11 +364,11 @@ func (g *luaGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
 	}
-	g.write("[")
+	g.write("[(")
 	if err := g.emitExpr(ie.Index); err != nil {
 		return err
 	}
-	g.write("]")
+	g.write(") + 1]")
 	return nil
 }
 

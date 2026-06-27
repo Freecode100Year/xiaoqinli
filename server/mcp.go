@@ -136,12 +136,13 @@ func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defer r.Body.Close()
+	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
-	defer r.Body.Close()
 
 	var req jsonRPCRequest
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -159,7 +160,7 @@ func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp := s.handleRequest(&req)
+	resp := s.safeHandleRequest(&req)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -207,7 +208,7 @@ func (s *MCPServer) handleInitialize(req *jsonRPCRequest) jsonRPCResponse {
 			"protocolVersion": "2025-03-26",
 			"serverInfo": map[string]string{
 				"name":    "xiaoqinli",
-				"version": "2.5.0",
+				"version": "3.1.1",
 			},
 			"capabilities": map[string]interface{}{
 				"tools":   map[string]interface{}{},
@@ -284,7 +285,13 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 		Source string `json:"source"`
 		Target string `json:"target"`
 	}
-	json.Unmarshal(params.Arguments, &args)
+	if err := json.Unmarshal(params.Arguments, &args); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &rpcError{Code: -32602, Message: "invalid tool arguments"},
+		}
+	}
 	if args.Target == "" {
 		args.Target = "go"
 	}
@@ -389,7 +396,7 @@ func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
 	for i, t := range targets {
 		lines[i] = t["flag"] + " (" + t["name"] + ", " + t["ext"] + ")"
 	}
-	text := "Supported targets (33 languages):\n"
+	text := fmt.Sprintf("Supported targets (%d languages):\n", len(targets))
 	for _, l := range lines {
 		text += "  " + l + "\n"
 	}

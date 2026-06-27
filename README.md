@@ -22,7 +22,7 @@ go build -o xql .
 - **Compile-time safety.** Type checking, effect inference, and capability verification happen before any code is generated.
 - **MCP-native.** Runs as an MCP server for Claude Code, Cursor, and any MCP-compatible editor.
 
-## Supported Languages (39)
+## Supported Languages (40)
 
 | Family | Targets |
 |--------|---------|
@@ -557,7 +557,7 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 |------|------|-------------|
 | `compile` | `source`, `target` | Compile `.xql.json` AST to target language |
 | `validate` | `source` | Validate AST without generating code |
-| `targets` | -- | List all 39 supported target languages |
+| `targets` | -- | List all 40 supported target languages |
 
 ### Claude Code Integration
 
@@ -602,7 +602,7 @@ Add to `.cursor/mcp.json` or VS Code MCP settings:
 
 ```
 xiaoqinli/
-  main.go                    CLI entry + version (3.1.0)
+  main.go                    CLI entry + version (3.1.1)
   ast/
     nodes.go                 24 AST node types + JSON parser
   check/
@@ -650,7 +650,8 @@ go build -o xql . && go test ./... -v   # build + test verbose
 
 | Version | Languages | Highlights |
 |---------|-----------|------------|
-| **3.1.0** | 40 | +OCaml/F#/Elixir/Clojure/Vala/Groovy/Batch |
+| **3.1.1** | 40 | Bug fixes: 1-based indexing for Lua/Julia, operator mappings for Ada/Pascal/Nim/Fortran, Zig Result type, C struct typedef, OCaml/F# float literals, Haskell/OCaml println type dispatch, Bat match/assign, C++ enum `::`, Perl match, ObjC printf, MQL sprintf, Lambda fallback in Java/C#/Kotlin, println multi-arg in Java/C#/Kotlin/Dart, server panic recovery + body size limit + error handling |
+| 3.1.0 | 40 | +OCaml/F#/Elixir/Clojure/Vala/Groovy/Batch |
 | 3.0.0 | 33 | +Ada/AWK/Bash/Crystal/D/Fortran/ObjC/Pascal/Perl/PowerShell/Tcl/V, IfExpr, Lambda |
 | 2.5.0 | 21 | +C/Scala/Haskell, EnumDecl, MatchExpr |
 | 2.2.0 | 18 | +C++/MQL4/MQL5, ArrayLit, IndexExpr, StructDecl |

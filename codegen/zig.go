@@ -77,7 +77,7 @@ func typeToZig(t ast.TypeExpr) string {
 		return "?*anyopaque"
 	case "Result":
 		if t.OkType != nil {
-			return typeToZig(*t.OkType) + "!void"
+			return "anyerror!" + typeToZig(*t.OkType)
 		}
 		return "anyerror!void"
 	default:
@@ -495,7 +495,7 @@ func (g *zigGen) emitCall(ce *ast.CallExpr) error {
 		return nil
 	case "sprintf":
 		g.needStd = true
-		g.write(`std.fmt.comptimePrint("`)
+		g.write(`std.fmt.allocPrint(std.heap.page_allocator, "`)
 		if len(ce.Args) > 0 {
 			g.write(g.zigFmtSpec(ce.Args[0]))
 		}
