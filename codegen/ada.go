@@ -513,6 +513,18 @@ func (g *adaGen) emitStructLit(sl *ast.StructLit) error {
 	return nil
 }
 
+func adaIsStringExpr(n ast.Node) bool {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return node.ValueType == "String"
+	case *ast.BinaryExpr:
+		return containsStringExpr(node)
+	case *ast.CallExpr:
+		return node.Callee == "sprintf"
+	}
+	return false
+}
+
 func (g *adaGen) emitCall(ce *ast.CallExpr) error {
 	switch ce.Callee {
 	case "println":
@@ -520,16 +532,20 @@ func (g *adaGen) emitCall(ce *ast.CallExpr) error {
 			g.write("New_Line")
 			return nil
 		}
-		g.write("Put_Line(")
-		for i, arg := range ce.Args {
-			if i > 0 {
-				g.write(", ")
-			}
+		arg := ce.Args[0]
+		if adaIsStringExpr(arg) {
+			g.write("Put_Line(")
 			if err := g.emitExpr(arg); err != nil {
 				return err
 			}
+			g.write(")")
+		} else {
+			g.write("Put_Line(Long_Integer'Image(")
+			if err := g.emitExpr(arg); err != nil {
+				return err
+			}
+			g.write("))")
 		}
-		g.write(")")
 		return nil
 	case "printf":
 		g.write("Put(")

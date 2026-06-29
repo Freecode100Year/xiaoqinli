@@ -232,7 +232,7 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 					},
 					"target": map[string]string{
 						"type":        "string",
-						"description": "Target language: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | mql4 | mql5 (default: go)",
+						"description": "Target language: go | rust | ts | py | cpp | c | java | csharp | kotlin | swift | scala | haskell | ocaml | fsharp | elixir | clojure | dart | lua | ruby | php | zig | nim | julia | mql4 | mql5 | ada | awk | bash | bat | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v | vala | groovy (default: go)",
 					},
 				},
 				"required": []string{"source"},
@@ -391,6 +391,13 @@ func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
 		{"flag": "powershell", "ext": ".ps1", "name": "PowerShell"},
 		{"flag": "tcl", "ext": ".tcl", "name": "Tcl"},
 		{"flag": "v", "ext": ".v", "name": "V"},
+		{"flag": "ocaml", "ext": ".ml", "name": "OCaml"},
+		{"flag": "fsharp", "ext": ".fs", "name": "F#"},
+		{"flag": "elixir", "ext": ".ex", "name": "Elixir"},
+		{"flag": "clojure", "ext": ".clj", "name": "Clojure"},
+		{"flag": "vala", "ext": ".vala", "name": "Vala"},
+		{"flag": "groovy", "ext": ".groovy", "name": "Groovy"},
+		{"flag": "bat", "ext": ".bat", "name": "Batch"},
 	}
 	lines := make([]string, len(targets))
 	for i, t := range targets {

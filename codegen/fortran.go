@@ -86,10 +86,17 @@ func (g *fortranGen) emitMainBlock(fd *ast.FunctionDecl, prog *ast.Program) erro
 
 	// Collect and emit variable declarations.
 	vars := collectVarDecls(fd.Body)
-	if len(vars) > 0 {
-		for _, vd := range vars {
+	forVars := collectForVars(fd.Body)
+	declaredNames := map[string]bool{}
+	for _, vd := range vars {
+		declaredNames[vd.Name] = true
+		g.writeIndent()
+		g.writeln(typeToFortran(vd.Type) + " :: " + vd.Name)
+	}
+	for _, name := range forVars {
+		if !declaredNames[name] {
 			g.writeIndent()
-			g.writeln(typeToFortran(vd.Type) + " :: " + vd.Name)
+			g.writeln("integer :: " + name)
 		}
 	}
 
@@ -226,9 +233,18 @@ func (g *fortranGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 
 	// Collect and emit variable declarations.
 	vars := collectVarDecls(fd.Body)
+	forVars := collectForVars(fd.Body)
+	declaredNames := map[string]bool{}
 	for _, vd := range vars {
+		declaredNames[vd.Name] = true
 		g.writeIndent()
 		g.writeln(typeToFortran(vd.Type) + " :: " + vd.Name)
+	}
+	for _, name := range forVars {
+		if !declaredNames[name] {
+			g.writeIndent()
+			g.writeln("integer :: " + name)
+		}
 	}
 
 	g.writeln("")
@@ -369,6 +385,17 @@ func (g *fortranGen) emitForStmt(fs *ast.ForStmt) error {
 }
 
 func (g *fortranGen) emitExprStmt(es *ast.ExprStmt) error {
+	if ce, ok := es.Expr.(*ast.CallExpr); ok {
+		switch ce.Callee {
+		case "println", "printf", "sprintf":
+			g.writeIndent()
+			if err := g.emitExpr(es.Expr); err != nil {
+				return err
+			}
+			g.writeln("")
+			return nil
+		}
+	}
 	g.writeIndent()
 	g.write("call ")
 	if err := g.emitExpr(es.Expr); err != nil {
@@ -528,7 +555,7 @@ func (g *fortranGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Index); err != nil {
 		return err
 	}
-	g.write(")")
+	g.write(" + 1)")
 	return nil
 }
 

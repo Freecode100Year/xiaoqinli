@@ -230,6 +230,17 @@ func (g *awkGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *awkGen) emitVarDecl(vd *ast.VarDecl) error {
+	if al, ok := vd.Value.(*ast.ArrayLit); ok {
+		for i, elem := range al.Elements {
+			g.writeIndent()
+			g.write(fmt.Sprintf("%s[%d] = ", vd.Name, i))
+			if err := g.emitExpr(elem); err != nil {
+				return err
+			}
+			g.writeln("")
+		}
+		return nil
+	}
 	g.writeIndent()
 	g.write(vd.Name + " = ")
 	if vd.Value != nil {

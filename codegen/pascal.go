@@ -17,41 +17,13 @@ func GeneratePascal(root ast.Node) ([]byte, error) {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
-	// Emit type declarations (structs and enums).
-	for _, d := range prog.Decls {
-		switch node := d.(type) {
-		case *ast.StructDecl:
-			if err := g.emitStructDecl(node); err != nil {
-				return nil, err
-			}
-			g.writeln("")
-		case *ast.EnumDecl:
-			if err := g.emitEnumDecl(node); err != nil {
-				return nil, err
-			}
-			g.writeln("")
-		}
-	}
-
-	// Emit non-main functions/procedures.
-	for _, d := range prog.Decls {
-		fd, ok := d.(*ast.FunctionDecl)
-		if !ok || fd.Name == "main" {
-			continue
-		}
-		if err := g.emitFunctionDecl(fd); err != nil {
-			return nil, err
-		}
-		g.writeln("")
-	}
-
-	// Emit main program block.
+	// Emit main program block (types, functions, and main body all inside).
 	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name != "main" {
 			continue
 		}
-		if err := g.emitMainBlock(fd); err != nil {
+		if err := g.emitMainBlock(fd, prog); err != nil {
 			return nil, err
 		}
 	}
@@ -116,19 +88,97 @@ func scanVarDecls(stmts []ast.Node, vars *[]*ast.VarDecl) {
 	}
 }
 
-func (g *pascalGen) emitMainBlock(fd *ast.FunctionDecl) error {
+func collectForVars(stmts []ast.Node) []string {
+	seen := map[string]bool{}
+	var vars []string
+	scanForVars(stmts, &vars, seen)
+	return vars
+}
+
+func scanForVars(stmts []ast.Node, vars *[]string, seen map[string]bool) {
+	for _, s := range stmts {
+		switch n := s.(type) {
+		case *ast.ForStmt:
+			if !seen[n.Var] {
+				seen[n.Var] = true
+				*vars = append(*vars, n.Var)
+			}
+			scanForVars(n.Body, vars, seen)
+		case *ast.IfStmt:
+			scanForVars(n.Then, vars, seen)
+			scanForVars(n.Else, vars, seen)
+		case *ast.WhileStmt:
+			scanForVars(n.Body, vars, seen)
+		case *ast.MatchExpr:
+			for _, arm := range n.Arms {
+				scanForVars(arm.Body, vars, seen)
+			}
+		}
+	}
+}
+
+func (g *pascalGen) emitMainBlock(fd *ast.FunctionDecl, prog *ast.Program) error {
 	g.writeln("program Main;")
+
+	// Emit type declarations (structs and enums) inside the program block.
+	hasTypes := false
+	for _, d := range prog.Decls {
+		switch d.(type) {
+		case *ast.StructDecl, *ast.EnumDecl:
+			if !hasTypes {
+				g.writeln("type")
+				g.indent++
+				hasTypes = true
+			}
+		}
+		switch node := d.(type) {
+		case *ast.StructDecl:
+			if err := g.emitStructDecl(node); err != nil {
+				return err
+			}
+		case *ast.EnumDecl:
+			if err := g.emitEnumDecl(node); err != nil {
+				return err
+			}
+		}
+	}
+	if hasTypes {
+		g.indent--
+	}
 
 	// Collect and emit var section for main.
 	vars := collectVarDecls(fd.Body)
-	if len(vars) > 0 {
+	forVars := collectForVars(fd.Body)
+	declaredNames := map[string]bool{}
+	for _, vd := range vars {
+		declaredNames[vd.Name] = true
+	}
+	if len(vars) > 0 || len(forVars) > 0 {
 		g.writeln("var")
 		g.indent++
 		for _, vd := range vars {
 			g.writeIndent()
 			g.writeln(vd.Name + ": " + typeToPascal(vd.Type) + ";")
 		}
+		for _, name := range forVars {
+			if !declaredNames[name] {
+				g.writeIndent()
+				g.writeln(name + ": Integer;")
+			}
+		}
 		g.indent--
+	}
+
+	// Emit non-main functions/procedures.
+	for _, d := range prog.Decls {
+		fdn, ok := d.(*ast.FunctionDecl)
+		if !ok || fdn.Name == "main" {
+			continue
+		}
+		if err := g.emitFunctionDecl(fdn); err != nil {
+			return err
+		}
+		g.writeln("")
 	}
 
 	g.writeln("begin")
@@ -182,7 +232,7 @@ func (g *pascalGen) emitNode(n ast.Node) error {
 
 func (g *pascalGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.writeIndent()
-	g.writeln("type " + sd.Name + " = record")
+	g.writeln(sd.Name + " = record")
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
@@ -196,7 +246,7 @@ func (g *pascalGen) emitStructDecl(sd *ast.StructDecl) error {
 
 func (g *pascalGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	g.writeIndent()
-	g.writeln("type " + ed.Name + " = (" + strings.Join(ed.Variants, ", ") + ");")
+	g.writeln(ed.Name + " = (" + strings.Join(ed.Variants, ", ") + ");")
 	return nil
 }
 
@@ -266,15 +316,26 @@ func (g *pascalGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *pascalGen) emitVarDecl(vd *ast.VarDecl) error {
-	// Variable declaration is in the var section; here we only emit the assignment if there is a value.
-	if vd.Value != nil {
-		g.writeIndent()
-		g.write(vd.Name + " := ")
-		if err := g.emitExpr(vd.Value); err != nil {
-			return err
-		}
-		g.writeln(";")
+	if vd.Value == nil {
+		return nil
 	}
+	if sl, ok := vd.Value.(*ast.StructLit); ok {
+		for _, f := range sl.Fields {
+			g.writeIndent()
+			g.write(vd.Name + "." + f.Name + " := ")
+			if err := g.emitExpr(f.Value); err != nil {
+				return err
+			}
+			g.writeln(";")
+		}
+		return nil
+	}
+	g.writeIndent()
+	g.write(vd.Name + " := ")
+	if err := g.emitExpr(vd.Value); err != nil {
+		return err
+	}
+	g.writeln(";")
 	return nil
 }
 
