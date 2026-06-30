@@ -1,28 +1,44 @@
 # Xiaoqinli (xql)
 
-**AST-First transpiler for AI agents.** One JSON AST in, idiomatic source code out -- 40 languages, single Go binary, zero dependencies.
+**AST-first transpiler for AI agents.** One JSON AST in, idiomatic source code out — 42 targets, single Go binary, zero dependencies.
 
 ```
-  .xql.json  -->  Type Check  -->  Effect Inference  -->  Capability Enforcement  -->  Source Code
-  (JSON AST)      Scope Nesting    Transitive Analysis     @grant Verification         (40 targets)
+  .xql.json  →  Type Check  →  Effect Inference  →  Capability Enforcement  →  Source Code
+  (JSON AST)     Scope Nesting   Transitive Analysis    @grant Verification      (42 targets)
 ```
 
-AI agents write structured `.xql.json` directly -- no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
+AI agents write structured `.xql.json` directly — no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
 
-### Install
+## Why?
+
+- **AI agents produce AST, not text.** JSON AST eliminates syntax errors, ambiguous parses, and language-specific formatting.
+- **One source of truth.** Write logic once as `.xql.json`, deploy to 42 platforms — from Go microservices to Chrome extensions to iOS shortcuts to MQL5 trading scripts.
+- **Compile-time safety.** Type checking, effect inference, and capability verification happen before any code is generated.
+- **MCP-native.** Runs as an MCP server for Claude Code, Cursor, and any MCP-compatible editor.
+
+## Install
 
 ```bash
 go build -o xql .
 ```
 
-### Why?
+## Quick Start
 
-- **AI agents produce AST, not text.** JSON AST eliminates syntax errors, ambiguous parses, and language-specific formatting.
-- **One source of truth.** Write logic once as `.xql.json`, deploy to 40 platforms -- from Go microservices to MQL5 trading scripts to Elixir pipelines.
-- **Compile-time safety.** Type checking, effect inference, and capability verification happen before any code is generated.
-- **MCP-native.** Runs as an MCP server for Claude Code, Cursor, and any MCP-compatible editor.
+```bash
+# Validate AST
+./xql validate --file examples/hello.xql.json
 
-## Supported Languages (40)
+# Compile to any of 42 targets
+./xql compile --file examples/hello.xql.json --target go
+./xql compile --file examples/hello.xql.json --target rust   --out main.rs
+./xql compile --file examples/hello.xql.json --target py     --out main.py
+./xql compile --file examples/hello.xql.json --target chrome --out my-ext/
+
+# List all supported targets
+./xql targets
+```
+
+## Supported Targets (42)
 
 | Family | Targets |
 |--------|---------|
@@ -32,6 +48,7 @@ go build -o xql .
 | **Functional** | `haskell` `ocaml` `fsharp` `elixir` `clojure` |
 | **Shell** | `bash` `bat` `powershell` `tcl` |
 | **Legacy/Niche** | `ada` `fortran` `pascal` `objc` `mql4` `mql5` |
+| **Platform** | `shortcut` (Apple iOS) `chrome` (Chrome Extension) |
 
 <details>
 <summary><strong>Full language table</strong></summary>
@@ -78,29 +95,12 @@ go build -o xql .
 | 38 | Tcl | `tcl` | `.tcl` | `[expr]` | -- |
 | 39 | MQL4 | `mql4` | `.mq4` | ternary | -- |
 | 40 | MQL5 | `mql5` | `.mq5` | ternary | -- |
+| 41 | Apple Shortcuts | `shortcut` | `.shortcut` | conditional action | -- |
+| 42 | Chrome Extension | `chrome` | `.crx.json` | ternary | arrow fn |
 
 **--** = returns compile error (language limitation).
 
 </details>
-
-## Quick Start
-
-```bash
-go build -o xql .
-
-# Validate AST
-./xql validate --file examples/hello.xql.json
-
-# Compile to any of 40 targets
-./xql compile --file examples/hello.xql.json --target go
-./xql compile --file examples/hello.xql.json --target rust   --out main.rs
-./xql compile --file examples/hello.xql.json --target py     --out main.py
-./xql compile --file examples/hello.xql.json --target ocaml  --out main.ml
-./xql compile --file examples/hello.xql.json --target elixir --out main.ex
-
-# List all supported targets
-./xql targets
-```
 
 ## One AST, Many Languages
 
@@ -196,6 +196,22 @@ if __name__ == "__main__":
 </details>
 
 <details>
+<summary><strong>TypeScript</strong></summary>
+
+```typescript
+function greet(name: string): string {
+    return ("Hello, " + name);
+}
+
+function main(): void {
+    console.log(greet("World"));
+}
+
+main();
+```
+</details>
+
+<details>
 <summary><strong>Haskell</strong></summary>
 
 ```haskell
@@ -207,125 +223,6 @@ greet name = ("Hello, " ++ name)
 main :: IO ()
 main = do
     putStrLn (greet "World")
-```
-</details>
-
-<details>
-<summary><strong>OCaml</strong></summary>
-
-```ocaml
-let greet (name: string) : string =
-    ("Hello, " ^ name)
-
-let main () =
-    print_endline (greet "World");
-
-let () = main ()
-```
-</details>
-
-<details>
-<summary><strong>F#</strong></summary>
-
-```fsharp
-let greet (name: string) : string =
-    ("Hello, " + name)
-
-[<EntryPoint>]
-let main argv =
-    printfn "%O" (greet "World")
-    0
-```
-</details>
-
-<details>
-<summary><strong>Elixir</strong></summary>
-
-```elixir
-defmodule Main do
-  def greet(name) do
-    ("Hello, " <> name)
-  end
-
-  def main() do
-    IO.puts(greet("World"))
-  end
-end
-Main.main()
-```
-</details>
-
-<details>
-<summary><strong>Clojure</strong></summary>
-
-```clojure
-(defn greet [name]
-  (str "Hello, " name)
-)
-
-(defn -main []
-  (println (greet "World"))
-)
-
-(-main)
-```
-</details>
-
-<details>
-<summary><strong>Kotlin</strong></summary>
-
-```kotlin
-fun greet(name: String): String {
-    return ("Hello, " + name)
-}
-
-fun main() {
-    println(greet("World"))
-}
-```
-</details>
-
-<details>
-<summary><strong>Swift</strong></summary>
-
-```swift
-func greet(_ name: String) -> String {
-    return ("Hello, " + name)
-}
-
-print(greet("World"))
-```
-</details>
-
-<details>
-<summary><strong>Java</strong></summary>
-
-```java
-public class Main {
-    static String greet(String name) {
-        return ("Hello, " + name);
-    }
-
-    public static void main(String[] args) {
-        System.out.println(greet("World"));
-    }
-}
-```
-</details>
-
-<details>
-<summary><strong>Scala</strong></summary>
-
-```scala
-object Main {
-    def greet(name: String): String = {
-        return ("Hello, " + name)
-    }
-
-    def main(args: Array[String]): Unit = {
-        println(greet("World"))
-    }
-}
 ```
 </details>
 
@@ -357,95 +254,6 @@ int main() {
 </details>
 
 <details>
-<summary><strong>C++</strong></summary>
-
-```cpp
-#include <iostream>
-#include <string>
-
-std::string greet(std::string name) {
-    return ("Hello, " + name);
-}
-
-int main() {
-    std::cout << greet("World") << std::endl;
-    return 0;
-}
-```
-</details>
-
-<details>
-<summary><strong>Vala</strong></summary>
-
-```vala
-static string greet(string name) {
-    return ("Hello, " + name);
-}
-
-static int main(string[] args) {
-    stdout.printf("%s\n", greet("World").to_string());
-    return 0;
-}
-```
-</details>
-
-<details>
-<summary><strong>Groovy</strong></summary>
-
-```groovy
-String greet(String name) {
-    return ("Hello, " + name)
-}
-
-println(greet("World"))
-```
-</details>
-
-<details>
-<summary><strong>D</strong></summary>
-
-```d
-import std.stdio;
-
-string greet(string name) {
-    return ("Hello, " ~ name);
-}
-
-void main() {
-    writeln(greet("World"));
-}
-```
-</details>
-
-<details>
-<summary><strong>Crystal</strong></summary>
-
-```crystal
-def greet(name : String) : String
-  return ("Hello, " + name)
-end
-
-puts(greet("World"))
-```
-</details>
-
-<details>
-<summary><strong>Perl</strong></summary>
-
-```perl
-use strict;
-use warnings;
-
-sub greet {
-    my ($name) = @_;
-    return ("Hello, " . $name);
-}
-
-print(greet("World") . "\n");
-```
-</details>
-
-<details>
 <summary><strong>MQL5</strong></summary>
 
 ```mql5
@@ -460,6 +268,34 @@ void OnStart() {
 }
 ```
 </details>
+
+### Platform Targets
+
+#### Chrome Extension
+
+`--target chrome` generates a Manifest V3 Chrome extension bundle. When used with `--out`, the compiler unpacks the bundle into a directory containing `manifest.json`, `popup.html`, and `popup.js` — directly loadable in `chrome://extensions` with Developer mode enabled.
+
+```bash
+./xql compile --file app.xql.json --target chrome --out my-extension/
+# Load my-extension/ in chrome://extensions → "Load unpacked"
+```
+
+Features:
+- Manifest V3 with popup-based UI
+- `_xql_print` / `_xql_printf` write to the popup DOM and `console.log`
+- Struct classes get `toString()` for display
+- `try/catch` error boundary prevents blank popups
+- Dark theme (Catppuccin Mocha) with monospace output
+
+#### Apple iOS Shortcuts
+
+`--target shortcut` generates a `.shortcut` JSON file importable into the iOS Shortcuts app.
+
+```bash
+./xql compile --file app.xql.json --target shortcut --out app.shortcut
+```
+
+Maps XQL constructs to Shortcuts workflow actions: variables → Set Variable, println → Show Result, arithmetic → Calculate, if → Conditional, for → Repeat.
 
 ## AST Node Reference
 
@@ -521,15 +357,15 @@ void OnStart() {
 All checks run before code generation. If any check fails, no code is emitted.
 
 ```
-  Parse JSON  -->  Type Check  -->  Effect Check  -->  Capability Check  -->  Codegen
-  (XQL_E1xx)      (XQL_E2xx)      (XQL_E2xx)         (XQL_E3xx)             (XQL_E4xx)
+  Parse JSON  →  Type Check  →  Effect Check  →  Capability Check  →  Codegen
+  (XQL_E1xx)     (XQL_E2xx)     (XQL_E2xx)       (XQL_E3xx)           (XQL_E4xx)
 ```
 
 | Phase | What it validates |
 |-------|-------------------|
 | **Type check** | Variable types, function signatures, return types, operator compatibility, array element types, struct field types, index types, IfExpr branch types |
 | **Effect inference** | Side effects (`network`/`filesystem`/`state`), purity violations, transitive propagation through call chains, Lambda body effects |
-| **Capability check** | `@grant` enforcement -- callee capabilities must be subset of caller's |
+| **Capability check** | `@grant` enforcement — callee capabilities must be subset of caller's |
 
 ## Type System
 
@@ -557,7 +393,7 @@ Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-comp
 |------|------|-------------|
 | `compile` | `source`, `target` | Compile `.xql.json` AST to target language |
 | `validate` | `source` | Validate AST without generating code |
-| `targets` | -- | List all 40 supported target languages |
+| `targets` | -- | List all 42 supported target languages |
 
 ### Claude Code Integration
 
@@ -602,7 +438,7 @@ Add to `.cursor/mcp.json` or VS Code MCP settings:
 
 ```
 xiaoqinli/
-  main.go                    CLI entry + version (3.1.1)
+  main.go                    CLI entry + version (3.2.0)
   ast/
     nodes.go                 24 AST node types + JSON parser
   check/
@@ -620,8 +456,10 @@ xiaoqinli/
     perl.go     powershell.go  tcl.go        v.go
     ada.go      awk.go       bash.go         mql.go
     vala.go     groovy.go    bat.go
+    shortcut.go              Apple iOS Shortcuts backend
+    chrome.go                Chrome Extension (Manifest V3) backend
     util.go                  Generate() dispatcher + shared utilities
-    codegen_test.go          124 tests across all 40 backends
+    codegen_test.go          128 tests across all 42 backends
     roundtrip_test.go        Compile-and-run verification
   server/
     mcp.go                   MCP server (stdio + HTTP)
@@ -629,28 +467,34 @@ xiaoqinli/
   examples/
     hello.xql.json           Hello world
     example.xql.json         Fibonacci + arithmetic
+    struct.xql.json          Struct usage
+    collections.xql.json     Array operations
+    loop.xql.json            For loop + accumulator
+    lambda_ifexpr.xql.json   Lambda + conditional expression
     clock.xql.json           System clock
 ```
 
 ## Tests
 
 ```bash
-go test ./...                    # run all 124 tests
+go test ./...                    # run all 128 tests
 go build -o xql . && go test ./... -v   # build + test verbose
 ```
 
 ## Design Principles
 
-- **Zero dependencies** -- Single language (Go), single binary, no third-party imports
-- **Deterministic** -- Same AST always produces same output
-- **Secure by default** -- All validation at compile time; `os/exec` never runs user code
-- **Two-layer pipeline** -- Check (types + effects + capabilities) then codegen, single-pass AST traversal, no IR
+- **Zero dependencies** — Single language (Go), single binary, no third-party imports
+- **Deterministic** — Same AST always produces same output
+- **Secure by default** — All validation at compile time; `os/exec` never runs user code
+- **Two-layer pipeline** — Check (types + effects + capabilities) then codegen, single-pass AST traversal, no IR
 
 ## Version History
 
-| Version | Languages | Highlights |
-|---------|-----------|------------|
-| **3.1.1** | 40 | Bug fixes: 1-based indexing for Lua/Julia, operator mappings for Ada/Pascal/Nim/Fortran, Zig Result type, C struct typedef, OCaml/F# float literals, Haskell/OCaml println type dispatch, Bat match/assign, C++ enum `::`, Perl match, ObjC printf, MQL sprintf, Lambda fallback in Java/C#/Kotlin, println multi-arg in Java/C#/Kotlin/Dart, server panic recovery + body size limit + error handling |
+| Version | Targets | Highlights |
+|---------|---------|------------|
+| **3.2.0** | 42 | +Apple iOS Shortcuts, +Chrome Extension (Manifest V3), printf multi-arg, struct toString, try/catch error boundary |
+| 3.1.2 | 40 | EnumDecl + MatchExpr added to 13 backends, Fortran/Ada/Pascal/AWK fixes |
+| 3.1.1 | 40 | 30+ bug fixes across 24 backends, server hardening |
 | 3.1.0 | 40 | +OCaml/F#/Elixir/Clojure/Vala/Groovy/Batch |
 | 3.0.0 | 33 | +Ada/AWK/Bash/Crystal/D/Fortran/ObjC/Pascal/Perl/PowerShell/Tcl/V, IfExpr, Lambda |
 | 2.5.0 | 21 | +C/Scala/Haskell, EnumDecl, MatchExpr |
