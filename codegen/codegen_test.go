@@ -648,7 +648,7 @@ func TestGenerateDispatcher(t *testing.T) {
 		"ocaml", "fsharp", "elixir", "clojure",
 		"ada", "awk", "bash", "crystal", "d", "fortran",
 		"objc", "pascal", "perl", "powershell", "tcl", "v",
-		"vala", "groovy", "bat", "shortcut",
+		"vala", "groovy", "bat", "shortcut", "chrome",
 	}
 	for _, tgt := range targets {
 		out, err := Generate(root, tgt)
@@ -1272,7 +1272,7 @@ func TestForStmtCodegenAll(t *testing.T) {
 		"ocaml", "fsharp", "elixir", "clojure",
 		"ada", "awk", "bash", "crystal", "d", "fortran",
 		"objc", "pascal", "perl", "powershell", "tcl", "v",
-		"vala", "groovy", "bat", "shortcut",
+		"vala", "groovy", "bat", "shortcut", "chrome",
 	}
 	root := mustParse(t, forRangeProgram)
 	for _, target := range targets {
@@ -1322,7 +1322,7 @@ func TestBreakContinueCodegenAll(t *testing.T) {
 		"c", "scala",
 		"awk", "bash", "crystal", "d", "fortran",
 		"objc", "pascal", "perl", "powershell", "tcl", "v",
-		"vala", "groovy",
+		"vala", "groovy", "chrome",
 	}
 	root := mustParse(t, breakContinueProgram)
 	for _, target := range targets {
@@ -1387,7 +1387,7 @@ func TestAssignIndexCodegenAll(t *testing.T) {
 		"ocaml", "fsharp", "elixir",
 		"ada", "awk", "bash", "crystal", "d",
 		"objc", "pascal", "perl", "powershell", "tcl", "v",
-		"vala", "groovy",
+		"vala", "groovy", "chrome",
 	}
 	root := mustParse(t, assignIndexProgram)
 	for _, target := range targets {
@@ -2008,7 +2008,7 @@ func TestEnumMatchCodegenMultiTarget(t *testing.T) {
 		"ocaml", "fsharp", "elixir", "clojure",
 		"ada", "awk", "bash", "crystal", "d", "fortran",
 		"objc", "pascal", "perl", "powershell", "tcl", "v",
-		"vala", "groovy", "bat", "shortcut",
+		"vala", "groovy", "bat", "shortcut", "chrome",
 	}
 	for _, tgt := range targets {
 		t.Run("match_"+tgt, func(t *testing.T) {

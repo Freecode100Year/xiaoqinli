@@ -24,6 +24,7 @@ var allTargets = []string{
 	"groovy",
 	"bat",
 	"shortcut",
+	"chrome",
 }
 
 const usage = `xiaoqinli - AST-First transpiler v` + Version + `
@@ -35,7 +36,7 @@ Usage:
   xiaoqinli stdio                           MCP stdio mode
   xiaoqinli http [<:port>] [--mode rest]    MCP/REST HTTP mode (default :8080)
 
-Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | ocaml | fsharp | elixir | clojure | mql4 | mql5 | ada | awk | bash | bat | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v | vala | groovy | shortcut (default: go)
+Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | ocaml | fsharp | elixir | clojure | mql4 | mql5 | ada | awk | bash | bat | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v | vala | groovy | shortcut | chrome (default: go)
 
 Exit codes: 0=success 1=validation failed 2=compilation error 3=argument error`
 

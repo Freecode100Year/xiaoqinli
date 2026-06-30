@@ -94,6 +94,8 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateBat(root)
 	case "shortcut":
 		return GenerateShortcut(root)
+	case "chrome":
+		return GenerateChrome(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}
