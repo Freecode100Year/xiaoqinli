@@ -26,7 +26,7 @@ func (s *RESTServer) Serve(addr string) error {
 	mux.HandleFunc("/skills/", handleSkillsREST)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3.1.2"})
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3.2.0"})
 	})
 
 	fmt.Fprintf(os.Stderr, "REST API listening on %s\n", addr)

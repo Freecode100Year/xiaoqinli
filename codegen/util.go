@@ -92,6 +92,8 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateGroovy(root)
 	case "bat":
 		return GenerateBat(root)
+	case "shortcut":
+		return GenerateShortcut(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}

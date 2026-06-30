@@ -208,7 +208,7 @@ func (s *MCPServer) handleInitialize(req *jsonRPCRequest) jsonRPCResponse {
 			"protocolVersion": "2025-03-26",
 			"serverInfo": map[string]string{
 				"name":    "xiaoqinli",
-				"version": "3.1.2",
+				"version": "3.2.0",
 			},
 			"capabilities": map[string]interface{}{
 				"tools":   map[string]interface{}{},
@@ -232,7 +232,7 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 					},
 					"target": map[string]string{
 						"type":        "string",
-						"description": "Target language: go | rust | ts | py | cpp | c | java | csharp | kotlin | swift | scala | haskell | ocaml | fsharp | elixir | clojure | dart | lua | ruby | php | zig | nim | julia | mql4 | mql5 | ada | awk | bash | bat | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v | vala | groovy (default: go)",
+						"description": "Target language: go | rust | ts | py | cpp | c | java | csharp | kotlin | swift | scala | haskell | ocaml | fsharp | elixir | clojure | dart | lua | ruby | php | zig | nim | julia | mql4 | mql5 | ada | awk | bash | bat | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v | vala | groovy | shortcut (default: go)",
 					},
 				},
 				"required": []string{"source"},
@@ -398,6 +398,7 @@ func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
 		{"flag": "vala", "ext": ".vala", "name": "Vala"},
 		{"flag": "groovy", "ext": ".groovy", "name": "Groovy"},
 		{"flag": "bat", "ext": ".bat", "name": "Batch"},
+		{"flag": "shortcut", "ext": ".shortcut", "name": "Apple Shortcuts"},
 	}
 	lines := make([]string, len(targets))
 	for i, t := range targets {

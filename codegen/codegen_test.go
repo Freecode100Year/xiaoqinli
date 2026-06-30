@@ -648,7 +648,7 @@ func TestGenerateDispatcher(t *testing.T) {
 		"ocaml", "fsharp", "elixir", "clojure",
 		"ada", "awk", "bash", "crystal", "d", "fortran",
 		"objc", "pascal", "perl", "powershell", "tcl", "v",
-		"vala", "groovy", "bat",
+		"vala", "groovy", "bat", "shortcut",
 	}
 	for _, tgt := range targets {
 		out, err := Generate(root, tgt)
@@ -1272,7 +1272,7 @@ func TestForStmtCodegenAll(t *testing.T) {
 		"ocaml", "fsharp", "elixir", "clojure",
 		"ada", "awk", "bash", "crystal", "d", "fortran",
 		"objc", "pascal", "perl", "powershell", "tcl", "v",
-		"vala", "groovy", "bat",
+		"vala", "groovy", "bat", "shortcut",
 	}
 	root := mustParse(t, forRangeProgram)
 	for _, target := range targets {
@@ -2008,7 +2008,7 @@ func TestEnumMatchCodegenMultiTarget(t *testing.T) {
 		"ocaml", "fsharp", "elixir", "clojure",
 		"ada", "awk", "bash", "crystal", "d", "fortran",
 		"objc", "pascal", "perl", "powershell", "tcl", "v",
-		"vala", "groovy", "bat",
+		"vala", "groovy", "bat", "shortcut",
 	}
 	for _, tgt := range targets {
 		t.Run("match_"+tgt, func(t *testing.T) {
