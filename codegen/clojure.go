@@ -107,6 +107,8 @@ func (g *cljGen) emitNode(n ast.Node) error {
 	case *ast.EnumDecl:
 		g.emitEnumDecl(node)
 		return nil
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}

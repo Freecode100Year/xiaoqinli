@@ -19,6 +19,18 @@ func GenerateRuby(root ast.Node) ([]byte, error) {
 
 	first := true
 	for _, d := range prog.Decls {
+		if ed, ok := d.(*ast.EnumDecl); ok {
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitEnumDecl(ed); err != nil {
+				return nil, err
+			}
+			first = false
+		}
+	}
+
+	for _, d := range prog.Decls {
 		if sd, ok := d.(*ast.StructDecl); ok {
 			if !first {
 				g.writeln("")
@@ -99,9 +111,58 @@ func (g *rbGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *rbGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.writeln("module " + ed.Name)
+	g.indent++
+	for i, v := range ed.Variants {
+		g.writeIndent()
+		g.writeln(fmt.Sprintf("%s = %d", v, i))
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("end")
+	return nil
+}
+
+func (g *rbGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("case ")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln("")
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.writeln("else")
+		} else {
+			g.write("when ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.writeln("")
+		}
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+	}
+	g.writeIndent()
+	g.writeln("end")
+	return nil
 }
 
 func (g *rbGen) emitStructDecl(sd *ast.StructDecl) error {

@@ -18,6 +18,19 @@ func GenerateLua(root ast.Node) ([]byte, error) {
 	}
 
 	first := true
+	// Emit enum declarations first.
+	for _, d := range prog.Decls {
+		if ed, ok := d.(*ast.EnumDecl); ok {
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitEnumDecl(ed); err != nil {
+				return nil, err
+			}
+			first = false
+		}
+	}
+
 	for _, d := range prog.Decls {
 		switch node := d.(type) {
 		case *ast.FunctionDecl:
@@ -89,9 +102,56 @@ func (g *luaGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return nil // Lua uses tables; no struct declaration needed.
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *luaGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	for i, v := range ed.Variants {
+		g.writeIndent()
+		g.writeln(fmt.Sprintf("%s = %d", v, i))
+	}
+	return nil
+}
+
+func (g *luaGen) emitMatchExpr(me *ast.MatchExpr) error {
+	first := true
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.writeln("else")
+		} else {
+			if first {
+				g.write("if ")
+			} else {
+				g.write("elseif ")
+			}
+			if err := g.emitExpr(me.Value); err != nil {
+				return err
+			}
+			g.write(" == ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.writeln(" then")
+		}
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		first = false
+	}
+	g.writeIndent()
+	g.writeln("end")
+	return nil
 }
 
 func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {

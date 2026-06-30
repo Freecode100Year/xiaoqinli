@@ -16,13 +16,31 @@ func GenerateKotlin(root ast.Node) ([]byte, error) {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
-	for i, d := range prog.Decls {
-		if i > 0 {
+	// Emit enum declarations first.
+	first := true
+	for _, d := range prog.Decls {
+		if ed, ok := d.(*ast.EnumDecl); ok {
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitEnumDecl(ed); err != nil {
+				return nil, err
+			}
+			first = false
+		}
+	}
+
+	for _, d := range prog.Decls {
+		if _, ok := d.(*ast.EnumDecl); ok {
+			continue
+		}
+		if !first {
 			g.writeln("")
 		}
 		if err := g.emitNode(d); err != nil {
 			return nil, err
 		}
+		first = false
 	}
 
 	return []byte(g.buf.String()), nil
@@ -100,9 +118,60 @@ func (g *ktGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *ktGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.write("enum class " + ed.Name + " { ")
+	for i, v := range ed.Variants {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(v)
+	}
+	g.writeln(" }")
+	return nil
+}
+
+func (g *ktGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("when (")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.write("else")
+		} else {
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+		}
+		g.writeln(" -> {")
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("}")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
 }
 
 func (g *ktGen) emitStructDecl(sd *ast.StructDecl) error {

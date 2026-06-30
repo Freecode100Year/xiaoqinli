@@ -16,8 +16,21 @@ func GenerateTypeScript(root ast.Node) ([]byte, error) {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
+	// Emit enum declarations first.
+	for _, d := range prog.Decls {
+		if ed, ok := d.(*ast.EnumDecl); ok {
+			if err := g.emitEnumDecl(ed); err != nil {
+				return nil, err
+			}
+			g.writeln("")
+		}
+	}
+
 	hasMain := false
 	for i, d := range prog.Decls {
+		if _, ok := d.(*ast.EnumDecl); ok {
+			continue
+		}
 		if i > 0 {
 			g.writeln("")
 		}
@@ -107,9 +120,59 @@ func (g *tsGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *tsGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.write("enum " + ed.Name + " { ")
+	for i, v := range ed.Variants {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(v)
+	}
+	g.writeln(" }")
+	return nil
+}
+
+func (g *tsGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("switch (")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.writeln("default:")
+		} else {
+			g.write("case ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.writeln(":")
+		}
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.writeIndent()
+		g.writeln("break;")
+		g.indent--
+	}
+	g.writeIndent()
+	g.writeln("}")
+	return nil
 }
 
 func (g *tsGen) emitStructDecl(sd *ast.StructDecl) error {

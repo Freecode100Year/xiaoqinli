@@ -17,8 +17,23 @@ func GenerateSwift(root ast.Node) ([]byte, error) {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
-	// Emit struct declarations first.
+	// Emit enum declarations first.
 	first := true
+	for _, d := range prog.Decls {
+		ed, ok := d.(*ast.EnumDecl)
+		if !ok {
+			continue
+		}
+		if !first {
+			g.writeln("")
+		}
+		if err := g.emitEnumDecl(ed); err != nil {
+			return nil, err
+		}
+		first = false
+	}
+
+	// Emit struct declarations.
 	for _, d := range prog.Decls {
 		sd, ok := d.(*ast.StructDecl)
 		if !ok {
@@ -141,9 +156,57 @@ func (g *swGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *swGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.write("enum " + ed.Name + " { case ")
+	for i, v := range ed.Variants {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(v)
+	}
+	g.writeln(" }")
+	return nil
+}
+
+func (g *swGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("switch ")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(" {")
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.writeln("default:")
+		} else {
+			g.write("case ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.writeln(":")
+		}
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+	}
+	g.writeIndent()
+	g.writeln("}")
+	return nil
 }
 
 func (g *swGen) emitStructDecl(sd *ast.StructDecl) error {

@@ -640,7 +640,16 @@ func TestGenerateCSharpStringConcat(t *testing.T) {
 
 func TestGenerateDispatcher(t *testing.T) {
 	root := mustParse(t, addFibMain)
-	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp", "c", "scala", "haskell", "mql4", "mql5"}
+	targets := []string{
+		"go", "rust", "ts", "kotlin", "swift", "py",
+		"java", "csharp", "dart", "lua", "ruby", "php",
+		"zig", "nim", "julia", "cpp", "c", "scala", "haskell",
+		"mql4", "mql5",
+		"ocaml", "fsharp", "elixir", "clojure",
+		"ada", "awk", "bash", "crystal", "d", "fortran",
+		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"vala", "groovy", "bat",
+	}
 	for _, tgt := range targets {
 		out, err := Generate(root, tgt)
 		if err != nil {
@@ -1255,7 +1264,16 @@ const forRangeProgram = `{
 }`
 
 func TestForStmtCodegenAll(t *testing.T) {
-	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp", "mql4", "mql5"}
+	targets := []string{
+		"go", "rust", "ts", "kotlin", "swift", "py",
+		"java", "csharp", "dart", "lua", "ruby", "php",
+		"zig", "nim", "julia", "cpp", "mql4", "mql5",
+		"c", "scala", "haskell",
+		"ocaml", "fsharp", "elixir", "clojure",
+		"ada", "awk", "bash", "crystal", "d", "fortran",
+		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"vala", "groovy", "bat",
+	}
 	root := mustParse(t, forRangeProgram)
 	for _, target := range targets {
 		t.Run("for_"+target, func(t *testing.T) {
@@ -1295,7 +1313,17 @@ const breakContinueProgram = `{
 }`
 
 func TestBreakContinueCodegenAll(t *testing.T) {
-	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "ruby", "php", "zig", "nim", "julia", "cpp", "mql4", "mql5"}
+	// Excluded: ocaml, haskell, fsharp (no break/continue), bat (limited control flow),
+	// lua, ada (no continue), elixir, clojure (functional — no break/continue)
+	targets := []string{
+		"go", "rust", "ts", "kotlin", "swift", "py",
+		"java", "csharp", "dart", "ruby", "php",
+		"zig", "nim", "julia", "cpp", "mql4", "mql5",
+		"c", "scala",
+		"awk", "bash", "crystal", "d", "fortran",
+		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"vala", "groovy",
+	}
 	root := mustParse(t, breakContinueProgram)
 	for _, target := range targets {
 		t.Run("brk_"+target, func(t *testing.T) {
@@ -1350,7 +1378,17 @@ const assignIndexProgram = `{
 }`
 
 func TestAssignIndexCodegenAll(t *testing.T) {
-	targets := []string{"go", "rust", "ts", "kotlin", "swift", "py", "java", "csharp", "dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp"}
+	// Excluded: haskell, clojure (functional — no imperative index assignment), fortran, bat, mql (limited array support)
+	targets := []string{
+		"go", "rust", "ts", "kotlin", "swift", "py",
+		"java", "csharp", "dart", "lua", "ruby", "php",
+		"zig", "nim", "julia", "cpp",
+		"c", "scala",
+		"ocaml", "fsharp", "elixir",
+		"ada", "awk", "bash", "crystal", "d",
+		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"vala", "groovy",
+	}
 	root := mustParse(t, assignIndexProgram)
 	for _, target := range targets {
 		t.Run("aidx_"+target, func(t *testing.T) {
@@ -1962,7 +2000,16 @@ func TestEnumMatchCodegenHaskell(t *testing.T) {
 
 func TestEnumMatchCodegenMultiTarget(t *testing.T) {
 	root := mustParse(t, enumMatchProgram)
-	targets := []string{"go", "rust", "py", "cpp", "c", "scala", "haskell"}
+	targets := []string{
+		"go", "rust", "ts", "kotlin", "swift", "py",
+		"java", "csharp", "dart", "lua", "ruby", "php",
+		"zig", "nim", "julia", "cpp", "c", "scala", "haskell",
+		"mql4", "mql5",
+		"ocaml", "fsharp", "elixir", "clojure",
+		"ada", "awk", "bash", "crystal", "d", "fortran",
+		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"vala", "groovy", "bat",
+	}
 	for _, tgt := range targets {
 		t.Run("match_"+tgt, func(t *testing.T) {
 			out, err := Generate(root, tgt)

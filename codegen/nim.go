@@ -19,6 +19,18 @@ func GenerateNim(root ast.Node) ([]byte, error) {
 
 	first := true
 	for _, d := range prog.Decls {
+		if ed, ok := d.(*ast.EnumDecl); ok {
+			if !first {
+				g.writeln("")
+			}
+			if err := g.emitEnumDecl(ed); err != nil {
+				return nil, err
+			}
+			first = false
+		}
+	}
+
+	for _, d := range prog.Decls {
 		if sd, ok := d.(*ast.StructDecl); ok {
 			if !first {
 				g.writeln("")
@@ -133,9 +145,57 @@ func (g *nimGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *nimGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.write("type " + ed.Name + " = enum ")
+	for i, v := range ed.Variants {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(v)
+	}
+	g.writeln("")
+	return nil
+}
+
+func (g *nimGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("case ")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(":")
+	g.indent++
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.writeln("else:")
+		} else {
+			g.write("of ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.writeln(":")
+		}
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+	}
+	g.indent--
+	return nil
 }
 
 func (g *nimGen) emitStructDecl(sd *ast.StructDecl) error {

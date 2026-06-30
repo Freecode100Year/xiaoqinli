@@ -35,14 +35,17 @@ func generateMQL(root ast.Node, dialect string) ([]byte, error) {
 
 	g := &mqlGen{buf: &strings.Builder{}, dialect: dialect}
 
-	// Separate declarations: structs and non-main functions go before OnStart,
+	// Separate declarations: enums, structs and non-main functions go before OnStart,
 	// the main function becomes OnStart.
+	var enums []ast.Node
 	var structs []ast.Node
 	var funcs []ast.Node
 	var mainFunc *ast.FunctionDecl
 
 	for _, d := range prog.Decls {
 		switch node := d.(type) {
+		case *ast.EnumDecl:
+			enums = append(enums, node)
 		case *ast.StructDecl:
 			structs = append(structs, node)
 		case *ast.FunctionDecl:
@@ -56,7 +59,21 @@ func generateMQL(root ast.Node, dialect string) ([]byte, error) {
 		}
 	}
 
-	// Emit structs first.
+	// Emit enums first.
+	for i, e := range enums {
+		if i > 0 {
+			g.writeln("")
+		}
+		if err := g.emitNode(e); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(enums) > 0 && (len(structs) > 0 || len(funcs) > 0 || mainFunc != nil) {
+		g.writeln("")
+	}
+
+	// Emit structs.
 	for i, s := range structs {
 		if i > 0 {
 			g.writeln("")
@@ -241,9 +258,59 @@ func (g *mqlGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.EnumDecl:
+		return g.emitEnumDecl(node)
+	case *ast.MatchExpr:
+		return g.emitMatchExpr(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *mqlGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.write("enum " + ed.Name + " { ")
+	for i, v := range ed.Variants {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(v)
+	}
+	g.writeln(" };")
+	return nil
+}
+
+func (g *mqlGen) emitMatchExpr(me *ast.MatchExpr) error {
+	g.writeIndent()
+	g.write("switch (")
+	if err := g.emitExpr(me.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	for _, arm := range me.Arms {
+		g.writeIndent()
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			g.writeln("default:")
+		} else {
+			g.write("case ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.writeln(":")
+		}
+		g.indent++
+		for _, s := range arm.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.writeIndent()
+		g.writeln("break;")
+		g.indent--
+	}
+	g.writeIndent()
+	g.writeln("}")
+	return nil
 }
 
 func (g *mqlGen) emitStructDecl(sd *ast.StructDecl) error {
