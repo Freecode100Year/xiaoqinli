@@ -1,6 +1,7 @@
 package codegen
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"strings"
@@ -22,8 +23,11 @@ func GenerateChrome(root ast.Node) ([]byte, error) {
 	g.writeln("")
 	g.writeln("function _xql_print(v) {")
 	g.indent++
+	g.writeIndent()
 	g.writeln("const el = document.getElementById('output');")
+	g.writeIndent()
 	g.writeln("if (el) el.textContent += String(v) + '\\n';")
+	g.writeIndent()
 	g.writeln("console.log(v);")
 	g.indent--
 	g.writeln("}")
@@ -70,17 +74,6 @@ func GenerateChrome(root ast.Node) ([]byte, error) {
 		}
 		g.indent--
 		g.writeln("});")
-	} else {
-		for _, d := range prog.Decls {
-			fd, ok := d.(*ast.FunctionDecl)
-			if !ok {
-				continue
-			}
-			if err := g.emitFunctionDecl(fd); err != nil {
-				return nil, err
-			}
-			g.writeln("")
-		}
 	}
 
 	popupJS := g.buf.String()
@@ -110,7 +103,6 @@ func GenerateChrome(root ast.Node) ([]byte, error) {
 		"action": map[string]interface{}{
 			"default_popup": "popup.html",
 		},
-		"icons": map[string]interface{}{},
 	}
 
 	bundle := map[string]interface{}{
@@ -119,7 +111,14 @@ func GenerateChrome(root ast.Node) ([]byte, error) {
 		"popup.js":      popupJS,
 	}
 
-	return json.MarshalIndent(bundle, "", "  ")
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(bundle); err != nil {
+		return nil, fmt.Errorf("XQL_E401: JSON encode error: %v", err)
+	}
+	return buf.Bytes(), nil
 }
 
 func findMain(prog *ast.Program) *ast.FunctionDecl {

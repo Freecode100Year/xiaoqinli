@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"xiaoqinli/ast"
 	"xiaoqinli/check"
@@ -142,14 +144,51 @@ func cmdCompile(args []string) {
 
 	// Output result.
 	if outPath != "" {
-		if err := os.WriteFile(outPath, output, 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "error writing output: %v\n", err)
-			os.Exit(2)
+		if target == "chrome" {
+			if err := unpackChromeBundle(output, outPath); err != nil {
+				fmt.Fprintf(os.Stderr, "error: %v\n", err)
+				os.Exit(2)
+			}
+			fmt.Fprintf(os.Stderr, "ok: Chrome extension unpacked to %s/\n", outPath)
+			fmt.Fprintf(os.Stderr, "    Load unpacked in chrome://extensions (Developer mode)\n")
+		} else {
+			if err := os.WriteFile(outPath, output, 0644); err != nil {
+				fmt.Fprintf(os.Stderr, "error writing output: %v\n", err)
+				os.Exit(2)
+			}
+			fmt.Fprintf(os.Stderr, "ok: compiled to %s\n", outPath)
 		}
-		fmt.Fprintf(os.Stderr, "ok: compiled to %s\n", outPath)
 	} else {
 		fmt.Print(string(output))
 	}
+}
+
+func unpackChromeBundle(data []byte, dir string) error {
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("cannot create directory %s: %v", dir, err)
+	}
+	var bundle map[string]interface{}
+	if err := json.Unmarshal(data, &bundle); err != nil {
+		return fmt.Errorf("invalid bundle: %v", err)
+	}
+	for name, content := range bundle {
+		var fileData []byte
+		switch v := content.(type) {
+		case string:
+			fileData = []byte(v)
+		default:
+			b, err := json.MarshalIndent(v, "", "  ")
+			if err != nil {
+				return fmt.Errorf("marshal %s: %v", name, err)
+			}
+			fileData = append(b, '\n')
+		}
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, fileData, 0644); err != nil {
+			return fmt.Errorf("write %s: %v", name, err)
+		}
+	}
+	return nil
 }
 
 func cmdHTTP(args []string) {
