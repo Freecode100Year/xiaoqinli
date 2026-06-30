@@ -1132,6 +1132,7 @@ func TestStructCodegenAll(t *testing.T) {
 		{"cpp", []string{"struct Point {", "long x;", "Point{"}},
 		{"mql4", []string{"struct Point {", "long x;"}},
 		{"mql5", []string{"struct Point {", "long x;"}},
+		{"chrome", []string{"class Point", "constructor(x, y)", "toString()"}},
 	}
 
 	for _, tc := range cases {
@@ -2091,5 +2092,94 @@ func TestScalaPrintfMultiArg(t *testing.T) {
 	code := string(out)
 	if !strings.Contains(code, ".format(name)") {
 		t.Errorf("Scala printf should use .format with args, got:\n%s", code)
+	}
+}
+
+// --- Chrome Extension codegen ---
+
+func TestGenerateChromeHello(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateChrome(root)
+	if err != nil {
+		t.Fatalf("GenerateChrome: %v", err)
+	}
+	code := string(out)
+	checks := []string{
+		`"manifest_version": 3`,
+		`"default_popup": "popup.html"`,
+		`<script src=\"popup.js\">`,
+		"function add(a, b)",
+		"DOMContentLoaded",
+		"_xql_print(",
+		"try {",
+		"} catch (_err)",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Chrome output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateChromeStruct(t *testing.T) {
+	root := mustParse(t, structProgram)
+	out, err := GenerateChrome(root)
+	if err != nil {
+		t.Fatalf("GenerateChrome: %v", err)
+	}
+	code := string(out)
+	checks := []string{
+		"class Point",
+		"constructor(x, y)",
+		"this.x = x",
+		"toString()",
+		"_xql_str(this.x)",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Chrome struct output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateChromePrintf(t *testing.T) {
+	root := mustParse(t, printfMultiArgProgram)
+	out, err := GenerateChrome(root)
+	if err != nil {
+		t.Fatalf("GenerateChrome: %v", err)
+	}
+	code := string(out)
+	checks := []string{
+		"_xql_printf(",
+		`\"hello %s\"`,
+		", name)",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Chrome printf output missing %q\n---\n%s", c, code)
+		}
+	}
+}
+
+func TestGenerateChromeHelpers(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := GenerateChrome(root)
+	if err != nil {
+		t.Fatalf("GenerateChrome: %v", err)
+	}
+	code := string(out)
+	checks := []string{
+		"function _xql_out(s)",
+		"function _xql_str(v)",
+		"function _xql_print(v)",
+		"function _xql_printf(fmt)",
+		"Array.isArray(v)",
+		"JSON.stringify(v)",
+		"'use strict'",
+	}
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("Chrome helpers missing %q\n---\n%s", c, code)
+		}
 	}
 }
