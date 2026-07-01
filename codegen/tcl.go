@@ -524,21 +524,43 @@ func (g *tclGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	case "printf":
-		g.write("puts -nonewline ")
-		if len(ce.Args) > 0 {
-			if err := g.emitExprInline(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.write("puts -nonewline [format ")
+			for _, arg := range ce.Args {
+				g.write(" ")
+				if err := g.emitExprInline(arg); err != nil {
+					return err
+				}
+			}
+			g.write("]")
+		} else {
+			g.write("puts -nonewline ")
+			if len(ce.Args) > 0 {
+				if err := g.emitExprInline(ce.Args[0]); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
 	case "sprintf":
-		g.write("[format \"%s\" ")
-		if len(ce.Args) > 0 {
-			if err := g.emitExprInline(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.write("[format ")
+			for _, arg := range ce.Args {
+				g.write(" ")
+				if err := g.emitExprInline(arg); err != nil {
+					return err
+				}
 			}
+			g.write("]")
+		} else {
+			g.write("[format \"%s\" ")
+			if len(ce.Args) > 0 {
+				if err := g.emitExprInline(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write("]")
 		}
-		g.write("]")
 		return nil
 	default:
 		g.write("[" + ce.Callee)

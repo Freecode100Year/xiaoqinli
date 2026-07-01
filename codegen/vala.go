@@ -660,7 +660,21 @@ func (g *valaGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "sprintf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(".printf(")
+			for i, arg := range ce.Args[1:] {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}

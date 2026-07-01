@@ -509,21 +509,47 @@ func (g *phpGen) emitCall(ce *ast.CallExpr) error {
 		g.write(` . "\n"`)
 		return nil
 	case "printf":
-		g.write("echo ")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.write("printf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else {
+			g.write("echo ")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
 			}
 		}
 		return nil
 	case "sprintf":
-		g.write("strval(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.write("sprintf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
 			}
+			g.write(")")
+		} else {
+			g.write("strval(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write(")")
 		}
-		g.write(")")
 		return nil
 	default:
 		g.write(ce.Callee + "(")

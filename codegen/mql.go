@@ -662,12 +662,25 @@ func (g *mqlGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "sprintf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.write("StringFormat(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else if len(ce.Args) > 0 {
 			g.write("(string)(")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
 			g.write(")")
+		} else {
+			g.write(`""`)
 		}
 		return nil
 	default:

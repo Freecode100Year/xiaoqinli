@@ -554,7 +554,10 @@ func (g *goGen) emitMemberExpr(me *ast.MemberExpr) error {
 }
 
 func (g *goGen) emitIfExpr(ie *ast.IfExpr) error {
-	g.write("func() interface{} { if ")
+	g.write("func() ")
+	retType := g.inferIfExprType(ie)
+	g.write(retType)
+	g.write(" { if ")
 	if err := g.emitExpr(ie.Cond); err != nil {
 		return err
 	}
@@ -568,6 +571,23 @@ func (g *goGen) emitIfExpr(ie *ast.IfExpr) error {
 	}
 	g.write(" }()")
 	return nil
+}
+
+func (g *goGen) inferIfExprType(ie *ast.IfExpr) string {
+	switch n := ie.Then.(type) {
+	case *ast.Literal:
+		switch n.ValueType {
+		case "String":
+			return "string"
+		case "Int":
+			return "int"
+		case "Float":
+			return "float64"
+		case "Bool":
+			return "bool"
+		}
+	}
+	return "interface{}"
 }
 
 func (g *goGen) emitLambda(lam *ast.Lambda) error {

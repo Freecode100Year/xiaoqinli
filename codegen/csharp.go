@@ -52,6 +52,21 @@ func GenerateCSharp(root ast.Node) ([]byte, error) {
 		out.WriteString("using System.Collections.Generic;\n")
 	}
 	out.WriteString("\nclass Program {\n")
+	if g.needSprintf {
+		out.WriteString("    static string _XqlSprintf(string fmt, params object[] args) {\n")
+		out.WriteString("        var sb = new System.Text.StringBuilder();\n")
+		out.WriteString("        int ai = 0;\n")
+		out.WriteString("        for (int i = 0; i < fmt.Length; i++) {\n")
+		out.WriteString("            if (fmt[i] == '%' && i + 1 < fmt.Length && \"sdfo\".IndexOf(fmt[i + 1]) >= 0) {\n")
+		out.WriteString("                sb.Append(args[ai++]);\n")
+		out.WriteString("                i++;\n")
+		out.WriteString("            } else {\n")
+		out.WriteString("                sb.Append(fmt[i]);\n")
+		out.WriteString("            }\n")
+		out.WriteString("        }\n")
+		out.WriteString("        return sb.ToString();\n")
+		out.WriteString("    }\n\n")
+	}
 	out.WriteString(g.buf.String())
 	out.WriteString("}\n")
 
@@ -59,10 +74,11 @@ func GenerateCSharp(root ast.Node) ([]byte, error) {
 }
 
 type csGen struct {
-	buf      *strings.Builder
-	indent   int
-	muts     map[string]bool
-	needList bool
+	buf         *strings.Builder
+	indent      int
+	muts        map[string]bool
+	needList    bool
+	needSprintf bool
 }
 
 func (g *csGen) write(s string)   { g.buf.WriteString(s) }
@@ -511,22 +527,50 @@ func (g *csGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("Console.Write(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("Console.Write(_XqlSprintf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
 			}
+			g.write("))")
+		} else {
+			g.write("Console.Write(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write(")")
 		}
-		g.write(")")
 		return nil
 	case "sprintf":
-		g.write("Convert.ToString(")
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("_XqlSprintf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else if len(ce.Args) > 0 {
+			g.write("Convert.ToString(")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+			g.write(")")
+		} else {
+			g.write("\"\"")
 		}
-		g.write(")")
 		return nil
 	default:
 		g.write(ce.Callee + "(")

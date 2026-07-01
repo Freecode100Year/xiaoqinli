@@ -580,11 +580,11 @@ func (g *rsGen) emitIfExpr(ie *ast.IfExpr) error {
 		return err
 	}
 	g.write(" { ")
-	if err := g.emitExpr(ie.Then); err != nil {
+	if err := g.emitOwnedExpr(ie.Then); err != nil {
 		return err
 	}
 	g.write(" } else { ")
-	if err := g.emitExpr(ie.Else); err != nil {
+	if err := g.emitOwnedExpr(ie.Else); err != nil {
 		return err
 	}
 	g.write(" }")

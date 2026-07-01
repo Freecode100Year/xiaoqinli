@@ -42,7 +42,13 @@ func GenerateHaskell(root ast.Node) ([]byte, error) {
 	out.WriteString("module Main where\n\n")
 
 	if g.needIORef {
-		out.WriteString("import Data.IORef\n\n")
+		out.WriteString("import Data.IORef\n")
+	}
+	if g.needPrintf {
+		out.WriteString("import Text.Printf\n")
+	}
+	if g.needIORef || g.needPrintf {
+		out.WriteString("\n")
 	}
 
 	for _, ed := range enums {
@@ -69,11 +75,12 @@ func GenerateHaskell(root ast.Node) ([]byte, error) {
 }
 
 type hsGen struct {
-	buf       *strings.Builder
-	indent    int
-	funcRets  map[string]string
-	needIORef bool
-	inIO      bool
+	buf        *strings.Builder
+	indent     int
+	funcRets   map[string]string
+	needIORef  bool
+	needPrintf bool
+	inIO       bool
 }
 
 func (g *hsGen) write(s string)   { g.buf.WriteString(s) }
@@ -596,7 +603,23 @@ func (g *hsGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	case "printf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needPrintf = true
+			g.write("printf ")
+			for _, arg := range ce.Args {
+				g.write(" ")
+				needParen := g.needParens(arg)
+				if needParen {
+					g.write("(")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+				if needParen {
+					g.write(")")
+				}
+			}
+		} else if len(ce.Args) > 0 {
 			tk := g.inferTypeKind(ce.Args[0])
 			if tk == "String" {
 				g.write("putStr ")
@@ -619,7 +642,24 @@ func (g *hsGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	case "sprintf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needPrintf = true
+			g.write("(printf ")
+			for _, arg := range ce.Args {
+				g.write(" ")
+				needParen := g.needParens(arg)
+				if needParen {
+					g.write("(")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+				if needParen {
+					g.write(")")
+				}
+			}
+			g.write(" :: String)")
+		} else if len(ce.Args) > 0 {
 			tk := g.inferTypeKind(ce.Args[0])
 			if tk == "String" {
 				if err := g.emitExpr(ce.Args[0]); err != nil {

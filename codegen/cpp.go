@@ -81,6 +81,7 @@ type cppGen struct {
 	needVec   bool // <vector>
 	needOpt   bool // <optional>
 	needMap   bool // <unordered_map>
+	needStdio bool // <cstdio>
 }
 
 func (g *cppGen) write(s string)   { g.buf.WriteString(s) }
@@ -102,6 +103,9 @@ func (g *cppGen) collectIncludes() []string {
 	}
 	if g.needMap {
 		incs = append(incs, "<unordered_map>")
+	}
+	if g.needStdio {
+		incs = append(incs, "<cstdio>")
 	}
 	return incs
 }
@@ -276,7 +280,12 @@ func (g *cppGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 			if i > 0 {
 				g.write(", ")
 			}
-			g.write(g.typeStr(p.Type) + " " + p.Name)
+			pt := g.typeStr(p.Type)
+			if p.Type.KindName == "String" || p.Type.KindName == "Array" {
+				g.write("const " + pt + "& " + p.Name)
+			} else {
+				g.write(pt + " " + p.Name)
+			}
 		}
 		g.writeln(") {")
 	}
@@ -577,10 +586,24 @@ func (g *cppGen) emitCall(ce *ast.CallExpr) error {
 		g.write(" << std::endl")
 		return nil
 	case "printf":
-		g.write("std::cout << ")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.needStdio = true
+			g.write("std::printf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else {
+			g.write("std::cout << ")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
 			}
 		}
 		return nil

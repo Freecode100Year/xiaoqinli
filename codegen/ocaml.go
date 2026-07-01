@@ -530,7 +530,22 @@ func (g *ocamlGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	case "printf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.write("Printf.printf ")
+			for _, arg := range ce.Args {
+				g.write(" ")
+				needParen := g.needParens(arg)
+				if needParen {
+					g.write("(")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+				if needParen {
+					g.write(")")
+				}
+			}
+		} else if len(ce.Args) > 0 {
 			g.write("Printf.printf \"%s\" ")
 			if g.needParens(ce.Args[0]) {
 				g.write("(")
@@ -544,7 +559,22 @@ func (g *ocamlGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	case "sprintf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.write("Printf.sprintf ")
+			for _, arg := range ce.Args {
+				g.write(" ")
+				needParen := g.needParens(arg)
+				if needParen {
+					g.write("(")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+				if needParen {
+					g.write(")")
+				}
+			}
+		} else if len(ce.Args) > 0 {
 			g.write("Printf.sprintf \"%s\" ")
 			if g.needParens(ce.Args[0]) {
 				g.write("(")

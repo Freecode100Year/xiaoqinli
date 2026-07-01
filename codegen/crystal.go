@@ -525,16 +525,40 @@ func (g *crystalGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("print(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.write("printf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
 			}
+			g.write(")")
+		} else {
+			g.write("print(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write(")")
 		}
-		g.write(")")
 		return nil
 	case "sprintf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.write("sprintf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}

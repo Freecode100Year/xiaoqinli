@@ -532,22 +532,48 @@ func (g *javaGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("System.out.print(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.write("System.out.printf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
 			}
+			g.write(")")
+		} else {
+			g.write("System.out.print(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write(")")
 		}
-		g.write(")")
 		return nil
 	case "sprintf":
-		g.write("String.valueOf(")
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.write("String.format(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else if len(ce.Args) > 0 {
+			g.write("String.valueOf(")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+			g.write(")")
+		} else {
+			g.write("\"\"")
 		}
-		g.write(")")
 		return nil
 	default:
 		g.write(ce.Callee + "(")

@@ -521,25 +521,55 @@ func (g *pyGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("print(")
-		for i, arg := range ce.Args {
-			if i > 0 {
-				g.write(", ")
-			}
-			if err := g.emitExpr(arg); err != nil {
-				return err
-			}
-		}
-		g.write(", end=\"\")")
-		return nil
-	case "sprintf":
-		g.write("str(")
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.write("print(")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+			g.write(" % (")
+			for i, arg := range ce.Args[1:] {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(",), end=\"\")")
+		} else {
+			g.write("print(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write(", end=\"\")")
 		}
-		g.write(")")
+		return nil
+	case "sprintf":
+		if len(ce.Args) >= 2 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(" % (")
+			for i, arg := range ce.Args[1:] {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(",)")
+		} else if len(ce.Args) > 0 {
+			g.write("str(")
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(")")
+		} else {
+			g.write("\"\"")
+		}
 		return nil
 	default:
 		g.write(ce.Callee + "(")

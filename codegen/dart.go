@@ -42,13 +42,31 @@ func GenerateDart(root ast.Node) ([]byte, error) {
 		first = false
 	}
 
-	return []byte(g.buf.String()), nil
+	var out strings.Builder
+	if g.needSprintf {
+		out.WriteString("String _xqlSprintf(String fmt, List<Object> args) {\n")
+		out.WriteString("    var sb = StringBuffer();\n")
+		out.WriteString("    int ai = 0;\n")
+		out.WriteString("    for (int i = 0; i < fmt.length; i++) {\n")
+		out.WriteString("        if (fmt[i] == '%' && i + 1 < fmt.length && 'sdfo'.contains(fmt[i + 1])) {\n")
+		out.WriteString("            sb.write(args[ai++]);\n")
+		out.WriteString("            i++;\n")
+		out.WriteString("        } else {\n")
+		out.WriteString("            sb.write(fmt[i]);\n")
+		out.WriteString("        }\n")
+		out.WriteString("    }\n")
+		out.WriteString("    return sb.toString();\n")
+		out.WriteString("}\n\n")
+	}
+	out.WriteString(g.buf.String())
+	return []byte(out.String()), nil
 }
 
 type dartGen struct {
-	buf    *strings.Builder
-	indent int
-	muts   map[string]bool
+	buf         *strings.Builder
+	indent      int
+	muts        map[string]bool
+	needSprintf bool
 }
 
 func (g *dartGen) write(s string)   { g.buf.WriteString(s) }
@@ -505,16 +523,50 @@ func (g *dartGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("stdout.write(")
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("stdout.write(_xqlSprintf(")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+			g.write(", [")
+			for i, arg := range ce.Args[1:] {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write("]))")
+		} else {
+			g.write("stdout.write(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write(")")
 		}
-		g.write(")")
 		return nil
 	case "sprintf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("_xqlSprintf(")
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(", [")
+			for i, arg := range ce.Args[1:] {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write("])")
+		} else if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}

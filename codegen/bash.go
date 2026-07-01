@@ -581,16 +581,22 @@ func (g *bashGen) emitCall(ce *ast.CallExpr) error {
 		return nil
 	case "printf":
 		g.write("printf ")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(" ")
+			}
+			if err := g.emitExpr(arg); err != nil {
 				return err
 			}
 		}
 		return nil
 	case "sprintf":
 		g.write("\"$(printf ")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
+		for i, arg := range ce.Args {
+			if i > 0 {
+				g.write(" ")
+			}
+			if err := g.emitExpr(arg); err != nil {
 				return err
 			}
 		}

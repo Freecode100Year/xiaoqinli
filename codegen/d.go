@@ -85,6 +85,9 @@ func GenerateD(root ast.Node) ([]byte, error) {
 	if g.needConv {
 		out.WriteString("import std.conv;\n")
 	}
+	if g.needFmt {
+		out.WriteString("import std.format;\n")
+	}
 	out.WriteString("\n")
 	out.WriteString(g.buf.String())
 	return []byte(out.String()), nil
@@ -94,6 +97,7 @@ type dGen struct {
 	buf      *strings.Builder
 	indent   int
 	needConv bool
+	needFmt  bool
 	funcRets map[string]string
 	varTypes map[string]string
 }
@@ -559,26 +563,50 @@ func (g *dGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("write(")
-		for i, arg := range ce.Args {
-			if i > 0 {
-				g.write(", ")
+		if len(ce.Args) >= 2 {
+			g.write("writef(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
 			}
-			if err := g.emitExpr(arg); err != nil {
-				return err
+			g.write(")")
+		} else {
+			g.write("write(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
 			}
+			g.write(")")
 		}
-		g.write(")")
 		return nil
 	case "sprintf":
-		g.needConv = true
-		g.write("to!string(")
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needFmt = true
+			g.write("format(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else if len(ce.Args) > 0 {
+			g.needConv = true
+			g.write("to!string(")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+			g.write(")")
+		} else {
+			g.write(`""`)
 		}
-		g.write(")")
 		return nil
 	default:
 		g.write(ce.Callee + "(")

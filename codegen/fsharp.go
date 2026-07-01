@@ -527,16 +527,33 @@ func (g *fsGen) emitCall(ce *ast.CallExpr) error {
 		if len(ce.Args) == 0 {
 			return nil
 		}
-		g.write("printf \"%O\" ")
-		needParen := g.needParens(ce.Args[0])
-		if needParen {
-			g.write("(")
-		}
-		if err := g.emitExpr(ce.Args[0]); err != nil {
-			return err
-		}
-		if needParen {
-			g.write(")")
+		if len(ce.Args) >= 2 {
+			g.write("printf ")
+			for _, arg := range ce.Args {
+				g.write(" ")
+				needParen := g.needParens(arg)
+				if needParen {
+					g.write("(")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+				if needParen {
+					g.write(")")
+				}
+			}
+		} else {
+			g.write("printf \"%O\" ")
+			needParen := g.needParens(ce.Args[0])
+			if needParen {
+				g.write("(")
+			}
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			if needParen {
+				g.write(")")
+			}
 		}
 		return nil
 	case "sprintf":
@@ -544,16 +561,33 @@ func (g *fsGen) emitCall(ce *ast.CallExpr) error {
 			g.write(`""`)
 			return nil
 		}
-		g.write("sprintf \"%O\" ")
-		needParen := g.needParens(ce.Args[0])
-		if needParen {
-			g.write("(")
-		}
-		if err := g.emitExpr(ce.Args[0]); err != nil {
-			return err
-		}
-		if needParen {
-			g.write(")")
+		if len(ce.Args) >= 2 {
+			g.write("sprintf ")
+			for _, arg := range ce.Args {
+				g.write(" ")
+				needParen := g.needParens(arg)
+				if needParen {
+					g.write("(")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+				if needParen {
+					g.write(")")
+				}
+			}
+		} else {
+			g.write("sprintf \"%O\" ")
+			needParen := g.needParens(ce.Args[0])
+			if needParen {
+				g.write("(")
+			}
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			if needParen {
+				g.write(")")
+			}
 		}
 		return nil
 	default:

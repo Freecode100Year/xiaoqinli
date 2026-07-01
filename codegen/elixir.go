@@ -72,12 +72,25 @@ func GenerateElixir(root ast.Node) ([]byte, error) {
 		g.writeln("Main.main()")
 	}
 
-	return []byte(g.buf.String()), nil
+	var out strings.Builder
+	if g.needSprintf {
+		out.WriteString("defmodule XqlHelper do\n")
+		out.WriteString("  def sprintf(fmt, args) do\n")
+		out.WriteString("    {result, _} = Enum.reduce(args, {fmt, 0}, fn arg, {s, _} ->\n")
+		out.WriteString("      {String.replace(s, ~r/%[sdfo]/, to_string(arg), global: false), 0}\n")
+		out.WriteString("    end)\n")
+		out.WriteString("    result\n")
+		out.WriteString("  end\n")
+		out.WriteString("end\n\n")
+	}
+	out.WriteString(g.buf.String())
+	return []byte(out.String()), nil
 }
 
 type exGen struct {
-	buf    *strings.Builder
-	indent int
+	buf         *strings.Builder
+	indent      int
+	needSprintf bool
 }
 
 func (g *exGen) write(s string)   { g.buf.WriteString(s) }
@@ -570,16 +583,50 @@ func (g *exGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("IO.write(")
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("IO.write(XqlHelper.sprintf(")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+			g.write(", [")
+			for i, arg := range ce.Args[1:] {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write("]))")
+		} else {
+			g.write("IO.write(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write(")")
 		}
-		g.write(")")
 		return nil
 	case "sprintf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("XqlHelper.sprintf(")
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+			g.write(", [")
+			for i, arg := range ce.Args[1:] {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write("])")
+		} else if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}

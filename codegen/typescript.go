@@ -47,13 +47,22 @@ func GenerateTypeScript(root ast.Node) ([]byte, error) {
 		g.writeln("main();")
 	}
 
-	return []byte(g.buf.String()), nil
+	var out strings.Builder
+	if g.needSprintf {
+		out.WriteString("function _xql_sprintf(fmt: string, ...args: unknown[]): string {\n")
+		out.WriteString("    let i = 0;\n")
+		out.WriteString("    return fmt.replace(/%[sdfo]/g, () => String(args[i++]));\n")
+		out.WriteString("}\n\n")
+	}
+	out.WriteString(g.buf.String())
+	return []byte(out.String()), nil
 }
 
 type tsGen struct {
-	buf    *strings.Builder
-	indent int
-	muts   map[string]bool
+	buf         *strings.Builder
+	indent      int
+	muts        map[string]bool
+	needSprintf bool
 }
 
 func (g *tsGen) write(s string)   { g.buf.WriteString(s) }
@@ -453,22 +462,50 @@ func (g *tsGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("process.stdout.write(String(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("process.stdout.write(_xql_sprintf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
 			}
+			g.write("))")
+		} else {
+			g.write("process.stdout.write(String(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write("))")
 		}
-		g.write("))")
 		return nil
 	case "sprintf":
-		g.write("String(")
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("_xql_sprintf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else if len(ce.Args) > 0 {
+			g.write("String(")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+			g.write(")")
+		} else {
+			g.write("\"\"")
 		}
-		g.write(")")
 		return nil
 	default:
 		g.write(ce.Callee + "(")

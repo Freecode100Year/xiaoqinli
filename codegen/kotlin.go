@@ -265,11 +265,11 @@ func (g *ktGen) emitAssign(as *ast.AssignStmt) error {
 
 func (g *ktGen) emitIf(is *ast.IfStmt) error {
 	g.writeIndent()
-	g.write("if (")
-	if err := g.emitExpr(is.Cond); err != nil {
+	g.write("if ")
+	if err := g.emitCondition(is.Cond); err != nil {
 		return err
 	}
-	g.writeln(") {")
+	g.writeln(" {")
 	g.indent++
 	for _, s := range is.Then {
 		if err := g.emitNode(s); err != nil {
@@ -296,11 +296,11 @@ func (g *ktGen) emitIf(is *ast.IfStmt) error {
 
 func (g *ktGen) emitWhile(ws *ast.WhileStmt) error {
 	g.writeIndent()
-	g.write("while (")
-	if err := g.emitExpr(ws.Cond); err != nil {
+	g.write("while ")
+	if err := g.emitCondition(ws.Cond); err != nil {
 		return err
 	}
-	g.writeln(") {")
+	g.writeln(" {")
 	g.indent++
 	for _, s := range ws.Body {
 		if err := g.emitNode(s); err != nil {
@@ -399,12 +399,24 @@ func (g *ktGen) emitExpr(n ast.Node) error {
 	}
 }
 
-func (g *ktGen) emitIfExpr(ie *ast.IfExpr) error {
-	g.write("if (")
-	if err := g.emitExpr(ie.Cond); err != nil {
+func (g *ktGen) emitCondition(cond ast.Node) error {
+	if _, ok := cond.(*ast.BinaryExpr); ok {
+		return g.emitExpr(cond)
+	}
+	g.write("(")
+	if err := g.emitExpr(cond); err != nil {
 		return err
 	}
-	g.write(") ")
+	g.write(")")
+	return nil
+}
+
+func (g *ktGen) emitIfExpr(ie *ast.IfExpr) error {
+	g.write("if ")
+	if err := g.emitCondition(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" ")
 	if err := g.emitExpr(ie.Then); err != nil {
 		return err
 	}
@@ -507,16 +519,40 @@ func (g *ktGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	case "printf":
-		g.write("print(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.write("print(String.format(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
 			}
+			g.write("))")
+		} else {
+			g.write("print(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write(")")
 		}
-		g.write(")")
 		return nil
 	case "sprintf":
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.write("String.format(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else if len(ce.Args) > 0 {
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}

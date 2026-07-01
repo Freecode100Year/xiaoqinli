@@ -72,13 +72,31 @@ func GenerateNim(root ast.Node) ([]byte, error) {
 		}
 	}
 
-	return []byte(g.buf.String()), nil
+	var out strings.Builder
+	if g.needSprintf {
+		out.WriteString("proc xqlSprintf(fmt: string, args: varargs[string, `$`]): string =\n")
+		out.WriteString("  result = \"\"\n")
+		out.WriteString("  var ai = 0\n")
+		out.WriteString("  var i = 0\n")
+		out.WriteString("  while i < fmt.len:\n")
+		out.WriteString("    if fmt[i] == '%' and i + 1 < fmt.len and fmt[i + 1] in {'s', 'd', 'f', 'o'}:\n")
+		out.WriteString("      result.add(args[ai])\n")
+		out.WriteString("      inc ai\n")
+		out.WriteString("      inc i, 2\n")
+		out.WriteString("    else:\n")
+		out.WriteString("      result.add(fmt[i])\n")
+		out.WriteString("      inc i\n")
+		out.WriteString("\n")
+	}
+	out.WriteString(g.buf.String())
+	return []byte(out.String()), nil
 }
 
 type nimGen struct {
-	buf    *strings.Builder
-	indent int
-	muts   map[string]bool
+	buf         *strings.Builder
+	indent      int
+	muts        map[string]bool
+	needSprintf bool
 }
 
 func (g *nimGen) write(s string)   { g.buf.WriteString(s) }
@@ -557,20 +575,48 @@ func (g *nimGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	case "printf":
-		g.write("stdout.write(")
-		if len(ce.Args) > 0 {
-			if err := g.emitExpr(ce.Args[0]); err != nil {
-				return err
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("stdout.write(xqlSprintf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
 			}
+			g.write("))")
+		} else {
+			g.write("stdout.write(")
+			if len(ce.Args) > 0 {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+			g.write(")")
 		}
-		g.write(")")
 		return nil
 	case "sprintf":
-		g.write("$")
-		if len(ce.Args) > 0 {
+		if len(ce.Args) >= 2 {
+			g.needSprintf = true
+			g.write("xqlSprintf(")
+			for i, arg := range ce.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else if len(ce.Args) > 0 {
+			g.write("$")
 			if err := g.emitExpr(ce.Args[0]); err != nil {
 				return err
 			}
+		} else {
+			g.write(`""`)
 		}
 		return nil
 	default:

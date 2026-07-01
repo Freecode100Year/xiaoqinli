@@ -1439,8 +1439,8 @@ func TestGenerateCppStringConcat(t *testing.T) {
 	if !strings.Contains(code, "#include <string>") {
 		t.Errorf("C++ should include <string>, got:\n%s", code)
 	}
-	if !strings.Contains(code, "std::string greet(std::string name)") {
-		t.Errorf("C++ should map String to std::string, got:\n%s", code)
+	if !strings.Contains(code, "std::string greet(const std::string& name)") {
+		t.Errorf("C++ should pass String as const ref, got:\n%s", code)
 	}
 }
 

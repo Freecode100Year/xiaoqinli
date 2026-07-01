@@ -79,10 +79,11 @@ func GenerateShortcut(root ast.Node) ([]byte, error) {
 }
 
 type scGen struct {
-	actions  []map[string]interface{}
-	funcs    map[string]*ast.FunctionDecl
-	groupSeq int
-	tmpSeq   int
+	actions    []map[string]interface{}
+	funcs      map[string]*ast.FunctionDecl
+	groupSeq   int
+	tmpSeq     int
+	callDepth  int
 }
 
 func (g *scGen) addAction(id string, params map[string]interface{}) {
@@ -274,6 +275,12 @@ func (g *scGen) emitInlineCall(ce *ast.CallExpr) error {
 		g.addComment("call " + ce.Callee + " (unknown)")
 		return nil
 	}
+	if g.callDepth > 10 {
+		g.addComment("call " + ce.Callee + " (recursion limit)")
+		return nil
+	}
+	g.callDepth++
+	defer func() { g.callDepth-- }()
 	for i, arg := range ce.Args {
 		if i < len(fd.Params) {
 			if err := g.emitExpr(arg); err != nil {
@@ -695,6 +702,12 @@ func (g *scGen) emitCallExpr(ce *ast.CallExpr) error {
 			g.addComment("call " + ce.Callee)
 			return nil
 		}
+		if g.callDepth > 10 {
+			g.addComment("call " + ce.Callee + " (recursion limit)")
+			return nil
+		}
+		g.callDepth++
+		defer func() { g.callDepth-- }()
 		for i, arg := range ce.Args {
 			if i < len(fd.Params) {
 				if err := g.emitExpr(arg); err != nil {
