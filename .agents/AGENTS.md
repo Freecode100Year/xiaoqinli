@@ -72,3 +72,9 @@
 
 ## 4.  YOLO 自动驾驶模式下的多语言同步审计 (YOLO-Mode Audit)
 当开启 `--dangerously-skip-permissions` 免确认模式时，审计层充当最后的安全看门狗（Watchdog），针对不同语言挂载专用钩子（Hooks）：
+
+---
+
+## 5.  文档更新与维护规范 (Documentation Update Guidelines)
+* **自述文件更新**：当项目功能发生变更、新增特性或修复 Bug 时，必须同步更新自述文件 (`README.md`)。
+* **更新日志置顶**：自述文件每次更新后必须重写，且必须将最新的“更新功能”和“修正的 Bug”（最新版本及日期）记录在文章的开头（置顶），以便用户和 Agent 能够一目了然。

@@ -4,6 +4,20 @@
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
 
+---
+
+## 📢 最新更新与 Bug 修复 (2026-06-30)
+
+### 🆕 新增功能
+- **行为准则规范化**：引入《Antigravity CLI 专属项目语义蓝图与编程准则》与《Antigravity CLI 多语言语义解耦与 Tree-sitter 宪法》作为项目最高的行为规范（在 `.agents/AGENTS.md` 中定义）。
+- **自述文件文档重构**：将自述文件 (`README.md`) 全面改写为中文，精炼了架构和极简原则描述，并新增了编译期转译与静态分析的流水线（Mermaid 可视化关系图）。
+
+### 🐛 修复问题
+- **版本号不一致问题**：修正了 `README.md` 与主入口源码 `main.go` 中的 `Version` 常量（`3.2.0`）版本号不一致的问题。
+- **Windows PowerShell 兼容问题**：修复了在 Windows 环境下使用 `&&` 符号连接命令导致的脚本报错问题，改用分步执行以增强跨平台兼容性。
+
+---
+
 **面向 AI Agent 的 AST-First 安全转译器。**  
 输入一份结构化的 JSON AST，直接输出 42 个目标平台的原生惯用代码 —— 单一 Go 二进制文件，零第三方依赖，零运行时。
 
