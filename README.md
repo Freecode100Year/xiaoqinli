@@ -9,6 +9,7 @@
 ## 📢 最新更新与 Bug 修复 (2026-06-30)
 
 ### 🆕 新增功能
+- **前端全栈准则防灾级更新**：在《Antigravity CLI 前端全栈项目语义蓝图与编程准则》中增补了“10秒本地影子闪存与突发灾难自愈”条款，确立了 10 秒周期静默暂存（`.xql/.shadow_stage/`）、网络异常指数退避续传、以及突发断电/强退后的开机影子重组与 AI 记忆对齐召回。
 - **Chrome 网络诊断插件示例**：新增了 `examples/chrome_network.xql.json` 示例程序，利用 XQL 语言成功编译出一个 Chrome 扩展程序（Manifest V3，位于 `chrome-net-extension/` 目录下），实现了显示当前活动标签页的标题与 URL，物理联网类型与网络传输状态，并结合 Cloudflare DoH 异步解析 DNS（A记录）以测算真实延迟耗时。
 - **前端全栈准则规范化**：增补了《Antigravity CLI 前端全栈项目语义蓝图与编程准则》，确立了 HTML/JS/CSS 在 YOLO 模式下的权限熔断、基于 Tree-sitter 的骨架提取压缩规范、前端双层审计静态拦截红线（内联样式与 ESLint 检验）、UI 状态锁定，以及 3-track 时空同步回撤机制。
 - **行为准则规范化**：引入《Antigravity CLI 专属项目语义蓝图与编程准则》与《Antigravity CLI 多语言语义解耦与 Tree-sitter 宪法》作为项目最高的行为规范（在 `.agents/AGENTS.md` 中定义）。
