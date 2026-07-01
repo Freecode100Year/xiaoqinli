@@ -1,0 +1,416 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "StructDecl",
+      "name": "QueryInfo",
+      "fields": [
+        { "name": "active", "type": { "kind": "Bool" } },
+        { "name": "currentWindow", "type": { "kind": "Bool" } }
+      ]
+    },
+    {
+      "kind": "StructDecl",
+      "name": "FetchHeaders",
+      "fields": [
+        { "name": "accept", "type": { "kind": "String" } }
+      ]
+    },
+    {
+      "kind": "StructDecl",
+      "name": "FetchOptions",
+      "fields": [
+        { "name": "headers", "type": { "kind": "FetchHeaders" } }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "getHostname",
+      "params": [
+        { "name": "url", "type": { "kind": "String" } }
+      ],
+      "returnType": { "kind": "String" },
+      "effects": ["pure"],
+      "grant": [],
+      "body": [
+        {
+          "kind": "ReturnStmt",
+          "value": { "kind": "Ident", "name": "url" }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "fetchDnsInfo",
+      "params": [
+        { "name": "domain", "type": { "kind": "String" } }
+      ],
+      "returnType": { "kind": "Void" },
+      "effects": ["network"],
+      "grant": [],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "queryUrl",
+          "type": { "kind": "String" },
+          "value": {
+            "kind": "BinaryExpr",
+            "op": "+",
+            "left": {
+              "kind": "BinaryExpr",
+              "op": "+",
+              "left": { "kind": "Literal", "valueType": "String", "value": "https://cloudflare-dns.com/dns-query?name=" },
+              "right": { "kind": "Ident", "name": "domain" }
+            },
+            "right": { "kind": "Literal", "valueType": "String", "value": "&type=A" }
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "opts",
+          "type": { "kind": "FetchOptions" },
+          "value": {
+            "kind": "StructLit",
+            "typeName": "FetchOptions",
+            "fields": [
+              {
+                "name": "headers",
+                "value": {
+                  "kind": "StructLit",
+                  "typeName": "FetchHeaders",
+                  "fields": [
+                    { "name": "accept", "value": { "kind": "Literal", "valueType": "String", "value": "application/dns-json" } }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "t0",
+          "type": { "kind": "Int" },
+          "value": { "kind": "CallExpr", "callee": "Date.now", "args": [] }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "p",
+          "value": {
+            "kind": "CallExpr",
+            "callee": "fetch",
+            "args": [
+              { "kind": "Ident", "name": "queryUrl" },
+              { "kind": "Ident", "name": "opts" }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "p.then",
+            "args": [
+              {
+                "kind": "Lambda",
+                "params": [
+                  { "name": "res" }
+                ],
+                "body": [
+                  {
+                    "kind": "VarDecl",
+                    "name": "p2",
+                    "value": { "kind": "CallExpr", "callee": "res.json", "args": [] }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "p2.then",
+                      "args": [
+                        {
+                          "kind": "Lambda",
+                          "params": [
+                            { "name": "data" }
+                          ],
+                          "body": [
+                            {
+                              "kind": "VarDecl",
+                              "name": "t1",
+                              "type": { "kind": "Int" },
+                              "value": { "kind": "CallExpr", "callee": "Date.now", "args": [] }
+                            },
+                            {
+                              "kind": "VarDecl",
+                              "name": "latency",
+                              "type": { "kind": "Int" },
+                              "value": {
+                                "kind": "BinaryExpr",
+                                "op": "-",
+                                "left": { "kind": "Ident", "name": "t1" },
+                                "right": { "kind": "Ident", "name": "t0" }
+                              }
+                            },
+                            {
+                              "kind": "ExprStmt",
+                              "expr": {
+                                "kind": "CallExpr",
+                                "callee": "printf",
+                                "args": [
+                                  { "kind": "Literal", "valueType": "String", "value": "\n--- DNS 与 延迟分析 ---\n" }
+                                ]
+                              }
+                            },
+                            {
+                              "kind": "ExprStmt",
+                              "expr": {
+                                "kind": "CallExpr",
+                                "callee": "printf",
+                                "args": [
+                                  { "kind": "Literal", "valueType": "String", "value": "目标域名: %s\n" },
+                                  { "kind": "Ident", "name": "domain" }
+                                ]
+                              }
+                            },
+                            {
+                              "kind": "ExprStmt",
+                              "expr": {
+                                "kind": "CallExpr",
+                                "callee": "printf",
+                                "args": [
+                                  { "kind": "Literal", "valueType": "String", "value": "解析 DNS + 往返延迟: %s ms\n" },
+                                  { "kind": "Ident", "name": "latency" }
+                                ]
+                              }
+                            },
+                            {
+                              "kind": "VarDecl",
+                              "name": "answer",
+                              "value": {
+                                "kind": "MemberExpr",
+                                "object": { "kind": "Ident", "name": "data" },
+                                "field": "Answer"
+                              }
+                            },
+                            {
+                              "kind": "IfStmt",
+                              "cond": { "kind": "Ident", "name": "answer" },
+                              "then": [
+                                {
+                                  "kind": "VarDecl",
+                                  "name": "first",
+                                  "value": {
+                                    "kind": "IndexExpr",
+                                    "target": { "kind": "Ident", "name": "answer" },
+                                    "index": { "kind": "Literal", "valueType": "Int", "value": 0 }
+                                  }
+                                },
+                                {
+                                  "kind": "ExprStmt",
+                                  "expr": {
+                                    "kind": "CallExpr",
+                                    "callee": "printf",
+                                    "args": [
+                                      { "kind": "Literal", "valueType": "String", "value": "DNS A记录解析 IP: %s\n" },
+                                      { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "first" }, "field": "data" }
+                                    ]
+                                  }
+                                }
+                              ],
+                              "else": [
+                                {
+                                  "kind": "ExprStmt",
+                                  "expr": {
+                                    "kind": "CallExpr",
+                                    "callee": "println",
+                                    "args": [
+                                      { "kind": "Literal", "valueType": "String", "value": "未检测到 DNS A记录解析。" }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state", "network"],
+      "grant": [],
+      "body": [
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              { "kind": "Literal", "valueType": "String", "value": "=== 网页与网络信息诊断工具 ===" }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              { "kind": "Literal", "valueType": "String", "value": "正在获取数据，请稍候..." }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "chrome.tabs.query",
+            "args": [
+              {
+                "kind": "StructLit",
+                "typeName": "QueryInfo",
+                "fields": [
+                  { "name": "active", "value": { "kind": "Literal", "valueType": "Bool", "value": true } },
+                  { "name": "currentWindow", "value": { "kind": "Literal", "valueType": "Bool", "value": true } }
+                ]
+              },
+              {
+                "kind": "Lambda",
+                "params": [
+                  { "name": "tabs" }
+                ],
+                "body": [
+                  {
+                    "kind": "VarDecl",
+                    "name": "tab",
+                    "value": {
+                      "kind": "IndexExpr",
+                      "target": { "kind": "Ident", "name": "tabs" },
+                      "index": { "kind": "Literal", "valueType": "Int", "value": 0 }
+                    }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "printf",
+                      "args": [
+                        { "kind": "Literal", "valueType": "String", "value": "当前网页标题: %s\n" },
+                        { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "tab" }, "field": "title" }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "printf",
+                      "args": [
+                        { "kind": "Literal", "valueType": "String", "value": "当前网页链接: %s\n" },
+                        { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "tab" }, "field": "url" }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "VarDecl",
+                    "name": "conn",
+                    "value": {
+                      "kind": "MemberExpr",
+                      "object": { "kind": "Ident", "name": "navigator" },
+                      "field": "connection"
+                    }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "printf",
+                      "args": [
+                        { "kind": "Literal", "valueType": "String", "value": "\n--- 网络连接状态 ---\n" }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "printf",
+                      "args": [
+                        { "kind": "Literal", "valueType": "String", "value": "物理连接类型: %s\n" },
+                        { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "conn" }, "field": "type" }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "printf",
+                      "args": [
+                        { "kind": "Literal", "valueType": "String", "value": "网络传输级别: %s\n" },
+                        { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "conn" }, "field": "effectiveType" }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "printf",
+                      "args": [
+                        { "kind": "Literal", "valueType": "String", "value": "下行带宽估算: %s Mb/s\n" },
+                        { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "conn" }, "field": "downlink" }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "printf",
+                      "args": [
+                        { "kind": "Literal", "valueType": "String", "value": "往返延迟估算 (RTT): %s ms\n" },
+                        { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "conn" }, "field": "rtt" }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "VarDecl",
+                    "name": "hostname",
+                    "type": { "kind": "String" },
+                    "value": {
+                      "kind": "CallExpr",
+                      "callee": "getHostname",
+                      "args": [
+                        { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "tab" }, "field": "url" }
+                      ]
+                    }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "fetchDnsInfo",
+                      "args": [
+                        { "kind": "Ident", "name": "hostname" }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
