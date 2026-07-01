@@ -1,4 +1,4 @@
-# Xiaoqinli (xql) 极简安全转译器 v2.0
+# Xiaoqinli (xql) 极简安全转译器 v3.2.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
@@ -141,7 +141,7 @@ Xiaoqinli 提供了三种灵活的交互方式：
 
 ```
 xiaoqinli/
-  main.go                    # 命令行入口及版本管理 (v2.0)
+  main.go                    # 命令行入口及版本管理 (v3.2.0)
   ast/
     nodes.go                 # 24 种 AST 节点定义及 JSON 解析器
     hash.go                  # 节点内容寻址哈希 (CAS)
