@@ -78,3 +78,37 @@
 ## 5.  文档更新与维护规范 (Documentation Update Guidelines)
 * **自述文件更新**：当项目功能发生变更、新增特性或修复 Bug 时，必须同步更新自述文件 (`README.md`)。
 * **更新日志置顶**：自述文件每次更新后必须重写，且必须将最新的“更新功能”和“修正的 Bug”（最新版本及日期）记录在文章的开头（置顶），以便用户和 Agent 能够一目了然。
+
+---
+
+# Antigravity CLI 前端全栈项目语义蓝图与编程准则
+
+> **核心声明**：本宪法专为 Google Antigravity CLI (`agy`) 及其底层的自主 Agent 引擎制定。专门针对 HTML、JavaScript (ES6+) 和 CSS 场景下的渐进式开发进行逻辑规训与 Token 极限控噪。Agent 在执行任务时必须无条件遵守，严禁越界。
+
+---
+
+## 1.  Antigravity CLI 自动驾驶与权限控制 (CLI & YOLO Mode)
+* **执行授权**：本项目允许在 `--dangerously-skip-permissions` YOLO 模式下运行，给予 Agent 跨文件、全自动运行测试 and 局部代码写入的绿灯。
+* **高危行为熔断**：即使处于免确认模式，`agy` 的任何沙箱穿透、试图改动非当前项目目录的系统全局文件、或越权执行未知二进制混淆脚本的行为，必须予以原地熔断。
+
+## 2.  跨语言 Token 极限压缩规范 (Tree-sitter Skeleton Extraction)
+为防止前端高频交互导致的 Context 爆炸，`agy` 在多文件捞取与符号依赖分析时，必须通过底层 **Tree-sitter** 进行结构化压缩，严禁进行全文本投喂：
+* **HTML (`tree-sitter-html`)**：只提取 DOM 核心拓扑树（`tag_name`、关键 `id` 和 `class` 锚点）。**彻底抠掉复杂的文本细节与嵌套深层的垃圾 `<div>` 块**。确保标签 100% 闭合，从源头拦截排版塌陷。
+* **JavaScript (`tree-sitter-javascript`)**：只提取顶层模块、函数签名、事件监听器（`addEventListener`）和异步状态机的动作定义。**彻底隐藏具体的函数体内部实现（`statement_block`）**。
+* **CSS (`tree-sitter-css`)**：只提取全局 CSS 变量、主干选择器与布局依赖，具体样式细节在非必要时不进行投喂。
+
+## 3.  前端两层边写边审实时拦截红线 (Dual-Track Audit)
+任何由 `agy` 盲盒生成的新代码，在真正写入本地文件系统前，必须通过 `xiaoqinli` 的同步审计过滤：
+* **第一层：零 Token 静态规则拦截**：自动挂载本地 Linter（如 ESLint、Stylelint）。凡是出现低级语法错误、未闭合的 HTML 标签、或者**在 HTML 中私自硬编码内联样式（如 `style="margin-left: 23px;"`）的行为，0 Token 直接打回重写**！强迫 AI 必须去专门的样式文件中调用弹性布局（Flex/Grid）或全局设计变量。
+* **第二层：函数体积硬性红线**：所有新建或修改的 JS 闭包、异步函数体代码，行数严格**控制在 30 行以内**。超过此限制，审计层直接拒签，要求 Agent 进行优雅的模块化组件分拆。
+
+## 4.  状态机锁定与断点记忆擦除 (State Management & Context Pruning)
+在进行 UI 优化与交互 Debug 时，前端视觉必须与底层的逻辑状态机强绑定：
+* **核心状态字典**：所有 UI 变动只能在 `STATE_IDLE`、`STATE_WALK`、`STATE_SLEEP` 之间轮转，禁止 Agent 随手派生未知状态。
+* **断点续传（最核心省钱机制）**：当用户说这个弹窗效果调好了，且同步审计层判定新代码完全跑通后，MCP 立即触发语义断点存盘。将当前最新的 HTML/JS/CSS 拓扑结构浓缩写进 `.xql` 快照，**随后强行清空/裁剪大模型当前的 Chat History（长对话记忆）**。下一轮调整新组件时，大模型脑子里 100% 干净，彻底切断由于历史报错引发的滚雪球式幻觉污染。
+
+## 5.  时空同步回撤机制 (Three-Track Rollback Policy)
+当渐进式修改导致前端界面彻底改烂、布局全面崩溃时，一旦用户发出回撤指令，`agy` 必须驱动三维同步退回：
+1. **代码轨（Code）**：利用本地快照或 Git 树，将 HTML/JS/CSS 文件精准恢复到刚才那个完美的提交点。
+2. **语义轨（Semantic）**：重置本地的前端组件 Tree-sitter 符号依赖引用图。
+3. **上下文轨（Context）**：**彻底删除、裁剪大模型会话中关于刚才调烂过程的所有报错、废话和诱导 Token**。让 Agent 带着完美的历史和完全干净的认知，重新在正确的时空点上继续为你干活。
