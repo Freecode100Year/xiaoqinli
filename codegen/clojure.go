@@ -51,6 +51,7 @@ func GenerateClojure(root ast.Node) ([]byte, error) {
 		if !ok || fd.Name != "main" {
 			continue
 		}
+		g.mutables = collectMutables(fd.Body)
 		if !first {
 			g.writeln("")
 		}
@@ -71,8 +72,9 @@ func GenerateClojure(root ast.Node) ([]byte, error) {
 }
 
 type cljGen struct {
-	buf    *strings.Builder
-	indent int
+	buf      *strings.Builder
+	indent   int
+	mutables map[string]bool
 }
 
 func (g *cljGen) write(s string)   { g.buf.WriteString(s) }
@@ -88,11 +90,11 @@ func (g *cljGen) emitNode(n ast.Node) error {
 	case *ast.VarDecl:
 		return g.emitVarDecl(node)
 	case *ast.AssignStmt:
-		return fmt.Errorf("XQL_E401: Clojure does not support AssignStmt (immutable language)")
+		return g.emitAssign(node)
 	case *ast.IfStmt:
 		return g.emitIf(node)
 	case *ast.WhileStmt:
-		return fmt.Errorf("XQL_E401: Clojure does not support WhileStmt (use recursion instead)")
+		return g.emitWhileStmt(node)
 	case *ast.ForStmt:
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
@@ -115,6 +117,7 @@ func (g *cljGen) emitNode(n ast.Node) error {
 }
 
 func (g *cljGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.mutables = collectMutables(fd.Body)
 	g.writeIndent()
 	g.write("(defn " + fd.Name + " [")
 	for i, p := range fd.Params {
@@ -152,14 +155,26 @@ func (g *cljGen) emitReturn(rs *ast.ReturnStmt) error {
 
 func (g *cljGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
-	g.write("(def " + vd.Name)
-	if vd.Value != nil {
-		g.write(" ")
-		if err := g.emitExpr(vd.Value); err != nil {
-			return err
+	if g.mutables[vd.Name] {
+		g.write("(def " + vd.Name + "Ref (atom ")
+		if vd.Value != nil {
+			if err := g.emitExpr(vd.Value); err != nil {
+				return err
+			}
+		} else {
+			g.write("nil")
 		}
+		g.writeln("))")
+	} else {
+		g.write("(def " + vd.Name)
+		if vd.Value != nil {
+			g.write(" ")
+			if err := g.emitExpr(vd.Value); err != nil {
+				return err
+			}
+		}
+		g.writeln(")")
 	}
-	g.writeln(")")
 	return nil
 }
 
@@ -246,6 +261,38 @@ func (g *cljGen) emitExprStmt(es *ast.ExprStmt) error {
 	return nil
 }
 
+func (g *cljGen) emitAssign(as *ast.AssignStmt) error {
+	if ident, ok := as.Target.(*ast.Ident); ok && g.mutables[ident.Name] {
+		g.writeIndent()
+		g.write("(reset! " + ident.Name + "Ref ")
+		if err := g.emitExpr(as.Value); err != nil {
+			return err
+		}
+		g.writeln(")")
+		return nil
+	}
+	return fmt.Errorf("XQL_E401: Clojure does not support AssignStmt for non-mutable targets")
+}
+
+func (g *cljGen) emitWhileStmt(ws *ast.WhileStmt) error {
+	g.writeIndent()
+	g.write("(while ")
+	if err := g.emitExpr(ws.Cond); err != nil {
+		return err
+	}
+	g.writeln("")
+	g.indent++
+	for _, s := range ws.Body {
+		if err := g.emitNode(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln(")")
+	return nil
+}
+
 func (g *cljGen) emitStructDecl(sd *ast.StructDecl) {
 	g.writeIndent()
 	g.write("(defrecord " + sd.Name + " [")
@@ -275,7 +322,11 @@ func (g *cljGen) emitExpr(n ast.Node) error {
 	case *ast.Literal:
 		return g.emitLiteral(node)
 	case *ast.Ident:
-		g.write(node.Name)
+		if g.mutables[node.Name] {
+			g.write("@" + node.Name + "Ref")
+		} else {
+			g.write(node.Name)
+		}
 		return nil
 	case *ast.BinaryExpr:
 		return g.emitBinaryExpr(node)

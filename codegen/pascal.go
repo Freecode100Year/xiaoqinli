@@ -32,8 +32,9 @@ func GeneratePascal(root ast.Node) ([]byte, error) {
 }
 
 type pascalGen struct {
-	buf    *strings.Builder
-	indent int
+	buf        *strings.Builder
+	indent     int
+	needIfThen bool
 }
 
 func (g *pascalGen) write(s string)   { g.buf.WriteString(s) }
@@ -117,8 +118,65 @@ func scanForVars(stmts []ast.Node, vars *[]string, seen map[string]bool) {
 	}
 }
 
+func pascalHasIfExpr(stmts []ast.Node) bool {
+	for _, s := range stmts {
+		if pascalWalkIfExpr(s) {
+			return true
+		}
+	}
+	return false
+}
+
+func pascalWalkIfExpr(n ast.Node) bool {
+	if n == nil {
+		return false
+	}
+	if _, ok := n.(*ast.IfExpr); ok {
+		return true
+	}
+	switch node := n.(type) {
+	case *ast.VarDecl:
+		return pascalWalkIfExpr(node.Value)
+	case *ast.ExprStmt:
+		return pascalWalkIfExpr(node.Expr)
+	case *ast.ReturnStmt:
+		return pascalWalkIfExpr(node.Value)
+	case *ast.AssignStmt:
+		return pascalWalkIfExpr(node.Value)
+	case *ast.CallExpr:
+		for _, a := range node.Args {
+			if pascalWalkIfExpr(a) {
+				return true
+			}
+		}
+	case *ast.BinaryExpr:
+		return pascalWalkIfExpr(node.Left) || pascalWalkIfExpr(node.Right)
+	case *ast.UnaryExpr:
+		return pascalWalkIfExpr(node.Operand)
+	case *ast.IfStmt:
+		return pascalHasIfExpr(node.Then) || pascalHasIfExpr(node.Else)
+	case *ast.WhileStmt:
+		return pascalHasIfExpr(node.Body)
+	case *ast.ForStmt:
+		return pascalHasIfExpr(node.Body)
+	}
+	return false
+}
+
 func (g *pascalGen) emitMainBlock(fd *ast.FunctionDecl, prog *ast.Program) error {
+	for _, d := range prog.Decls {
+		if fn, ok := d.(*ast.FunctionDecl); ok {
+			if pascalHasIfExpr(fn.Body) {
+				g.needIfThen = true
+				break
+			}
+		}
+	}
+
 	g.writeln("program Main;")
+	if g.needIfThen {
+		g.writeln("uses StrUtils, Math;")
+	}
 
 	// Emit type declarations (structs and enums) inside the program block.
 	hasTypes := false
@@ -571,7 +629,20 @@ func (g *pascalGen) emitExpr(n ast.Node) error {
 }
 
 func (g *pascalGen) emitIfExpr(ie *ast.IfExpr) error {
-	return fmt.Errorf("XQL_E401: Pascal does not support IfExpr (ternary expressions)")
+	g.write("IfThen(")
+	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(", ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write(", ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
 }
 
 func (g *pascalGen) emitLambda(lam *ast.Lambda) error {

@@ -38,19 +38,6 @@ func GenerateHaskell(root ast.Node) ([]byte, error) {
 		}
 	}
 
-	var out strings.Builder
-	out.WriteString("module Main where\n\n")
-
-	if g.needIORef {
-		out.WriteString("import Data.IORef\n")
-	}
-	if g.needPrintf {
-		out.WriteString("import Text.Printf\n")
-	}
-	if g.needIORef || g.needPrintf {
-		out.WriteString("\n")
-	}
-
 	for _, ed := range enums {
 		g.emitEnumDecl(ed)
 		g.writeln("")
@@ -70,6 +57,19 @@ func GenerateHaskell(root ast.Node) ([]byte, error) {
 		}
 	}
 
+	var out strings.Builder
+	out.WriteString("module Main where\n\n")
+
+	if g.needIORef {
+		out.WriteString("import Data.IORef\n")
+	}
+	if g.needPrintf {
+		out.WriteString("import Text.Printf\n")
+	}
+	if g.needIORef || g.needPrintf {
+		out.WriteString("\n")
+	}
+
 	out.WriteString(g.buf.String())
 	return []byte(out.String()), nil
 }
@@ -81,6 +81,8 @@ type hsGen struct {
 	needIORef  bool
 	needPrintf bool
 	inIO       bool
+	mutables   map[string]bool
+	loopCount  int
 }
 
 func (g *hsGen) write(s string)   { g.buf.WriteString(s) }
@@ -173,6 +175,10 @@ func (g *hsGen) emitStructDecl(sd *ast.StructDecl) {
 func (g *hsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	isIO := g.isIOFunc(fd)
 	g.inIO = isIO
+	g.mutables = collectMutables(fd.Body)
+	if len(g.mutables) > 0 && isIO {
+		g.needIORef = true
+	}
 
 	g.writeIndent()
 	if fd.Name == "main" {
@@ -236,6 +242,9 @@ func (g *hsGen) emitPureExprBody(n ast.Node) error {
 func (g *hsGen) emitStmt(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.ReturnStmt:
+		if g.inIO && len(g.mutables) > 0 && node.Value != nil {
+			g.preReadMutables(node.Value)
+		}
 		g.writeIndent()
 		if node.Value == nil {
 			if g.inIO {
@@ -254,18 +263,37 @@ func (g *hsGen) emitStmt(n ast.Node) error {
 		g.writeln("")
 		return nil
 	case *ast.VarDecl:
-		g.writeIndent()
-		g.write("let " + node.Name + " = ")
-		if node.Value != nil {
-			if err := g.emitExpr(node.Value); err != nil {
-				return err
+		if g.inIO && g.mutables[node.Name] {
+			g.writeIndent()
+			g.write(node.Name + "Ref <- newIORef ")
+			if node.Value != nil {
+				if err := g.emitExpr(node.Value); err != nil {
+					return err
+				}
+			} else {
+				g.write("undefined")
 			}
+			g.writeln("")
 		} else {
-			g.write("undefined")
+			if g.inIO && len(g.mutables) > 0 && node.Value != nil {
+				g.preReadMutables(node.Value)
+			}
+			g.writeIndent()
+			g.write("let " + node.Name + " = ")
+			if node.Value != nil {
+				if err := g.emitExpr(node.Value); err != nil {
+					return err
+				}
+			} else {
+				g.write("undefined")
+			}
+			g.writeln("")
 		}
-		g.writeln("")
 		return nil
 	case *ast.ExprStmt:
+		if g.inIO && len(g.mutables) > 0 {
+			g.preReadMutables(node.Expr)
+		}
 		g.writeIndent()
 		if err := g.emitExpr(node.Expr); err != nil {
 			return err
@@ -275,9 +303,24 @@ func (g *hsGen) emitStmt(n ast.Node) error {
 	case *ast.IfStmt:
 		return g.emitIf(node)
 	case *ast.AssignStmt:
+		if g.inIO {
+			if ident, ok := node.Target.(*ast.Ident); ok && g.mutables[ident.Name] {
+				g.preReadMutables(node.Value)
+				g.writeIndent()
+				g.write("writeIORef " + ident.Name + "Ref (")
+				if err := g.emitExpr(node.Value); err != nil {
+					return err
+				}
+				g.writeln(")")
+				return nil
+			}
+		}
 		return fmt.Errorf("XQL_E401: Haskell does not support mutable assignment")
 	case *ast.WhileStmt:
-		return fmt.Errorf("XQL_E401: Haskell does not support while loops")
+		if g.inIO {
+			return g.emitWhileStmt(node)
+		}
+		return fmt.Errorf("XQL_E401: Haskell does not support while loops in pure context")
 	case *ast.ForStmt:
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
@@ -772,6 +815,111 @@ func (g *hsGen) emitIndexExpr(ie *ast.IndexExpr) error {
 func (g *hsGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	g.writeln("data " + ed.Name + " = " + strings.Join(ed.Variants, " | ") + " deriving (Show, Eq)")
 	return nil
+}
+
+func (g *hsGen) emitWhileStmt(ws *ast.WhileStmt) error {
+	loopName := fmt.Sprintf("xqlLoop%d", g.loopCount)
+	g.loopCount++
+
+	g.writeIndent()
+	g.writeln("let " + loopName + " = do")
+	g.indent++
+
+	if lit, ok := ws.Cond.(*ast.Literal); ok && lit.ValueType == "Bool" && lit.Value == true {
+		for _, s := range ws.Body {
+			if err := g.emitStmt(s); err != nil {
+				return err
+			}
+		}
+		g.writeIndent()
+		g.writeln(loopName)
+	} else {
+		g.preReadMutables(ws.Cond)
+		g.writeIndent()
+		g.write("if ")
+		if err := g.emitExpr(ws.Cond); err != nil {
+			return err
+		}
+		g.writeln("")
+		g.indent++
+		g.writeIndent()
+		g.writeln("then do")
+		g.indent++
+		for _, s := range ws.Body {
+			if err := g.emitStmt(s); err != nil {
+				return err
+			}
+		}
+		g.writeIndent()
+		g.writeln(loopName)
+		g.indent--
+		g.writeIndent()
+		g.writeln("else return ()")
+		g.indent--
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.writeln(loopName)
+	return nil
+}
+
+func hsCollectIdents(n ast.Node) map[string]bool {
+	ids := make(map[string]bool)
+	var walk func(ast.Node)
+	walk = func(n ast.Node) {
+		if n == nil {
+			return
+		}
+		switch node := n.(type) {
+		case *ast.Ident:
+			ids[node.Name] = true
+		case *ast.BinaryExpr:
+			walk(node.Left)
+			walk(node.Right)
+		case *ast.UnaryExpr:
+			walk(node.Operand)
+		case *ast.CallExpr:
+			for _, a := range node.Args {
+				walk(a)
+			}
+		case *ast.IndexExpr:
+			walk(node.Target)
+			walk(node.Index)
+		case *ast.MemberExpr:
+			walk(node.Object)
+		case *ast.IfExpr:
+			walk(node.Cond)
+			walk(node.Then)
+			walk(node.Else)
+		case *ast.ArrayLit:
+			for _, e := range node.Elements {
+				walk(e)
+			}
+		case *ast.StructLit:
+			for _, f := range node.Fields {
+				walk(f.Value)
+			}
+		}
+	}
+	walk(n)
+	return ids
+}
+
+func (g *hsGen) preReadMutables(exprs ...ast.Node) {
+	seen := make(map[string]bool)
+	for _, expr := range exprs {
+		if expr == nil {
+			continue
+		}
+		for name := range hsCollectIdents(expr) {
+			if g.mutables[name] && !seen[name] {
+				seen[name] = true
+				g.writeIndent()
+				g.writeln(name + " <- readIORef " + name + "Ref")
+			}
+		}
+	}
 }
 
 func (g *hsGen) emitMatchExpr(me *ast.MatchExpr) error {

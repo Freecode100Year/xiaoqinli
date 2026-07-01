@@ -8,7 +8,7 @@ import (
 )
 
 func GenerateBat(root ast.Node) ([]byte, error) {
-	g := &batGen{buf: &strings.Builder{}, savedTmps: make(map[ast.Node]string)}
+	g := &batGen{buf: &strings.Builder{}, savedTmps: make(map[ast.Node]string), forVars: make(map[string]bool)}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -65,6 +65,7 @@ type batGen struct {
 	tmpID     int
 	savedTmps map[ast.Node]string
 	inBlock   bool
+	forVars   map[string]bool
 }
 
 func (g *batGen) write(s string)   { g.buf.WriteString(s) }
@@ -176,6 +177,51 @@ func (g *batGen) emitReturn(rs *ast.ReturnStmt) error {
 
 func (g *batGen) emitVarDecl(vd *ast.VarDecl) error {
 	if vd.Value != nil {
+		// Handle IfExpr as if-else block
+		if ie, ok := vd.Value.(*ast.IfExpr); ok {
+			prev := g.inBlock
+			g.inBlock = true
+			g.writeIndent()
+			g.write("if ")
+			if err := g.emitCondExpr(ie.Cond); err != nil {
+				return err
+			}
+			g.writeln(" (")
+			g.indent++
+			g.writeIndent()
+			g.write("set \"" + vd.Name + "=")
+			if err := g.emitValExpr(ie.Then); err != nil {
+				return err
+			}
+			g.writeln("\"")
+			g.indent--
+			g.writeIndent()
+			g.writeln(") else (")
+			g.indent++
+			g.writeIndent()
+			g.write("set \"" + vd.Name + "=")
+			if err := g.emitValExpr(ie.Else); err != nil {
+				return err
+			}
+			g.writeln("\"")
+			g.indent--
+			g.writeIndent()
+			g.writeln(")")
+			g.inBlock = prev
+			return nil
+		}
+		// Handle ArrayLit as pseudo-array
+		if al, ok := vd.Value.(*ast.ArrayLit); ok && vd.Type.KindName == "Array" {
+			for i, elem := range al.Elements {
+				g.writeIndent()
+				g.write(fmt.Sprintf("set \"%s[%d]=", vd.Name, i))
+				if err := g.emitValExpr(elem); err != nil {
+					return err
+				}
+				g.writeln("\"")
+			}
+			return nil
+		}
 		// Pre-emit any nested function calls.
 		if err := g.emitNestedCalls(vd.Value); err != nil {
 			return err
@@ -327,6 +373,7 @@ func (g *batGen) emitForStmt(fs *ast.ForStmt) error {
 			g.write("!_end_tmp!")
 		}
 		g.writeln(") do (")
+		g.forVars[fs.Var] = true
 		g.indent++
 		for _, s := range fs.Body {
 			if err := g.emitNode(s); err != nil {
@@ -334,6 +381,7 @@ func (g *batGen) emitForStmt(fs *ast.ForStmt) error {
 			}
 		}
 		g.indent--
+		delete(g.forVars, fs.Var)
 		g.writeIndent()
 		g.writeln(")")
 	case "each":
@@ -344,6 +392,7 @@ func (g *batGen) emitForStmt(fs *ast.ForStmt) error {
 			return err
 		}
 		g.writeln(") do (")
+		g.forVars[fs.Var] = true
 		g.indent++
 		for _, s := range fs.Body {
 			if err := g.emitNode(s); err != nil {
@@ -351,6 +400,7 @@ func (g *batGen) emitForStmt(fs *ast.ForStmt) error {
 			}
 		}
 		g.indent--
+		delete(g.forVars, fs.Var)
 		g.writeIndent()
 		g.writeln(")")
 	default:
@@ -494,6 +544,26 @@ func (g *batGen) emitNestedCalls(n ast.Node) error {
 	return nil
 }
 
+func (g *batGen) emitIndexExpr(ie *ast.IndexExpr) error {
+	ident, ok := ie.Target.(*ast.Ident)
+	if !ok {
+		return fmt.Errorf("XQL_E401: bat IndexExpr requires simple identifier target")
+	}
+	g.write("!")
+	g.write(ident.Name)
+	g.write("[")
+	if idx, ok := ie.Index.(*ast.Ident); ok && g.forVars[idx.Name] {
+		g.write("%%" + idx.Name)
+	} else if lit, ok := ie.Index.(*ast.Literal); ok {
+		f, _ := lit.Value.(float64)
+		g.write(fmt.Sprintf("%d", int64(f)))
+	} else if idx, ok := ie.Index.(*ast.Ident); ok {
+		g.write("!" + idx.Name + "!")
+	}
+	g.write("]!")
+	return nil
+}
+
 func (g *batGen) emitCallStmt(ce *ast.CallExpr) error {
 	// Pre-emit any nested function calls.
 	if err := g.emitNestedCalls(ce); err != nil {
@@ -558,8 +628,10 @@ func (g *batGen) emitValExpr(n ast.Node) error {
 			}
 		}
 		return nil
+	case *ast.IndexExpr:
+		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
-		return fmt.Errorf("XQL_E401: bat does not support IfExpr")
+		return fmt.Errorf("XQL_E401: bat does not support IfExpr in expression context")
 	case *ast.Lambda:
 		return fmt.Errorf("XQL_E401: bat does not support Lambda")
 	default:
@@ -709,6 +781,8 @@ func (g *batGen) emitArithExpr(n ast.Node) error {
 	case *ast.UnaryExpr:
 		g.write(node.Op)
 		return g.emitArithExpr(node.Operand)
+	case *ast.IndexExpr:
+		return g.emitIndexExpr(node)
 	case *ast.CallExpr:
 		g.write("_return")
 		return nil

@@ -482,7 +482,20 @@ func (g *bashGen) emitExpr(n ast.Node) error {
 }
 
 func (g *bashGen) emitIfExpr(ie *ast.IfExpr) error {
-	return fmt.Errorf("XQL_E401: Bash does not support IfExpr in expression context")
+	g.write("$(if [[ ")
+	if err := g.emitCondExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(" ]]; then echo ")
+	if err := g.emitExpr(ie.Then); err != nil {
+		return err
+	}
+	g.write("; else echo ")
+	if err := g.emitExpr(ie.Else); err != nil {
+		return err
+	}
+	g.write("; fi)")
+	return nil
 }
 
 func (g *bashGen) emitLambda(lam *ast.Lambda) error {

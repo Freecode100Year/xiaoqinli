@@ -91,6 +91,7 @@ type exGen struct {
 	buf         *strings.Builder
 	indent      int
 	needSprintf bool
+	loopCount   int
 }
 
 func (g *exGen) write(s string)   { g.buf.WriteString(s) }
@@ -110,7 +111,7 @@ func (g *exGen) emitNode(n ast.Node) error {
 	case *ast.IfStmt:
 		return g.emitIf(node)
 	case *ast.WhileStmt:
-		return fmt.Errorf("XQL_E401: Elixir does not support WhileStmt")
+		return g.emitWhileStmt(node)
 	case *ast.ForStmt:
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
@@ -288,6 +289,51 @@ func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
 	g.indent--
 	g.writeIndent()
 	g.writeln("end")
+	return nil
+}
+
+func (g *exGen) emitWhileStmt(ws *ast.WhileStmt) error {
+	loopName := fmt.Sprintf("xql_loop%d", g.loopCount)
+	g.loopCount++
+	loopFn := loopName + "_fn"
+
+	g.writeIndent()
+	g.writeln(loopName + " = fn " + loopFn + " ->")
+	g.indent++
+
+	if lit, ok := ws.Cond.(*ast.Literal); ok && lit.ValueType == "Bool" && lit.Value == true {
+		for _, s := range ws.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.writeIndent()
+		g.writeln(loopFn + ".(" + loopFn + ")")
+	} else {
+		g.writeIndent()
+		g.write("if ")
+		if err := g.emitExpr(ws.Cond); err != nil {
+			return err
+		}
+		g.writeln(" do")
+		g.indent++
+		for _, s := range ws.Body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.writeIndent()
+		g.writeln(loopFn + ".(" + loopFn + ")")
+		g.indent--
+		g.writeIndent()
+		g.writeln("end")
+	}
+
+	g.indent--
+	g.writeIndent()
+	g.writeln("end")
+	g.writeIndent()
+	g.writeln(loopName + ".(" + loopName + ")")
 	return nil
 }
 
