@@ -1,404 +1,123 @@
-# Xiaoqinli (xql)
+# Xiaoqinli (xql) 极简安全转译器 v2.0
 
-**AST-first transpiler for AI agents.** One JSON AST in, idiomatic source code out — 42 targets, single Go binary, zero dependencies.
+[![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
+[![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
 
+**面向 AI Agent 的 AST-First 安全转译器。**  
+输入一份结构化的 JSON AST，直接输出 42 个目标平台的原生惯用代码 —— 单一 Go 二进制文件，零第三方依赖，零运行时。
+
+```mermaid
+graph TD
+    A[".xql.json (结构化 AST)"] --> B["类型检查 (Type Check)"]
+    B --> C["效果推断 (Effect Inference)"]
+    C --> D["能力验证 (Capability - @grant)"]
+    D --> E["目标代码生成 (Codegen)"]
+    E --> F["Go / Rust / TS / Python / Chrome / iOS... (42 种语言/平台)"]
 ```
-  .xql.json  →  Type Check  →  Effect Inference  →  Capability Enforcement  →  Source Code
-  (JSON AST)     Scope Nesting   Transitive Analysis    @grant Verification      (42 targets)
-```
 
-AI agents write structured `.xql.json` directly — no parser, no syntax errors. The compiler validates types, effects, and capabilities at compile time, then emits idiomatic code for the chosen target.
+AI Agent 可以直接生成结构化的 `.xql.json` —— 物理上天然避免了语法错误和歧义解析。编译器在编译期对类型、副作用和能力（Capability）进行静态安全验证，验证通过后直接输出目标语言的高质量源码。
 
-## Why?
+---
 
-- **AI agents produce AST, not text.** JSON AST eliminates syntax errors, ambiguous parses, and language-specific formatting.
-- **One source of truth.** Write logic once as `.xql.json`, deploy to 42 platforms — from Go microservices to Chrome extensions to iOS shortcuts to MQL5 trading scripts.
-- **Compile-time safety.** Type checking, effect inference, and capability verification happen before any code is generated.
-- **MCP-native.** Runs as an MCP server for Claude Code, Cursor, and any MCP-compatible editor.
+## 🎯 为什么选择 Xiaoqinli？
 
-## Install
+1. **AI Agent 原生设计**：AI 模型更擅长生成结构化的 JSON AST，而不是编写容易产生语法、括号和缩进错误的文本文档。
+2. **单一可信源 (Single Source of Truth)**：一次编写 `.xql.json` 逻辑，即可直接编译部署到 42 个不同的目标平台 —— 从 Go 微服务、Chrome 插件、iOS 快捷指令到 MQL5 交易脚本。
+3. **编译期静态安全保证**：类型检查、副作用推断和能力安全机制（`@grant` 验证）均在编译期完成，不带任何运行期不确定性。
+4. **内置 MCP 支持**：原生作为 MCP (Model Context Protocol) 服务运行，无缝接入 Claude Code, Cursor 及任何兼容 MCP 的编辑器。
 
+---
+
+## ⚖️ 设计宪法：三要求优先于一切
+
+在 v2.0 架构中，功能丰富度永远让位于以下三条原则（**做减法不做加法**）：
+* **极简 (Minimal)**：单语言（Go）、单二进制、最少工具链、零第三方依赖。
+* **安全 (Secure)**：所有静态分析与检查在编译期熔断，产出物完全确定，无任何运行期网络/LLM依赖。
+* **高性能 (Fast)**：转译器无运行时开销，编译与转换均为毫秒级响应。
+
+### v1.4 → v2.0 减法清单
+为了追求极致的设计宪法，v2.0 删减了以下非核心模块：
+* **移除 TypeScript 编译器核心**：消除了双语言栈，完全采用 Go 重写以降低维护成本。
+* **移除 Aether VM + 字节码**：删除虚拟机运行层，AST 检查后直接生成目标代码。
+* **移除自愈引擎 (Healer)**：运行期改代码是不确定且不可控的，不符合确定性原则。
+* **移除运行期认知原语 (`predict/embed`)**：规避运行期的网络调用、LLM 调用与 Token 消耗。
+
+---
+
+## 🚀 快速开始
+
+### 1. 编译安装
 ```bash
 go build -o xql .
 ```
 
-## Quick Start
-
+### 2. 命令行使用
 ```bash
-# Validate AST
+# 验证 AST 合法性（不输出代码）
 ./xql validate --file examples/hello.xql.json
 
-# Compile to any of 42 targets
+# 编译为指定语言/目标
 ./xql compile --file examples/hello.xql.json --target go
 ./xql compile --file examples/hello.xql.json --target rust   --out main.rs
 ./xql compile --file examples/hello.xql.json --target py     --out main.py
 ./xql compile --file examples/hello.xql.json --target chrome --out my-ext/
 
-# List all supported targets
+# 列出所有支持的目标平台
 ./xql targets
 ```
 
-## Supported Targets (42)
+---
 
-| Family | Targets |
+## 🌐 支持的目标平台 (共 42 种)
+
+| 家族分类 | 目标语言/平台标识符 |
 |--------|---------|
-| **Systems** | `go` `rust` `c` `cpp` `zig` `d` `v` `nim` `vala` |
-| **JVM/CLR** | `java` `kotlin` `scala` `csharp` `dart` `groovy` |
-| **Scripting** | `py` `ts` `ruby` `lua` `php` `perl` `julia` `crystal` `awk` |
-| **Functional** | `haskell` `ocaml` `fsharp` `elixir` `clojure` |
-| **Shell** | `bash` `bat` `powershell` `tcl` |
-| **Legacy/Niche** | `ada` `fortran` `pascal` `objc` `mql4` `mql5` |
-| **Platform** | `shortcut` (Apple iOS) `chrome` (Chrome Extension) |
+| **系统级语言** | `go` `rust` `c` `cpp` `zig` `d` `v` `nim` `vala` |
+| **JVM/CLR 家族** | `java` `kotlin` `scala` `csharp` `dart` `groovy` |
+| **脚本/解释型** | `py` `ts` `ruby` `lua` `php` `perl` `julia` `crystal` `awk` |
+| **函数式语言** | `haskell` `ocaml` `fsharp` `elixir` `clojure` |
+| **Shell 脚本** | `bash` `bat` `powershell` `tcl` |
+| **领域/历史遗留** | `ada` `fortran` `pascal` `objc` `mql4` `mql5` |
+| **专属平台** | `shortcut` (苹果 iOS 快捷指令) `chrome` (Chrome 浏览器插件) |
 
-<details>
-<summary><strong>Full language table</strong></summary>
+---
 
-| # | Target | Flag | Ext | IfExpr | Lambda |
-|---|--------|------|-----|--------|--------|
-| 1 | Go | `go` | `.go` | IIFE | yes |
-| 2 | Rust | `rust` | `.rs` | if-expr | closure |
-| 3 | TypeScript | `ts` | `.ts` | ternary | arrow fn |
-| 4 | Python | `py` | `.py` | inline if | lambda |
-| 5 | C++ | `cpp` | `.cpp` | ternary | `[](){}` |
-| 6 | C | `c` | `.c` | ternary | -- |
-| 7 | Kotlin | `kotlin` | `.kt` | if-expr | `{}` |
-| 8 | Swift | `swift` | `.swift` | ternary | closure |
-| 9 | Java | `java` | `.java` | ternary | `->` |
-| 10 | C# | `csharp` | `.cs` | ternary | `=>` |
-| 11 | Scala | `scala` | `.scala` | if-expr | `=>` |
-| 12 | Haskell | `haskell` | `.hs` | if-then-else | `\->` |
-| 13 | OCaml | `ocaml` | `.ml` | if-then-else | `fun ->` |
-| 14 | F# | `fsharp` | `.fs` | if-then-else | `fun ->` |
-| 15 | Elixir | `elixir` | `.ex` | if-do-else | `fn -> end` |
-| 16 | Clojure | `clojure` | `.clj` | `if` | `fn` |
-| 17 | Dart | `dart` | `.dart` | ternary | arrow/block |
-| 18 | Lua | `lua` | `.lua` | and/or | `function() end` |
-| 19 | Ruby | `ruby` | `.rb` | ternary | `lambda {}` |
-| 20 | PHP | `php` | `.php` | ternary | `function(){}` |
-| 21 | Zig | `zig` | `.zig` | if-expr | -- |
-| 22 | Nim | `nim` | `.nim` | if-expr | `proc()` |
-| 23 | Julia | `julia` | `.jl` | ternary | `->` |
-| 24 | Groovy | `groovy` | `.groovy` | ternary | `{ -> }` |
-| 25 | Vala | `vala` | `.vala` | ternary | `() => {}` |
-| 26 | Crystal | `crystal` | `.cr` | ternary | `->(){}` |
-| 27 | D | `d` | `.d` | ternary | `(){}` |
-| 28 | V | `v` | `.v` | if-expr | `fn(){}` |
-| 29 | Ada | `ada` | `.adb` | if-expr | -- |
-| 30 | AWK | `awk` | `.awk` | ternary | -- |
-| 31 | Bash | `bash` | `.sh` | -- | -- |
-| 32 | Batch | `bat` | `.bat` | -- | -- |
-| 33 | Fortran | `fortran` | `.f90` | `merge()` | -- |
-| 34 | Objective-C | `objc` | `.m` | ternary | block `^(){}` |
-| 35 | Pascal | `pascal` | `.pas` | -- | -- |
-| 36 | Perl | `perl` | `.pl` | ternary | `sub {}` |
-| 37 | PowerShell | `powershell` | `.ps1` | `$(if)` | scriptblock |
-| 38 | Tcl | `tcl` | `.tcl` | `[expr]` | -- |
-| 39 | MQL4 | `mql4` | `.mq4` | ternary | -- |
-| 40 | MQL5 | `mql5` | `.mq5` | ternary | -- |
-| 41 | Apple Shortcuts | `shortcut` | `.shortcut` | conditional action | -- |
-| 42 | Chrome Extension | `chrome` | `.crx.json` | ternary | arrow fn |
+## 📐 双视图设计 (Dual-View Design)
 
-**--** = returns compile error (language limitation).
+* **AST 为唯一输入**：转译器仅接受 `.xql.json`（AST）文件作为有效输入。
+* **人类可读视图**：`.xql` 纯文本文件仅作为单向渲染的**只读视图**，编译器中不包含 `.xql` 到 AST 的逆向解析器。这保证了核心转译器的极简性，并彻底杜绝了文本文档解析错误。
 
-</details>
+---
 
-## One AST, Many Languages
+## 🛠️ 静态分析流水线
 
-Write one `.xql.json`, compile to any target:
+所有验证机制都在代码生成之前执行。只要有任意一项检查未通过，编译立刻熔断，不生成任何目标代码。
 
-```json
-{
-  "kind": "Program",
-  "declarations": [
-    {
-      "kind": "FunctionDecl",
-      "name": "greet",
-      "params": [{ "name": "name", "type": { "kind": "String" } }],
-      "returnType": { "kind": "String" },
-      "effects": ["pure"],
-      "grant": [],
-      "body": [{
-        "kind": "ReturnStmt",
-        "value": {
-          "kind": "BinaryExpr", "op": "+",
-          "left": { "kind": "Literal", "valueType": "String", "value": "Hello, " },
-          "right": { "kind": "Ident", "name": "name" }
-        }
-      }]
-    },
-    {
-      "kind": "FunctionDecl",
-      "name": "main",
-      "params": [],
-      "returnType": { "kind": "Void" },
-      "effects": [],
-      "grant": [],
-      "body": [{
-        "kind": "ExprStmt",
-        "expr": {
-          "kind": "CallExpr", "callee": "println",
-          "args": [{
-            "kind": "CallExpr", "callee": "greet",
-            "args": [{ "kind": "Literal", "valueType": "String", "value": "World" }]
-          }]
-        }
-      }]
-    }
-  ]
-}
+```
+  JSON解析  →  类型检查  →  效果推断  →  能力安全验证  →  代码生成
+ (XQL_E1xx)   (XQL_E2xx)    (XQL_E2xx)     (XQL_E3xx)       (XQL_E4xx)
 ```
 
-<details>
-<summary><strong>Go</strong></summary>
+1. **类型检查 (Type Check)**：验证变量、函数签名、返回值、操作符兼容性、数组及结构体字段类型等。
+2. **效果推断 (Effect Inference)**：自动推断并传播副作用（`network`/`filesystem`/`state`）。若纯函数声明为 `@effects(["pure"])` 但被检测到副作用，则编译失败。
+3. **能力安全验证 (Capability Check)**：基于 `@grant` 机制。被调用函数所需的能力集必须是调用函数声明能力的**子集**（能力继承），防止越权调用。
 
-```go
-package main
+---
 
-import "fmt"
+## 🔗 三通道接入
 
-func greet(name string) string {
-    return "Hello, " + name
-}
+Xiaoqinli 提供了三种灵活的交互方式：
 
-func main() {
-    fmt.Println(greet("World"))
-}
-```
-</details>
-
-<details>
-<summary><strong>Rust</strong></summary>
-
-```rust
-fn greet(name: &str) -> String {
-    return ("Hello, ".to_string() + name);
-}
-
-fn main() {
-    println!("{}", greet("World"));
-}
-```
-</details>
-
-<details>
-<summary><strong>Python</strong></summary>
-
-```python
-def greet(name: str) -> str:
-    return ("Hello, " + name)
-
-def main() -> None:
-    print(greet("World"))
-
-if __name__ == "__main__":
-    main()
-```
-</details>
-
-<details>
-<summary><strong>TypeScript</strong></summary>
-
-```typescript
-function greet(name: string): string {
-    return ("Hello, " + name);
-}
-
-function main(): void {
-    console.log(greet("World"));
-}
-
-main();
-```
-</details>
-
-<details>
-<summary><strong>Haskell</strong></summary>
-
-```haskell
-module Main where
-
-greet :: String -> String
-greet name = ("Hello, " ++ name)
-
-main :: IO ()
-main = do
-    putStrLn (greet "World")
-```
-</details>
-
-<details>
-<summary><strong>C</strong></summary>
-
-```c
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-static char* _xql_strcat(const char* a, const char* b) {
-    size_t la = strlen(a), lb = strlen(b);
-    char* r = (char*)malloc(la + lb + 1);
-    memcpy(r, a, la);
-    memcpy(r + la, b, lb + 1);
-    return r;
-}
-
-const char* greet(const char* name) {
-    return _xql_strcat("Hello, ", name);
-}
-
-int main() {
-    printf("%s\n", greet("World"));
-    return 0;
-}
-```
-</details>
-
-<details>
-<summary><strong>MQL5</strong></summary>
-
-```mql5
-#property strict
-
-string greet(string name) {
-    return ("Hello, " + name);
-}
-
-void OnStart() {
-    Print(greet("World"));
-}
-```
-</details>
-
-### Platform Targets
-
-#### Chrome Extension
-
-`--target chrome` generates a Manifest V3 Chrome extension bundle. When used with `--out`, the compiler unpacks the bundle into a directory containing `manifest.json`, `popup.html`, and `popup.js` — directly loadable in `chrome://extensions` with Developer mode enabled.
-
+### 1. MCP (Model Context Protocol) 服务
+原生支持 stdio 和 streamable HTTP 接入，非常适合集成到 Claude Code、Cursor 等 AI 开发工具中：
 ```bash
-./xql compile --file app.xql.json --target chrome --out my-extension/
-# Load my-extension/ in chrome://extensions → "Load unpacked"
+./xql stdio                      # 标准输入输出模式（本地集成推荐）
+./xql http :8080                 # 远程流式 HTTP 模式
+./xql http :8080 --mode rest     # 远程 REST API 模式
 ```
 
-Features:
-- Manifest V3 with popup-based UI
-- `_xql_print` / `_xql_printf` write to the popup DOM and `console.log`
-- Struct classes get `toString()` for display
-- `try/catch` error boundary prevents blank popups
-- Dark theme (Catppuccin Mocha) with monospace output
-
-#### Apple iOS Shortcuts
-
-`--target shortcut` generates a `.shortcut` JSON file importable into the iOS Shortcuts app.
-
-```bash
-./xql compile --file app.xql.json --target shortcut --out app.shortcut
-```
-
-Maps XQL constructs to Shortcuts workflow actions: variables → Set Variable, println → Show Result, arithmetic → Calculate, if → Conditional, for → Repeat.
-
-## AST Node Reference
-
-### Program
-
-```json
-{ "kind": "Program", "declarations": [...] }
-```
-
-### Declarations
-
-| Node | Fields | Description |
-|------|--------|-------------|
-| `FunctionDecl` | `name`, `params[]`, `returnType`, `effects[]`, `grant[]`, `body[]` | Function definition |
-| `StructDecl` | `name`, `fields[]` | Struct type definition |
-| `EnumDecl` | `name`, `variants[]` | Enum type definition |
-
-### Statements
-
-| Node | Fields | Description |
-|------|--------|-------------|
-| `VarDecl` | `name`, `type`, `value` | Variable declaration |
-| `AssignStmt` | `target`, `value` | Assignment |
-| `ReturnStmt` | `value` (optional) | Return from function |
-| `IfStmt` | `cond`, `then[]`, `else[]` | Conditional branch |
-| `WhileStmt` | `cond`, `body[]` | While loop |
-| `ForStmt` | `form`, `var`, `start`/`end` or `iterable`, `body[]` | For loop (range or each) |
-| `BreakStmt` | -- | Exit innermost loop |
-| `ContinueStmt` | -- | Skip to next iteration |
-| `ExprStmt` | `expr` | Expression as statement |
-
-### Expressions
-
-| Node | Fields | Description |
-|------|--------|-------------|
-| `Literal` | `valueType`, `value` | Int, Float, String, Bool literal |
-| `Ident` | `name` | Variable reference |
-| `BinaryExpr` | `op`, `left`, `right` | `+ - * / % == != < > <= >= && \|\|` |
-| `UnaryExpr` | `op`, `operand` | `- !` |
-| `CallExpr` | `callee`, `args[]` | Function call |
-| `MemberExpr` | `object`, `field` | Field access (`obj.x`) |
-| `StructLit` | `typeName`, `fields[]` | Struct construction |
-| `ArrayLit` | `elemType`, `elements[]` | Array literal |
-| `IndexExpr` | `target`, `index` | Index access (`arr[i]`) |
-| `MatchExpr` | `value`, `arms[]` | Pattern match / switch |
-| `IfExpr` | `cond`, `then`, `else` | Ternary / conditional expression |
-| `Lambda` | `params[]`, `returnType`, `body[]` | Anonymous function / closure |
-
-### Built-in Functions
-
-| Function | Effect | Description |
-|----------|--------|-------------|
-| `println` | state | Print with newline |
-| `printf` | state | Formatted print |
-| `sprintf` | pure | Formatted string (returns String) |
-
-## Static Analysis Pipeline
-
-All checks run before code generation. If any check fails, no code is emitted.
-
-```
-  Parse JSON  →  Type Check  →  Effect Check  →  Capability Check  →  Codegen
-  (XQL_E1xx)     (XQL_E2xx)     (XQL_E2xx)       (XQL_E3xx)           (XQL_E4xx)
-```
-
-| Phase | What it validates |
-|-------|-------------------|
-| **Type check** | Variable types, function signatures, return types, operator compatibility, array element types, struct field types, index types, IfExpr branch types |
-| **Effect inference** | Side effects (`network`/`filesystem`/`state`), purity violations, transitive propagation through call chains, Lambda body effects |
-| **Capability check** | `@grant` enforcement — callee capabilities must be subset of caller's |
-
-## Type System
-
-| XQL Kind | Go | Rust | C | Python | Java | Haskell | OCaml | F# |
-|----------|-----|------|---|--------|------|---------|-------|----|
-| `Int` | `int` | `i64` | `long` | `int` | `long` | `Int` | `int` | `int` |
-| `Float` | `float64` | `f64` | `double` | `float` | `double` | `Double` | `float` | `float` |
-| `String` | `string` | `String` | `const char*` | `str` | `String` | `String` | `string` | `string` |
-| `Bool` | `bool` | `bool` | `int` | `bool` | `boolean` | `Bool` | `bool` | `bool` |
-| `Void` | -- | -- | `void` | `None` | `void` | `()` | `unit` | `unit` |
-| `Array<T>` | `[]T` | `Vec<T>` | `T[]` | `list[T]` | `T[]` | `[T]` | `T list` | `T list` |
-| `Option<T>` | `*T` | `Option<T>` | E402 | `Optional[T]` | `T` | `Maybe T` | `T option` | `T option` |
-
-## MCP Server
-
-Xiaoqinli runs as a local MCP server for Claude Code, Cursor, and other MCP-compatible editors.
-
-```bash
-./xql stdio                      # stdio mode (recommended)
-./xql http :8080                 # streamable HTTP mode
-./xql http :8080 --mode rest     # REST API mode
-```
-
-| Tool | Args | Description |
-|------|------|-------------|
-| `compile` | `source`, `target` | Compile `.xql.json` AST to target language |
-| `validate` | `source` | Validate AST without generating code |
-| `targets` | -- | List all 42 supported target languages |
-
-### Claude Code Integration
-
-Add to `~/.mcp.json`:
-
+在 `~/.mcp.json` 中配置：
 ```json
 {
   "mcpServers": {
@@ -410,98 +129,52 @@ Add to `~/.mcp.json`:
 }
 ```
 
-### Cursor / VS Code Integration
+### 2. REST API 接入
+面向 Aider、独立脚本或任意标准 HTTP 客户端，通过轻量级 HTTP API 发送编译/验证请求。
 
-Add to `.cursor/mcp.json` or VS Code MCP settings:
+### 3. Skills 技能分发
+所有 AI 技能包使用 `go:embed` 嵌入二进制中，通过 MCP 的 `prompts/*` 和 REST 的 `/skills/*` 提供全自动化的 Agent 技能分发。
 
-```json
-{
-  "mcpServers": {
-    "xiaoqinli": {
-      "command": "/path/to/xql",
-      "args": ["stdio"]
-    }
-  }
-}
-```
+---
 
-## Error Codes
-
-| Range | Category | Example |
-|-------|----------|---------|
-| `XQL_E1xx` | Parse / AST structure | Missing `kind` field, invalid JSON |
-| `XQL_E2xx` | Type / effect violations | Return type mismatch, purity violation |
-| `XQL_E3xx` | Capability violations | Missing `@grant` for callee |
-| `XQL_E4xx` | Codegen errors | Unsupported node for target (e.g. Lambda in C) |
-
-## Project Structure
+## 📂 项目结构
 
 ```
 xiaoqinli/
-  main.go                    CLI entry + version (3.2.0)
+  main.go                    # 命令行入口及版本管理 (v2.0)
   ast/
-    nodes.go                 24 AST node types + JSON parser
+    nodes.go                 # 24 种 AST 节点定义及 JSON 解析器
+    hash.go                  # 节点内容寻址哈希 (CAS)
   check/
-    types.go                 Type checker + effect system
-    capability.go            @grant enforcement
-    check.go                 RunAll orchestrator
+    types.go                 # 类型检查器与效果推断系统
+    capability.go            # 基于 @grant 的安全能力验证器
+    check.go                 # 静态检查统筹器
   codegen/
-    golang.go   rust.go      typescript.go   python.go
-    cpp.go      c.go         kotlin.go       swift.go
-    java.go     csharp.go    scala.go        haskell.go
-    ocaml.go    fsharp.go    elixir.go       clojure.go
-    dart.go     lua.go       ruby.go         php.go
-    zig.go      nim.go       julia.go        crystal.go
-    d.go        fortran.go   objc.go         pascal.go
-    perl.go     powershell.go  tcl.go        v.go
-    ada.go      awk.go       bash.go         mql.go
-    vala.go     groovy.go    bat.go
-    shortcut.go              Apple iOS Shortcuts backend
-    chrome.go                Chrome Extension (Manifest V3) backend
-    util.go                  Generate() dispatcher + shared utilities
-    codegen_test.go          128 tests across all 42 backends
-    roundtrip_test.go        Compile-and-run verification
+    golang.go   rust.go      # 42 种语言和平台的后端代码生成器
+    typescript.go python.go  
+    util.go                  # 统一生成调度与共享工具
+    codegen_test.go          # 跨后端单元测试
+    roundtrip_test.go        # 编译及运行回环测试
   server/
-    mcp.go                   MCP server (stdio + HTTP)
-    rest.go                  REST API server
-  examples/
-    hello.xql.json           Hello world
-    example.xql.json         Fibonacci + arithmetic
-    struct.xql.json          Struct usage
-    collections.xql.json     Array operations
-    loop.xql.json            For loop + accumulator
-    lambda_ifexpr.xql.json   Lambda + conditional expression
-    clock.xql.json           System clock
+    mcp.go                   # MCP 协议服务端 (支持 stdio 与 HTTP SSE)
+    rest.go                  # 经典 REST API 服务端
+    skills.go                # Skills 技能分发路由器
+  vfs/
+    workspace.go             # 基于会话的虚拟内存文件系统
+  skills/                    # 内置技能文档 (通过 go:embed 打入二进制)
+    xiaoqinli-usage-guide.md
+    xiaoqinli-error-handbook.md
 ```
 
-## Tests
+---
+
+## 🧪 测试命令
 
 ```bash
-go test ./...                    # run all 128 tests
-go build -o xql . && go test ./... -v   # build + test verbose
+go test ./...                    # 运行所有后端及逻辑测试
+go test -v ./...                 # 详细模式运行测试
 ```
 
-## Design Principles
+## 📄 开源协议
 
-- **Zero dependencies** — Single language (Go), single binary, no third-party imports
-- **Deterministic** — Same AST always produces same output
-- **Secure by default** — All validation at compile time; `os/exec` never runs user code
-- **Two-layer pipeline** — Check (types + effects + capabilities) then codegen, single-pass AST traversal, no IR
-
-## Version History
-
-| Version | Targets | Highlights |
-|---------|---------|------------|
-| **3.2.0** | 42 | +Apple iOS Shortcuts, +Chrome Extension (Manifest V3), printf multi-arg, struct toString, try/catch error boundary |
-| 3.1.2 | 40 | EnumDecl + MatchExpr added to 13 backends, Fortran/Ada/Pascal/AWK fixes |
-| 3.1.1 | 40 | 30+ bug fixes across 24 backends, server hardening |
-| 3.1.0 | 40 | +OCaml/F#/Elixir/Clojure/Vala/Groovy/Batch |
-| 3.0.0 | 33 | +Ada/AWK/Bash/Crystal/D/Fortran/ObjC/Pascal/Perl/PowerShell/Tcl/V, IfExpr, Lambda |
-| 2.5.0 | 21 | +C/Scala/Haskell, EnumDecl, MatchExpr |
-| 2.2.0 | 18 | +C++/MQL4/MQL5, ArrayLit, IndexExpr, StructDecl |
-| 2.0.0 | 15 | +Dart/Lua/Ruby/PHP/Zig/Nim/Julia, ForStmt |
-| 1.0.0 | 8 | Go/Rust/TS/Python/Kotlin/Swift/Java/C# |
-
-## License
-
-MIT
+本项目采用 [MIT](LICENSE) 开源协议。
