@@ -174,11 +174,16 @@ Xiaoqinli 提供了三种灵活的交互方式：
 
 ### 快速部署 🚀
 
-在项目根目录下通过 Compose 一键拉取并运行容器化本地 MCP 服务器与同步审计环境：
-
-```bash
-docker compose up -d
-```
+*   **方式 A：本地构建并运行**
+    在项目根目录下通过 Compose 一键本地构建并运行容器化 MCP 服务器：
+    ```bash
+    docker compose up -d
+    ```
+*   **方式 B：直接拉取 Docker Hub 预编译镜像运行**
+    您也可以直接拉取并运行发布在 Docker Hub 上的官方镜像：
+    ```bash
+    docker run -d -p 18789:8080 -v .:/workspace --tmpfs /workspace/.xql/.shadow_stage:rw,size=64m,mode=1777 --name xiaoqinli-mcp-server sj9292008133/xiaoqinli:latest
+    ```
 
 ### 自动化构建与发布 (CI/CD) 🤖
 
