@@ -174,15 +174,20 @@ Xiaoqinli 提供了三种灵活的交互方式：
 
 ### 快速部署 🚀
 
-*   **方式 A：本地构建并运行**
-    在项目根目录下通过 Compose 一键本地构建并运行容器化 MCP 服务器：
+*   **方式 A：本地一键部署管理（Windows 宿主机推荐）**
+    直接双击项目根目录下的 **`deploy.bat`**。该脚本将自动执行以下生命周期管理：
+    1. 检查 Docker 守护进程运行状态；
+    2. 执行 `docker compose up -d --build` 一键编排并挂载 `tmpfs` 内存隔离区；
+    3. 自动与宿主机 Antigravity CLI (`agy`) 完成无感对接与 MCP 注册绑定。
+*   **方式 B：本地 Docker Compose 手动构建并运行**
+    在项目根目录下通过 Compose 命令行手动构建并启动：
     ```bash
     docker compose up -d
     ```
-*   **方式 B：直接拉取 Docker Hub 预编译镜像运行**
-    您也可以直接拉取并运行发布在 Docker Hub 上的官方镜像：
+*   **方式 C：直接拉取 Docker Hub 预编译镜像运行**
+    直接拉取并运行我们在 Docker Hub 上发布好的镜像（自动启用 `tmpfs` 内存保护）：
     ```bash
-    docker run -d -p 18789:8080 -v .:/workspace --tmpfs /workspace/.xql/.shadow_stage:rw,size=64m,mode=1777 --name xiaoqinli-mcp-server sj9292008133/xiaoqinli:latest
+    docker run -d -p 8080:8080 -v .:/workspace --tmpfs /workspace/.xql/.shadow_stage:rw,noexec,nosuid,size=64m --name xql_mcp_core sj9292008133/xiaoqinli:latest
     ```
 
 ### 自动化构建与发布 (CI/CD) 🤖

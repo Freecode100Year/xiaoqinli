@@ -1,17 +1,15 @@
 version: '3.8'
 
 services:
-  xiaoqinli-mcp:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: xiaoqinli-mcp-server
+  xql-mcp-server:
+    build: .
+    container_name: xql_mcp_core
     ports:
-      - "18789:8080"
+      - "8080:8080"
     volumes:
+      # 挂载当前正在开发/逆向的项目目录（宿主机源码）
       - .:/workspace
-    # Mount .xql/.shadow_stage/ to tmpfs (RAM disk) for zero-SSD wear
+    # 核心黑魔法：将 10秒暂存区直接挂载到宿主机的内存中（tmpfs）
     tmpfs:
-      - /workspace/.xql/.shadow_stage:rw,size=64m,mode=1777
-    restart: unless-stopped
-    command: ["http", ":8080"]
+      - /workspace/.xql/.shadow_stage:rw,noexec,nosuid,size=64m
+    restart: always
