@@ -180,6 +180,17 @@ Xiaoqinli 提供了三种灵活的交互方式：
 docker compose up -d
 ```
 
+### 自动化构建与发布 (CI/CD) 🤖
+
+本项目已配置 GitHub Actions 自动构建工作流。您只需将项目推送至 GitHub，即可完全自动在云端构建并发布镜像至 Docker Hub。
+
+**配置步骤**：
+1. 前往您 GitHub 仓库的 **Settings -> Secrets and variables -> Actions**。
+2. 新增以下两个 Repository secrets：
+   * `DOCKERHUB_USERNAME`：您的 Docker Hub 用户名。
+   * `DOCKERHUB_TOKEN`：您的 Docker Hub Access Token（可在 Docker Hub 官网的 Account Settings -> Security 中创建）。
+3. 每次您推送代码至 `master` 分支，或发布版本标签（如 `v3.2.0`）时，GitHub 就会自动在云端编译并推送最新镜像到您的 Docker Hub 个人仓库下。
+
 ---
 
 ## 📂 项目结构
