@@ -1,5 +1,5 @@
 # Stage 1: Build xiaoqinli Go binary
-FROM golang:1.22-bookworm AS builder
+FROM golang:1.23-bookworm AS builder
 WORKDIR /app
 COPY go.mod ./
 COPY main.go ./
@@ -12,7 +12,7 @@ COPY skills/ ./skills/
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o xql .
 
 # Stage 2: Sandboxed environment with Python, Node.js, and Go compilers
-FROM golang:1.22-bookworm
+FROM golang:1.23-bookworm
 WORKDIR /workspace
 
 # Install Python and Node.js
