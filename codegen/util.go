@@ -18,6 +18,8 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateRust(root)
 	case "ts":
 		return GenerateTypeScript(root)
+	case "js", "javascript":
+		return GenerateJavaScript(root)
 	case "kotlin":
 		return GenerateKotlin(root)
 	case "swift":
@@ -131,12 +133,14 @@ func scanMutables(stmts []ast.Node, muts map[string]bool) {
 // unsupportedResultTargets lists targets that silently map Result<T> to just T,
 // losing error-handling semantics. These should reject Result types explicitly.
 var unsupportedResultTargets = map[string]bool{
-	"ts":     true,
-	"dart":   true,
-	"nim":    true,
-	"julia":  true,
-	"lua":    true,
-	"ruby":   true,
+	"ts":         true,
+	"js":         true,
+	"javascript": true,
+	"dart":       true,
+	"nim":        true,
+	"julia":      true,
+	"lua":        true,
+	"ruby":       true,
 }
 
 // validateTypesForTarget walks the AST and returns an error if any type is

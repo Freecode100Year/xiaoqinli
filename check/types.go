@@ -248,6 +248,13 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 			return operandT
 		}
 		return operandT
+	case *ast.NewExpr:
+		for _, arg := range node.Args {
+			tc.inferType(arg, scope)
+		}
+		return ast.TypeExpr{KindName: ""}
+	case *ast.AwaitExpr:
+		return tc.inferType(node.Expr, scope)
 	case *ast.CallExpr:
 		if bi, ok := builtinFuncs[node.Callee]; ok {
 			return ast.TypeExpr{KindName: bi.ReturnType}
@@ -285,7 +292,11 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 	case *ast.StructLit:
 		sd, ok := tc.structTable[node.TypeName]
 		if !ok {
-			tc.addError(fmt.Sprintf("unknown struct type '%s'", node.TypeName))
+			// Treat as external/dynamic struct (like standard library/web types).
+			// We check the fields' values recursively but do not enforce schema rules.
+			for _, fi := range node.Fields {
+				tc.inferType(fi.Value, scope)
+			}
 			return ast.TypeExpr{KindName: node.TypeName}
 		}
 		provided := make(map[string]bool)
@@ -522,6 +533,12 @@ func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]as
 		collectEffects(node.Right, seen, funcBodies, result, resolving)
 	case *ast.UnaryExpr:
 		collectEffects(node.Operand, seen, funcBodies, result, resolving)
+	case *ast.NewExpr:
+		for _, arg := range node.Args {
+			collectEffects(arg, seen, funcBodies, result, resolving)
+		}
+	case *ast.AwaitExpr:
+		collectEffects(node.Expr, seen, funcBodies, result, resolving)
 	case *ast.StructLit:
 		for _, fi := range node.Fields {
 			collectEffects(fi.Value, seen, funcBodies, result, resolving)

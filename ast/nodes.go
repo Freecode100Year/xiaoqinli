@@ -246,6 +246,21 @@ type IfExpr struct {
 
 func (*IfExpr) Kind() string { return "IfExpr" }
 
+// NewExpr represents a constructor call (new Callee(Args...))
+type NewExpr struct {
+	Callee string
+	Args   []Node
+}
+
+func (*NewExpr) Kind() string { return "NewExpr" }
+
+// AwaitExpr represents an await operation (await Expr)
+type AwaitExpr struct {
+	Expr Node
+}
+
+func (*AwaitExpr) Kind() string { return "AwaitExpr" }
+
 // Lambda represents an anonymous function / closure expression.
 type Lambda struct {
 	Params     []Param
@@ -322,6 +337,10 @@ func parseNode(raw map[string]interface{}) (Node, error) {
 		return parseIdent(raw)
 	case "MemberExpr":
 		return parseMemberExpr(raw)
+	case "NewExpr":
+		return parseNewExpr(raw)
+	case "AwaitExpr":
+		return parseAwaitExpr(raw)
 	default:
 		return nil, fmt.Errorf("XQL_E101: unknown node kind: %s", kind)
 	}
@@ -689,6 +708,41 @@ func parseCallExpr(raw map[string]interface{}) (*CallExpr, error) {
 		ce.Args = nodes
 	}
 	return ce, nil
+}
+
+func parseNewExpr(raw map[string]interface{}) (*NewExpr, error) {
+	ne := &NewExpr{}
+	ne.Callee, _ = raw["callee"].(string)
+	if ne.Callee == "" {
+		return nil, fmt.Errorf("XQL_E101: NewExpr missing 'callee'")
+	}
+	if args, ok := raw["args"].([]interface{}); ok {
+		nodes, err := parseNodeList(args)
+		if err != nil {
+			return nil, err
+		}
+		ne.Args = nodes
+	}
+	return ne, nil
+}
+
+func parseAwaitExpr(raw map[string]interface{}) (*AwaitExpr, error) {
+	ae := &AwaitExpr{}
+	expr, err := parseChildNode(raw, "expr")
+	if err != nil {
+		return nil, err
+	}
+	if expr == nil {
+		expr, err = parseChildNode(raw, "expression")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if expr == nil {
+		return nil, fmt.Errorf("XQL_E101: AwaitExpr missing 'expr'")
+	}
+	ae.Expr = expr
+	return ae, nil
 }
 
 func parseLiteral(raw map[string]interface{}) (*Literal, error) {

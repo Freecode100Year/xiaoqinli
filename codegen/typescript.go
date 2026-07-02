@@ -9,7 +9,16 @@ import (
 
 // GenerateTypeScript produces TypeScript source code from the given typed AST.
 func GenerateTypeScript(root ast.Node) ([]byte, error) {
-	g := &tsGen{buf: &strings.Builder{}}
+	return generateJSTarget(root, false)
+}
+
+// GenerateJavaScript produces pure JavaScript source code from the given typed AST.
+func GenerateJavaScript(root ast.Node) ([]byte, error) {
+	return generateJSTarget(root, true)
+}
+
+func generateJSTarget(root ast.Node, isJS bool) ([]byte, error) {
+	g := &tsGen{buf: &strings.Builder{}, isJS: isJS}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -49,7 +58,11 @@ func GenerateTypeScript(root ast.Node) ([]byte, error) {
 
 	var out strings.Builder
 	if g.needSprintf {
-		out.WriteString("function _xql_sprintf(fmt: string, ...args: unknown[]): string {\n")
+		if isJS {
+			out.WriteString("function _xql_sprintf(fmt, ...args) {\n")
+		} else {
+			out.WriteString("function _xql_sprintf(fmt: string, ...args: unknown[]): string {\n")
+		}
 		out.WriteString("    let i = 0;\n")
 		out.WriteString("    return fmt.replace(/%[sdfo]/g, () => String(args[i++]));\n")
 		out.WriteString("}\n\n")
@@ -63,6 +76,7 @@ type tsGen struct {
 	indent      int
 	muts        map[string]bool
 	needSprintf bool
+	isJS        bool
 }
 
 func (g *tsGen) write(s string)   { g.buf.WriteString(s) }
@@ -70,6 +84,9 @@ func (g *tsGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') 
 func (g *tsGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
 func typeToTS(t ast.TypeExpr) string {
+	if t.KindName == "" {
+		return "any"
+	}
 	switch t.KindName {
 	case "Int", "Float":
 		return "number"
@@ -140,14 +157,25 @@ func (g *tsGen) emitNode(n ast.Node) error {
 
 func (g *tsGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	g.writeIndent()
-	g.write("enum " + ed.Name + " { ")
-	for i, v := range ed.Variants {
-		if i > 0 {
-			g.write(", ")
+	if g.isJS {
+		g.write("const " + ed.Name + " = { ")
+		for i, v := range ed.Variants {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.write(v + ": " + fmt.Sprintf("%q", v))
 		}
-		g.write(v)
+		g.writeln(" };")
+	} else {
+		g.write("enum " + ed.Name + " { ")
+		for i, v := range ed.Variants {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.write(v)
+		}
+		g.writeln(" }")
 	}
-	g.writeln(" }")
 	return nil
 }
 
@@ -185,6 +213,9 @@ func (g *tsGen) emitMatchExpr(me *ast.MatchExpr) error {
 }
 
 func (g *tsGen) emitStructDecl(sd *ast.StructDecl) error {
+	if g.isJS {
+		return nil
+	}
 	g.writeIndent()
 	g.writeln("interface " + sd.Name + " {")
 	g.indent++
@@ -202,16 +233,27 @@ func (g *tsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.muts = collectMutables(fd.Body)
 
 	g.writeIndent()
+	if strings.HasPrefix(fd.Name, "onRequest") {
+		g.write("export ")
+	}
+	if hasAwait(fd.Body) {
+		g.write("async ")
+	}
 	g.write("function " + fd.Name + "(")
 	for i, p := range fd.Params {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name + ": " + typeToTS(p.Type))
+		g.write(p.Name)
+		if !g.isJS {
+			g.write(": " + typeToTS(p.Type))
+		}
 	}
 	g.write(")")
 
-	g.write(": " + typeToTS(fd.ReturnType))
+	if !g.isJS {
+		g.write(": " + typeToTS(fd.ReturnType))
+	}
 	g.writeln(" {")
 	g.indent++
 	for _, stmt := range fd.Body {
@@ -246,7 +288,10 @@ func (g *tsGen) emitVarDecl(vd *ast.VarDecl) error {
 	} else {
 		g.write("const ")
 	}
-	g.write(vd.Name + ": " + typeToTS(vd.Type))
+	g.write(vd.Name)
+	if !g.isJS {
+		g.write(": " + typeToTS(vd.Type))
+	}
 	if vd.Value != nil {
 		g.write(" = ")
 		if err := g.emitExpr(vd.Value); err != nil {
@@ -385,6 +430,10 @@ func (g *tsGen) emitExpr(n ast.Node) error {
 		return g.emitExpr(node.Operand)
 	case *ast.CallExpr:
 		return g.emitCall(node)
+	case *ast.NewExpr:
+		return g.emitNewExpr(node)
+	case *ast.AwaitExpr:
+		return g.emitAwaitExpr(node)
 	case *ast.MemberExpr:
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
@@ -522,6 +571,25 @@ func (g *tsGen) emitCall(ce *ast.CallExpr) error {
 	}
 }
 
+func (g *tsGen) emitNewExpr(ne *ast.NewExpr) error {
+	g.write("new " + ne.Callee + "(")
+	for i, arg := range ne.Args {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(arg); err != nil {
+			return err
+		}
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *tsGen) emitAwaitExpr(ae *ast.AwaitExpr) error {
+	g.write("await ")
+	return g.emitExpr(ae.Expr)
+}
+
 func (g *tsGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
@@ -560,15 +628,23 @@ func (g *tsGen) emitIfExpr(ie *ast.IfExpr) error {
 }
 
 func (g *tsGen) emitLambda(lam *ast.Lambda) error {
+	if hasAwait(lam.Body) {
+		g.write("async ")
+	}
 	g.write("(")
 	for i, p := range lam.Params {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name + ": " + typeToTS(p.Type))
+		g.write(p.Name)
+		if !g.isJS {
+			g.write(": " + typeToTS(p.Type))
+		}
 	}
 	g.write(")")
-	g.write(": " + typeToTS(lam.ReturnType))
+	if !g.isJS {
+		g.write(": " + typeToTS(lam.ReturnType))
+	}
 	g.write(" => {")
 	if len(lam.Body) == 0 {
 		g.write("}")
@@ -585,4 +661,103 @@ func (g *tsGen) emitLambda(lam *ast.Lambda) error {
 	g.writeIndent()
 	g.write("}")
 	return nil
+}
+
+func hasAwait(stmts []ast.Node) bool {
+	for _, s := range stmts {
+		if hasAwaitNode(s) {
+			return true
+		}
+	}
+	return false
+}
+
+func hasAwaitNode(n ast.Node) bool {
+	if n == nil {
+		return false
+	}
+	switch node := n.(type) {
+	case *ast.AwaitExpr:
+		return true
+	case *ast.ExprStmt:
+		return hasAwaitNode(node.Expr)
+	case *ast.ReturnStmt:
+		return hasAwaitNode(node.Value)
+	case *ast.VarDecl:
+		return hasAwaitNode(node.Value)
+	case *ast.AssignStmt:
+		return hasAwaitNode(node.Target) || hasAwaitNode(node.Value)
+	case *ast.IfStmt:
+		for _, s := range node.Then {
+			if hasAwaitNode(s) {
+				return true
+			}
+		}
+		for _, s := range node.Else {
+			if hasAwaitNode(s) {
+				return true
+			}
+		}
+	case *ast.WhileStmt:
+		for _, s := range node.Body {
+			if hasAwaitNode(s) {
+				return true
+			}
+		}
+	case *ast.ForStmt:
+		if hasAwaitNode(node.Start) || hasAwaitNode(node.End) || hasAwaitNode(node.Iterable) {
+			return true
+		}
+		for _, s := range node.Body {
+			if hasAwaitNode(s) {
+				return true
+			}
+		}
+	case *ast.BinaryExpr:
+		return hasAwaitNode(node.Left) || hasAwaitNode(node.Right)
+	case *ast.UnaryExpr:
+		return hasAwaitNode(node.Operand)
+	case *ast.CallExpr:
+		for _, arg := range node.Args {
+			if hasAwaitNode(arg) {
+				return true
+			}
+		}
+	case *ast.NewExpr:
+		for _, arg := range node.Args {
+			if hasAwaitNode(arg) {
+				return true
+			}
+		}
+	case *ast.MemberExpr:
+		return hasAwaitNode(node.Object)
+	case *ast.StructLit:
+		for _, f := range node.Fields {
+			if hasAwaitNode(f.Value) {
+				return true
+			}
+		}
+	case *ast.ArrayLit:
+		for _, elem := range node.Elements {
+			if hasAwaitNode(elem) {
+				return true
+			}
+		}
+	case *ast.IndexExpr:
+		return hasAwaitNode(node.Target) || hasAwaitNode(node.Index)
+	case *ast.IfExpr:
+		return hasAwaitNode(node.Cond) || hasAwaitNode(node.Then) || hasAwaitNode(node.Else)
+	case *ast.MatchExpr:
+		if hasAwaitNode(node.Value) {
+			return true
+		}
+		for _, arm := range node.Arms {
+			for _, s := range arm.Body {
+				if hasAwaitNode(s) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
