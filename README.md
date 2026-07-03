@@ -9,7 +9,7 @@
 ## 📢 最新更新与 Bug 修复 (2026-07-02)
 
 ### 🆕 新增功能
-- **生产级混合云 XQLB 密语网关与智能体指令 v1.0**：新增了 `~/.agy/skills/xql_cloud.skill` 生产级系统提示词与 Skill 驱动脚本。通过配置 `xqlb_encode`/`xqlb_decode` MCP 编解码工具链，将 AST 序列化传输阈值限制在 64KB 以内，实现 80% 的网络带宽与 Token 极限压缩，并通过 4 道安全铁锁（白名单、补丁写入上限、逃生通道限制）实现 70B 远程大脑与本地 `local_patcher` 智能体高密协同。
+- **生产级混合云 XQLB 密语网关与智能体指令 v1.0**：新增了 `~/.agy/skills/xql_cloud.skill` 生产级系统提示词与 Skill 驱动脚本。通过配置 `xqlb_encode`/`xqlb_decode` MCP 编解码工具链，将 AST 序列化传输阈值限制在 64KB 以内，实现 80% 的网络带宽与 Token 极限压缩，并通过 4 道安全铁锁（白名单、补丁写入上限、逃生通道限制）实现 gpt-oss:120b-cloud 远程大脑与本地 `local_patcher` 智能体高密协同。
 - **支持 NewExpr 语句转译 (Chrome Target)**：在 `codegen/chrome.go` 生成器中补充了对 `NewExpr` 表达式的支持，从而允许通过 `new window.AudioContext()` 等方式动态创建原生 Web APIs 对象。
 - **递归可变变量分析器优化 (scanMutables)**：对 `codegen/util.go` 中的 `scanMutables` 进行了全面升级。现在它能穿透并递归地扫描 Lambda 闭包表达式，准确地捕捉并标记在闭包中被重新赋值的外部捕获变量，从而在生成 JavaScript 时正确地使用 `let` 代替 `const`，彻底消除了闭包多级作用域变量赋值抛出 `TypeError: Assignment to constant variable` 的致命隐患。
 - **音量增强 Chrome 扩展示例**：新增了 `examples/chrome_volume.xql.json` 音量增强器 AST 代码，成功编译出首个在后台常驻的音量调节扩展程序（物理路径：`chrome-volume-extension/`）。支持在任意页面使用快捷键 `Shift + ⬆️/⬇️` 每次微调 10% 音量，并在 Web Audio API 下实现 100% - 300% 破限音量控制；HUD 以磨砂玻璃 (Glassmorphism) 及精美动画形式悬浮在屏幕右上角。
@@ -180,7 +180,7 @@ Xiaoqinli 提供了三种灵活的交互方式：
 ---
 ## 🌌 XQLB 工业级混合云 AI 密语网关
 
-在经历底层的指针级优化、LRU 截断、4 道安全铁锁（白名单、补丁上限、错误逃生、强 Schema 限制）以及 Merkle 根指纹校验后，`xiaoqinli` 项目引入了面向生产级的混合云 AI 私人语言（XQLB 协议）网关体系。这套架构使得远程大模型（如 Ollama Cloud 70B+）与本地 `agy` CLI 完美对齐：
+在经历底层的指针级优化、LRU 截断、4 道安全铁锁（白名单、补丁上限、错误逃生、强 Schema 限制）以及 Merkle 根指纹校验后，`xiaoqinli` 项目引入了面向生产级的混合云 AI 私人语言（XQLB 协议）网关体系。这套架构使得远程大模型（如 Ollama Cloud gpt-oss:120b-cloud）与本地 `agy` CLI 完美对齐：
 
 ### 核心机制 🔒
 *   **自适应硬限与主动压缩**：当单次同步的 AST 序列化文本体积大于 **64KB** 时，远程智能体强制调用本地 MCP 工具 `xqlb_encode` 将其坍缩为高密度的 Base64 密语指纹，避免网络大段数据传输导致的延迟与 OOM。

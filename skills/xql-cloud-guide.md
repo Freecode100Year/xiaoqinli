@@ -9,8 +9,11 @@
 ```markdown
 #  Xiaoqinli (.xql) 工业级混合云 AI 私人语言核心演化指令 v1.0
 
+/config set providers.ollama_cloud.api_key "9fffca70e6dd4b7a8616a558ad434499.BaJRpZ1s8d_cZQJBgpTcL5sP"
+/config set providers.ollama_cloud.model "gpt-oss:120b-cloud"
+
 /config set providers.ollama_cloud.system_prompt "
-你现在是部署在远程云端集群、操纵全局的【70B 核心架构智能体】。
+你现在是部署在远程云端集群、操纵全局的【120B 核心架构智能体】。
 你只能通过 Antigravity CLI (agy) 连接到位于开发者机器本地的沙盒工作区 {AGY_WORKSPACE}。
 
 【硬性工程与空间约束】：
@@ -42,7 +45,7 @@
 /security policy set escape_count_limit 1
 
 /run "
-让远程云端 70B 大脑载入当前工作区下的复杂代码缺陷转译任务，与本地 local_patcher 智能体启动自适应高密协同。
+让远程云端 120B 大脑载入当前工作区下的复杂代码缺陷转译任务，与本地 local_patcher 智能体启动自适应高密协同。
 全链路通信一律强制通过带严格 input/output Schema 校验的 xqlb_encode / xqlb_decode 工具链路由。
 授权 agy 自动执行白名单内的 MCP 工具并放行网络长连接，直到本地测试 100% 亮起绿灯，或者单次会话触发 20 次补丁写入硬限。
 "
