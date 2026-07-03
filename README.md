@@ -6,6 +6,23 @@
 
 ---
 
+## 📢 最新更新与 Bug 修复 (2026-07-02)
+
+### 🆕 新增功能
+- **生产级混合云 XQLB 密语网关与智能体指令 v1.0**：新增了 `~/.agy/skills/xql_cloud.skill` 生产级系统提示词与 Skill 驱动脚本。通过配置 `xqlb_encode`/`xqlb_decode` MCP 编解码工具链，将 AST 序列化传输阈值限制在 64KB 以内，实现 80% 的网络带宽与 Token 极限压缩，并通过 4 道安全铁锁（白名单、补丁写入上限、逃生通道限制）实现 70B 远程大脑与本地 `local_patcher` 智能体高密协同。
+- **支持 NewExpr 语句转译 (Chrome Target)**：在 `codegen/chrome.go` 生成器中补充了对 `NewExpr` 表达式的支持，从而允许通过 `new window.AudioContext()` 等方式动态创建原生 Web APIs 对象。
+- **递归可变变量分析器优化 (scanMutables)**：对 `codegen/util.go` 中的 `scanMutables` 进行了全面升级。现在它能穿透并递归地扫描 Lambda 闭包表达式，准确地捕捉并标记在闭包中被重新赋值的外部捕获变量，从而在生成 JavaScript 时正确地使用 `let` 代替 `const`，彻底消除了闭包多级作用域变量赋值抛出 `TypeError: Assignment to constant variable` 的致命隐患。
+- **音量增强 Chrome 扩展示例**：新增了 `examples/chrome_volume.xql.json` 音量增强器 AST 代码，成功编译出首个在后台常驻的音量调节扩展程序（物理路径：`chrome-volume-extension/`）。支持在任意页面使用快捷键 `Shift + ⬆️/⬇️` 每次微调 10% 音量，并在 Web Audio API 下实现 100% - 300% 破限音量控制；HUD 以磨砂玻璃 (Glassmorphism) 及精美动画形式悬浮在屏幕右上角。
+
+### 🐛 修复问题
+- **外部变量关系比较类型推断缺陷**：在 `check/types.go` 的 `checkBinaryOp` 中，修复了外部未定义类型的变量参与 `==`/`===`/`!=` 等比较操作时其结果类型被错误推断为被比较字面量类型（如 `String`）进而导致 `IfStmt` 的 condition 静态校验不通过的缺陷。现在直接对所有关系运算符在第一阶段强行推断并返回 `Bool` 类型，使得外部比较表达式在 `if` 逻辑中行为更自然、安全。
+- **扩展后台注入多项兼容性缺陷修复**：
+  1. 修复了在 iframe 页面中因未注入 Content Script 导致嵌入式播放器无法调节音量的缺陷（已在 `manifest.json` 中配置 `"all_frames": true`）；
+  2. 修复了 `popup.js` 注入后污染宿主网页内置 `id="output"` 元素文本的缺陷（已新增 `window.location.protocol` 判断限制说明文本仅在插件弹窗内打印）；
+  3. 修复了遍历 DOM 时 `media.dataset` 属性可能未定义从而在个别网页上引发的 `Cannot read properties of undefined` 页面脚本崩溃缺陷（已前置增加了非空防御判断）。
+
+---
+
 ## 📢 最新更新与 Bug 修复 (2026-07-01)
 
 ### 🆕 新增功能

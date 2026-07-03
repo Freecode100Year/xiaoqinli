@@ -1,0 +1,725 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": [],
+      "body": [
+        {
+          "kind": "IfStmt",
+          "cond": {
+            "kind": "BinaryExpr",
+            "op": "===",
+            "left": {
+              "kind": "MemberExpr",
+              "object": { "kind": "Ident", "name": "window.location" },
+              "field": "protocol"
+            },
+            "right": { "kind": "Literal", "valueType": "String", "value": "chrome-extension:" }
+          },
+          "then": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [
+                  { "kind": "Literal", "valueType": "String", "value": "======================================\n   ⚡ Xiaoqinli 极速音量放大器 v1.0   \n======================================\n\n【键盘快捷键使用指南】\n - 放大音量: 按住 Shift + 键盘向上键 (⬆️)\n - 减小音量: 按住 Shift + 键盘向下键 (⬇️)\n - 调节范围: 100% - 300% (每次调节 10%)\n\n--------------------------------------\n 本插件已自动注入到所有网页后台，无需保持此\n 弹窗打开即可使用！\n======================================" }
+                ]
+              }
+            }
+          ],
+          "else": []
+        },
+        {
+          "kind": "VarDecl",
+          "name": "volume",
+          "value": { "kind": "Literal", "valueType": "Float", "value": 1.0 }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "audioCtx",
+          "value": { "kind": "Literal", "valueType": "String", "value": "" }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "gainNode",
+          "value": { "kind": "Literal", "valueType": "String", "value": "" }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "hudElement",
+          "value": { "kind": "Literal", "valueType": "String", "value": "" }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "hudTimeout",
+          "value": { "kind": "Literal", "valueType": "String", "value": "" }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "injectStyles",
+          "value": {
+            "kind": "Lambda",
+            "params": [],
+            "body": [
+              {
+                "kind": "VarDecl",
+                "name": "style",
+                "value": {
+                  "kind": "CallExpr",
+                  "callee": "document.createElement",
+                  "args": [
+                    { "kind": "Literal", "valueType": "String", "value": "style" }
+                  ]
+                }
+              },
+              {
+                "kind": "AssignStmt",
+                "target": {
+                  "kind": "MemberExpr",
+                  "object": { "kind": "Ident", "name": "style" },
+                  "field": "textContent"
+                },
+                "value": {
+                  "kind": "Literal",
+                  "valueType": "String",
+                  "value": "\n        .xql-volume-hud {\n            position: fixed;\n            top: 20px;\n            right: 20px;\n            background: rgba(30, 30, 46, 0.95);\n            backdrop-filter: blur(8px);\n            border: 1px solid rgba(137, 180, 250, 0.25);\n            border-radius: 12px;\n            padding: 10px 16px;\n            color: #cdd6f4;\n            font-family: 'Outfit', 'Inter', system-ui, sans-serif;\n            font-size: 14px;\n            font-weight: 600;\n            z-index: 2147483647;\n            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);\n            display: flex;\n            align-items: center;\n            gap: 10px;\n            opacity: 0;\n            transform: translateY(-20px) scale(0.95);\n            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);\n            pointer-events: none;\n        }\n        .xql-volume-hud.show {\n            opacity: 1;\n            transform: translateY(0) scale(1);\n        }\n        .xql-volume-progress-bg {\n            width: 100px;\n            height: 6px;\n            background: #313244;\n            border-radius: 3px;\n            overflow: hidden;\n        }\n        .xql-volume-progress-bar {\n            height: 100%;\n            background: linear-gradient(90deg, #89b4fa, #b4befe);\n            width: var(--vol-percent, 0%);\n            transition: width 0.1s ease;\n        }\n        .xql-volume-text {\n            min-width: 45px;\n            text-align: right;\n            color: #89b4fa;\n        }\n    "
+                }
+              },
+              {
+                "kind": "ExprStmt",
+                "expr": {
+                  "kind": "CallExpr",
+                  "callee": "document.head.appendChild",
+                  "args": [
+                    { "kind": "Ident", "name": "style" }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "createHUD",
+          "value": {
+            "kind": "Lambda",
+            "params": [],
+            "body": [
+              {
+                "kind": "AssignStmt",
+                "target": { "kind": "Ident", "name": "hudElement" },
+                "value": {
+                  "kind": "CallExpr",
+                  "callee": "document.createElement",
+                  "args": [
+                    { "kind": "Literal", "valueType": "String", "value": "div" }
+                  ]
+                }
+              },
+              {
+                "kind": "AssignStmt",
+                "target": {
+                  "kind": "MemberExpr",
+                  "object": { "kind": "Ident", "name": "hudElement" },
+                  "field": "className"
+                },
+                "value": { "kind": "Literal", "valueType": "String", "value": "xql-volume-hud" }
+              },
+              {
+                "kind": "AssignStmt",
+                "target": {
+                  "kind": "MemberExpr",
+                  "object": { "kind": "Ident", "name": "hudElement" },
+                  "field": "innerHTML"
+                },
+                "value": {
+                  "kind": "Literal",
+                  "valueType": "String",
+                  "value": "<span>🔊</span><div class=\"xql-volume-progress-bg\"><div class=\"xql-volume-progress-bar\" id=\"xql-vol-bar\"></div></div><span class=\"xql-volume-text\" id=\"xql-vol-text\">100%</span>"
+                }
+              },
+              {
+                "kind": "ExprStmt",
+                "expr": {
+                  "kind": "CallExpr",
+                  "callee": "document.body.appendChild",
+                  "args": [
+                    { "kind": "Ident", "name": "hudElement" }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "showBoosterUI",
+          "value": {
+            "kind": "Lambda",
+            "params": [
+              { "name": "vol" }
+            ],
+            "body": [
+              {
+                "kind": "IfStmt",
+                "cond": {
+                  "kind": "UnaryExpr",
+                  "op": "!",
+                  "operand": { "kind": "Ident", "name": "hudElement" }
+                },
+                "then": [
+                  {
+                    "kind": "ExprStmt",
+                    "expr": { "kind": "CallExpr", "callee": "createHUD", "args": [] }
+                  }
+                ],
+                "else": []
+              },
+              {
+                "kind": "VarDecl",
+                "name": "percent",
+                "value": {
+                  "kind": "CallExpr",
+                  "callee": "Math.round",
+                  "args": [
+                    {
+                      "kind": "BinaryExpr",
+                      "op": "*",
+                      "left": { "kind": "Ident", "name": "vol" },
+                      "right": { "kind": "Literal", "valueType": "Int", "value": 100 }
+                    }
+                  ]
+                }
+              },
+              {
+                "kind": "VarDecl",
+                "name": "bar",
+                "value": {
+                  "kind": "CallExpr",
+                  "callee": "document.getElementById",
+                  "args": [
+                    { "kind": "Literal", "valueType": "String", "value": "xql-vol-bar" }
+                  ]
+                }
+              },
+              {
+                "kind": "VarDecl",
+                "name": "text",
+                "value": {
+                  "kind": "CallExpr",
+                  "callee": "document.getElementById",
+                  "args": [
+                    { "kind": "Literal", "valueType": "String", "value": "xql-vol-text" }
+                  ]
+                }
+              },
+              {
+                "kind": "IfStmt",
+                "cond": { "kind": "Ident", "name": "bar" },
+                "then": [
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "bar.style.setProperty",
+                      "args": [
+                        { "kind": "Literal", "valueType": "String", "value": "--vol-percent" },
+                        {
+                          "kind": "BinaryExpr",
+                          "op": "+",
+                          "left": {
+                            "kind": "BinaryExpr",
+                            "op": "/",
+                            "left": {
+                              "kind": "BinaryExpr",
+                              "op": "-",
+                              "left": { "kind": "Ident", "name": "percent" },
+                              "right": { "kind": "Literal", "valueType": "Int", "value": 100 }
+                            },
+                            "right": { "kind": "Literal", "valueType": "Int", "value": 2 }
+                          },
+                          "right": { "kind": "Literal", "valueType": "String", "value": "%" }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "else": []
+              },
+              {
+                "kind": "IfStmt",
+                "cond": { "kind": "Ident", "name": "text" },
+                "then": [
+                  {
+                    "kind": "AssignStmt",
+                    "target": {
+                      "kind": "MemberExpr",
+                      "object": { "kind": "Ident", "name": "text" },
+                      "field": "textContent"
+                    },
+                    "value": {
+                      "kind": "BinaryExpr",
+                      "op": "+",
+                      "left": { "kind": "Ident", "name": "percent" },
+                      "right": { "kind": "Literal", "valueType": "String", "value": "%" }
+                    }
+                  }
+                ],
+                "else": []
+              },
+              {
+                "kind": "ExprStmt",
+                "expr": {
+                  "kind": "CallExpr",
+                  "callee": "hudElement.classList.add",
+                  "args": [
+                    { "kind": "Literal", "valueType": "String", "value": "show" }
+                  ]
+                }
+              },
+              {
+                "kind": "IfStmt",
+                "cond": { "kind": "Ident", "name": "hudTimeout" },
+                "then": [
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "clearTimeout",
+                      "args": [
+                        { "kind": "Ident", "name": "hudTimeout" }
+                      ]
+                    }
+                  }
+                ],
+                "else": []
+              },
+              {
+                "kind": "AssignStmt",
+                "target": { "kind": "Ident", "name": "hudTimeout" },
+                "value": {
+                  "kind": "CallExpr",
+                  "callee": "setTimeout",
+                  "args": [
+                    {
+                      "kind": "Lambda",
+                      "params": [],
+                      "body": [
+                        {
+                          "kind": "ExprStmt",
+                          "expr": {
+                            "kind": "CallExpr",
+                            "callee": "hudElement.classList.remove",
+                            "args": [
+                              { "kind": "Literal", "valueType": "String", "value": "show" }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    { "kind": "Literal", "valueType": "Int", "value": 1500 }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "initAudio",
+          "value": {
+            "kind": "Lambda",
+            "params": [],
+            "body": [
+              {
+                "kind": "IfStmt",
+                "cond": {
+                  "kind": "UnaryExpr",
+                  "op": "!",
+                  "operand": { "kind": "Ident", "name": "audioCtx" }
+                },
+                "then": [
+                  {
+                    "kind": "AssignStmt",
+                    "target": { "kind": "Ident", "name": "audioCtx" },
+                    "value": {
+                      "kind": "NewExpr",
+                      "callee": "window.AudioContext",
+                      "args": []
+                    }
+                  },
+                  {
+                    "kind": "AssignStmt",
+                    "target": { "kind": "Ident", "name": "gainNode" },
+                    "value": {
+                      "kind": "CallExpr",
+                      "callee": "audioCtx.createGain",
+                      "args": []
+                    }
+                  },
+                  {
+                    "kind": "AssignStmt",
+                    "target": {
+                      "kind": "MemberExpr",
+                      "object": {
+                        "kind": "MemberExpr",
+                        "object": { "kind": "Ident", "name": "gainNode" },
+                        "field": "gain"
+                      },
+                      "field": "value"
+                    },
+                    "value": { "kind": "Ident", "name": "volume" }
+                  },
+                  {
+                    "kind": "ExprStmt",
+                    "expr": {
+                      "kind": "CallExpr",
+                      "callee": "gainNode.connect",
+                      "args": [
+                        {
+                          "kind": "MemberExpr",
+                          "object": { "kind": "Ident", "name": "audioCtx" },
+                          "field": "destination"
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "connectMedia",
+          "value": {
+            "kind": "Lambda",
+            "params": [
+              { "name": "media" }
+            ],
+            "body": [
+              {
+                "kind": "IfStmt",
+                "cond": {
+                  "kind": "MemberExpr",
+                  "object": { "kind": "Ident", "name": "media" },
+                  "field": "dataset"
+                },
+                "then": [
+                  {
+                    "kind": "IfStmt",
+                    "cond": {
+                      "kind": "UnaryExpr",
+                      "op": "!",
+                      "operand": {
+                        "kind": "MemberExpr",
+                        "object": {
+                          "kind": "MemberExpr",
+                          "object": { "kind": "Ident", "name": "media" },
+                          "field": "dataset"
+                        },
+                        "field": "volumeBoosterConnected"
+                      }
+                    },
+                    "then": [
+                      {
+                        "kind": "VarDecl",
+                        "name": "source",
+                        "value": {
+                          "kind": "CallExpr",
+                          "callee": "audioCtx.createMediaElementSource",
+                          "args": [
+                            { "kind": "Ident", "name": "media" }
+                          ]
+                        }
+                      },
+                      {
+                        "kind": "ExprStmt",
+                        "expr": {
+                          "kind": "CallExpr",
+                          "callee": "source.connect",
+                          "args": [
+                            { "kind": "Ident", "name": "gainNode" }
+                          ]
+                        }
+                      },
+                      {
+                        "kind": "AssignStmt",
+                        "target": {
+                          "kind": "MemberExpr",
+                          "object": {
+                            "kind": "MemberExpr",
+                            "object": { "kind": "Ident", "name": "media" },
+                            "field": "dataset"
+                          },
+                          "field": "volumeBoosterConnected"
+                        },
+                        "value": { "kind": "Literal", "valueType": "String", "value": "true" }
+                      }
+                    ],
+                    "else": []
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "applyVolume",
+          "value": {
+            "kind": "Lambda",
+            "params": [],
+            "body": [
+              {
+                "kind": "ExprStmt",
+                "expr": { "kind": "CallExpr", "callee": "initAudio", "args": [] }
+              },
+              {
+                "kind": "AssignStmt",
+                "target": {
+                  "kind": "MemberExpr",
+                  "object": {
+                    "kind": "MemberExpr",
+                    "object": { "kind": "Ident", "name": "gainNode" },
+                    "field": "gain"
+                  },
+                  "field": "value"
+                },
+                "value": { "kind": "Ident", "name": "volume" }
+              },
+              {
+                "kind": "VarDecl",
+                "name": "mediaElements",
+                "value": {
+                  "kind": "CallExpr",
+                  "callee": "document.querySelectorAll",
+                  "args": [
+                    { "kind": "Literal", "valueType": "String", "value": "video, audio" }
+                  ]
+                }
+              },
+              {
+                "kind": "ExprStmt",
+                "expr": {
+                  "kind": "CallExpr",
+                  "callee": "mediaElements.forEach",
+                  "args": [
+                    { "kind": "Ident", "name": "connectMedia" }
+                  ]
+                }
+              },
+              {
+                "kind": "ExprStmt",
+                "expr": {
+                  "kind": "CallExpr",
+                  "callee": "showBoosterUI",
+                  "args": [
+                    { "kind": "Ident", "name": "volume" }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "adjustVolume",
+          "value": {
+            "kind": "Lambda",
+            "params": [
+              { "name": "key" }
+            ],
+            "body": [
+              {
+                "kind": "IfStmt",
+                "cond": {
+                  "kind": "BinaryExpr",
+                  "op": "===",
+                  "left": { "kind": "Ident", "name": "key" },
+                  "right": { "kind": "Literal", "valueType": "String", "value": "ArrowUp" }
+                },
+                "then": [
+                  {
+                    "kind": "AssignStmt",
+                    "target": { "kind": "Ident", "name": "volume" },
+                    "value": {
+                      "kind": "BinaryExpr",
+                      "op": "+",
+                      "left": { "kind": "Ident", "name": "volume" },
+                      "right": { "kind": "Literal", "valueType": "Float", "value": 0.1 }
+                    }
+                  },
+                  {
+                    "kind": "IfStmt",
+                    "cond": {
+                      "kind": "BinaryExpr",
+                      "op": ">",
+                      "left": { "kind": "Ident", "name": "volume" },
+                      "right": { "kind": "Literal", "valueType": "Float", "value": 3.0 }
+                    },
+                    "then": [
+                      {
+                        "kind": "AssignStmt",
+                        "target": { "kind": "Ident", "name": "volume" },
+                        "value": { "kind": "Literal", "valueType": "Float", "value": 3.0 }
+                      }
+                    ],
+                    "else": []
+                  }
+                ],
+                "else": [
+                  {
+                    "kind": "AssignStmt",
+                    "target": { "kind": "Ident", "name": "volume" },
+                    "value": {
+                      "kind": "BinaryExpr",
+                      "op": "-",
+                      "left": { "kind": "Ident", "name": "volume" },
+                      "right": { "kind": "Literal", "valueType": "Float", "value": 0.1 }
+                    }
+                  },
+                  {
+                    "kind": "IfStmt",
+                    "cond": {
+                      "kind": "BinaryExpr",
+                      "op": "<",
+                      "left": { "kind": "Ident", "name": "volume" },
+                      "right": { "kind": "Literal", "valueType": "Float", "value": 1.0 }
+                    },
+                    "then": [
+                      {
+                        "kind": "AssignStmt",
+                        "target": { "kind": "Ident", "name": "volume" },
+                        "value": { "kind": "Literal", "valueType": "Float", "value": 1.0 }
+                      }
+                    ],
+                    "else": []
+                  }
+                ]
+              },
+              {
+                "kind": "ExprStmt",
+                "expr": { "kind": "CallExpr", "callee": "applyVolume", "args": [] }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "handleKeydown",
+          "value": {
+            "kind": "Lambda",
+            "params": [
+              { "name": "event" }
+            ],
+            "body": [
+              {
+                "kind": "IfStmt",
+                "cond": {
+                  "kind": "MemberExpr",
+                  "object": { "kind": "Ident", "name": "event" },
+                  "field": "shiftKey"
+                },
+                "then": [
+                  {
+                    "kind": "IfStmt",
+                    "cond": {
+                      "kind": "BinaryExpr",
+                      "op": "===",
+                      "left": {
+                        "kind": "MemberExpr",
+                        "object": { "kind": "Ident", "name": "event" },
+                        "field": "key"
+                      },
+                      "right": { "kind": "Literal", "valueType": "String", "value": "ArrowUp" }
+                    },
+                    "then": [
+                      {
+                        "kind": "ExprStmt",
+                        "expr": {
+                          "kind": "CallExpr",
+                          "callee": "event.preventDefault",
+                          "args": []
+                        }
+                      },
+                      {
+                        "kind": "ExprStmt",
+                        "expr": {
+                          "kind": "CallExpr",
+                          "callee": "adjustVolume",
+                          "args": [
+                            { "kind": "Literal", "valueType": "String", "value": "ArrowUp" }
+                          ]
+                        }
+                      }
+                    ],
+                    "else": []
+                  },
+                  {
+                    "kind": "IfStmt",
+                    "cond": {
+                      "kind": "BinaryExpr",
+                      "op": "===",
+                      "left": {
+                        "kind": "MemberExpr",
+                        "object": { "kind": "Ident", "name": "event" },
+                        "field": "key"
+                      },
+                      "right": { "kind": "Literal", "valueType": "String", "value": "ArrowDown" }
+                    },
+                    "then": [
+                      {
+                        "kind": "ExprStmt",
+                        "expr": {
+                          "kind": "CallExpr",
+                          "callee": "event.preventDefault",
+                          "args": []
+                        }
+                      },
+                      {
+                        "kind": "ExprStmt",
+                        "expr": {
+                          "kind": "CallExpr",
+                          "callee": "adjustVolume",
+                          "args": [
+                            { "kind": "Literal", "valueType": "String", "value": "ArrowDown" }
+                          ]
+                        }
+                      }
+                    ],
+                    "else": []
+                  }
+                ],
+                "else": []
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": { "kind": "CallExpr", "callee": "injectStyles", "args": [] }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "document.addEventListener",
+            "args": [
+              { "kind": "Literal", "valueType": "String", "value": "keydown" },
+              { "kind": "Ident", "name": "handleKeydown" }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

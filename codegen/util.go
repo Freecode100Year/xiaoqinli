@@ -119,6 +119,7 @@ func scanMutables(stmts []ast.Node, muts map[string]bool) {
 			if ident, ok := n.Target.(*ast.Ident); ok {
 				muts[ident.Name] = true
 			}
+			scanExpr(n.Value, muts)
 		case *ast.IfStmt:
 			scanMutables(n.Then, muts)
 			scanMutables(n.Else, muts)
@@ -126,6 +127,41 @@ func scanMutables(stmts []ast.Node, muts map[string]bool) {
 			scanMutables(n.Body, muts)
 		case *ast.ForStmt:
 			scanMutables(n.Body, muts)
+		case *ast.VarDecl:
+			scanExpr(n.Value, muts)
+		case *ast.ExprStmt:
+			scanExpr(n.Expr, muts)
+		}
+	}
+}
+
+func scanExpr(expr ast.Node, muts map[string]bool) {
+	if expr == nil {
+		return
+	}
+	switch e := expr.(type) {
+	case *ast.Lambda:
+		scanMutables(e.Body, muts)
+	case *ast.CallExpr:
+		for _, arg := range e.Args {
+			scanExpr(arg, muts)
+		}
+	case *ast.BinaryExpr:
+		scanExpr(e.Left, muts)
+		scanExpr(e.Right, muts)
+	case *ast.UnaryExpr:
+		scanExpr(e.Operand, muts)
+	case *ast.NewExpr:
+		for _, arg := range e.Args {
+			scanExpr(arg, muts)
+		}
+	case *ast.IfExpr:
+		scanExpr(e.Cond, muts)
+		scanExpr(e.Then, muts)
+		scanExpr(e.Else, muts)
+	case *ast.ArrayLit:
+		for _, elem := range e.Elements {
+			scanExpr(elem, muts)
 		}
 	}
 }

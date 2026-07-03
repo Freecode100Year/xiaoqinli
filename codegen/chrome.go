@@ -506,6 +506,18 @@ func (g *chromeGen) emitExpr(n ast.Node) error {
 	case *ast.UnaryExpr:
 		g.write(node.Op)
 		return g.emitExpr(node.Operand)
+	case *ast.NewExpr:
+		g.write("new " + node.Callee + "(")
+		for i, arg := range node.Args {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(arg); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:

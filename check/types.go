@@ -369,6 +369,9 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 }
 
 func (tc *TypeChecker) checkBinaryOp(op string, leftT, rightT ast.TypeExpr) ast.TypeExpr {
+	if op == "==" || op == "!=" || op == "===" || op == "!==" || op == "<" || op == ">" || op == "<=" || op == ">=" {
+		return ast.TypeExpr{KindName: "Bool"}
+	}
 	l, r := leftT.KindName, rightT.KindName
 	if l == "" || r == "" {
 		if l != "" {

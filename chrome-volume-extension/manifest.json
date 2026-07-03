@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Xiaoqinli 极速音量放大器",
+  "version": "1.0",
+  "description": "通过 Shift + 键盘向上/向下键调节网页音量至 100% - 300%",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "permissions": [
+    "activeTab"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["popup.js"],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ]
+}
