@@ -106,6 +106,9 @@ func runRust(t *testing.T, path string) string {
 	cmd := exec.Command("rustc", path, "-o", bin)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if strings.Contains(string(out), "linker `link.exe` not found") {
+			t.Skip("rustc linker link.exe not found, skipping test")
+		}
 		t.Fatalf("rustc failed: %v\n%s", err, out)
 	}
 
