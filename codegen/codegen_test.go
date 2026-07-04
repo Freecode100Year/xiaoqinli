@@ -1666,6 +1666,31 @@ func TestCollectMutables(t *testing.T) {
 	}
 }
 
+func TestCollectMutablesClosure(t *testing.T) {
+	stmts := []ast.Node{
+		&ast.VarDecl{Name: "y"},
+		&ast.VarDecl{
+			Name: "lam",
+			Value: &ast.Lambda{
+				Params: []ast.Param{},
+				Body: []ast.Node{
+					&ast.VarDecl{Name: "x"},
+					&ast.AssignStmt{Target: &ast.Ident{Name: "x"}, Value: &ast.Literal{ValueType: "Int", Value: float64(2)}},
+					&ast.AssignStmt{Target: &ast.Ident{Name: "y"}, Value: &ast.Literal{ValueType: "Int", Value: float64(99)}},
+				},
+			},
+		},
+	}
+
+	muts := collectMutables(stmts)
+	if !muts["y"] {
+		t.Error("y should be mutable (assigned inside closure)")
+	}
+	if muts["x"] {
+		t.Error("x should not be mutable globally (it is a local variable inside the lambda)")
+	}
+}
+
 // --- C codegen ---
 
 func TestGenerateC(t *testing.T) {

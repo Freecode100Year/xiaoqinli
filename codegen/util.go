@@ -108,62 +108,87 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 // Used by languages with immutable-by-default bindings (Rust, TS, Kotlin, Swift).
 func collectMutables(stmts []ast.Node) map[string]bool {
 	muts := make(map[string]bool)
-	scanMutables(stmts, muts)
+	scanMutables(stmts, muts, nil)
 	return muts
 }
 
-func scanMutables(stmts []ast.Node, muts map[string]bool) {
+func scanMutables(stmts []ast.Node, muts map[string]bool, localVars map[string]bool) {
 	for _, s := range stmts {
 		switch n := s.(type) {
 		case *ast.AssignStmt:
 			if ident, ok := n.Target.(*ast.Ident); ok {
-				muts[ident.Name] = true
+				if localVars == nil || !localVars[ident.Name] {
+					muts[ident.Name] = true
+				}
 			}
-			scanExpr(n.Value, muts)
+			scanExpr(n.Value, muts, localVars)
 		case *ast.IfStmt:
-			scanMutables(n.Then, muts)
-			scanMutables(n.Else, muts)
+			scanMutables(n.Then, muts, localVars)
+			scanMutables(n.Else, muts, localVars)
 		case *ast.WhileStmt:
-			scanMutables(n.Body, muts)
+			scanMutables(n.Body, muts, localVars)
 		case *ast.ForStmt:
-			scanMutables(n.Body, muts)
+			if localVars != nil {
+				forLocals := forkLocalVars(localVars)
+				if n.Var != "" {
+					forLocals[n.Var] = true
+				}
+				scanMutables(n.Body, muts, forLocals)
+			} else {
+				scanMutables(n.Body, muts, nil)
+			}
 		case *ast.VarDecl:
-			scanExpr(n.Value, muts)
+			if localVars != nil {
+				localVars[n.Name] = true
+			}
+			scanExpr(n.Value, muts, localVars)
 		case *ast.ExprStmt:
-			scanExpr(n.Expr, muts)
+			scanExpr(n.Expr, muts, localVars)
 		}
 	}
 }
 
-func scanExpr(expr ast.Node, muts map[string]bool) {
+func scanExpr(expr ast.Node, muts map[string]bool, localVars map[string]bool) {
 	if expr == nil {
 		return
 	}
 	switch e := expr.(type) {
 	case *ast.Lambda:
-		scanMutables(e.Body, muts)
+		lambdaLocals := make(map[string]bool)
+		for _, p := range e.Params {
+			lambdaLocals[p.Name] = true
+		}
+		scanMutables(e.Body, muts, lambdaLocals)
 	case *ast.CallExpr:
 		for _, arg := range e.Args {
-			scanExpr(arg, muts)
+			scanExpr(arg, muts, localVars)
 		}
 	case *ast.BinaryExpr:
-		scanExpr(e.Left, muts)
-		scanExpr(e.Right, muts)
+		scanExpr(e.Left, muts, localVars)
+		scanExpr(e.Right, muts, localVars)
 	case *ast.UnaryExpr:
-		scanExpr(e.Operand, muts)
+		scanExpr(e.Operand, muts, localVars)
 	case *ast.NewExpr:
 		for _, arg := range e.Args {
-			scanExpr(arg, muts)
+			scanExpr(arg, muts, localVars)
 		}
 	case *ast.IfExpr:
-		scanExpr(e.Cond, muts)
-		scanExpr(e.Then, muts)
-		scanExpr(e.Else, muts)
+		scanExpr(e.Cond, muts, localVars)
+		scanExpr(e.Then, muts, localVars)
+		scanExpr(e.Else, muts, localVars)
 	case *ast.ArrayLit:
 		for _, elem := range e.Elements {
-			scanExpr(elem, muts)
+			scanExpr(elem, muts, localVars)
 		}
 	}
+}
+
+func forkLocalVars(parent map[string]bool) map[string]bool {
+	child := make(map[string]bool, len(parent))
+	for k, v := range parent {
+		child[k] = v
+	}
+	return child
 }
 
 // unsupportedResultTargets lists targets that silently map Result<T> to just T,

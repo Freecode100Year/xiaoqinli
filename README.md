@@ -12,6 +12,7 @@
 - **闭包静态校验强化（Lambda 闭包类型分析）**：在类型推断系统（`check/types.go`）中实现了对 `Lambda` 节点内部 Body 语句的自动类型推导和静态检验。引入了动态追踪 currentReturn 和 currentFunc 的上下文管理机制，完美兼容多层嵌套闭包的 Return 类型一致性校验。
 
 ### 🐛 修复问题
+- **闭包作用域可变性污染与过度 let 声明修复**：修复了代码生成器变量可变性提取器（`codegen/util.go` 里的 `scanMutables`）中的逻辑缺陷。通过引入最外层与闭包作用域局部变量（`localVars`）的精准隔离，防止闭包内部局部的重新赋值行为意外向上传播污染外层同名变量的可变性声明（例如导致在 JS/TS 中用 `const` 代替错误的 `let` ）。
 - **Capability 校验闭包及表达式漏检缺陷**：在 `check/capability.go` 中，补全了 `checkCapExpr` 缺失的 `Lambda`、`NewExpr`、`AwaitExpr`、`IfExpr` 和 `MatchExpr` 表达式的校验逻辑。现闭包内部的函数调用均能正确穿透并验证对所需 Capability 的继承限制，彻底消除了越权调用漏洞。
 
 ---
