@@ -159,5 +159,26 @@ func checkCapExpr(n ast.Node, callerName string, callerCap Capability, funcGrant
 	case *ast.IndexExpr:
 		checkCapExpr(node.Target, callerName, callerCap, funcGrants, errs)
 		checkCapExpr(node.Index, callerName, callerCap, funcGrants, errs)
+	case *ast.NewExpr:
+		for _, arg := range node.Args {
+			checkCapExpr(arg, callerName, callerCap, funcGrants, errs)
+		}
+	case *ast.AwaitExpr:
+		checkCapExpr(node.Expr, callerName, callerCap, funcGrants, errs)
+	case *ast.IfExpr:
+		checkCapExpr(node.Cond, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Then, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Else, callerName, callerCap, funcGrants, errs)
+	case *ast.MatchExpr:
+		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs)
+		for _, arm := range node.Arms {
+			for _, s := range arm.Body {
+				checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+			}
+		}
+	case *ast.Lambda:
+		for _, s := range node.Body {
+			checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+		}
 	}
 }

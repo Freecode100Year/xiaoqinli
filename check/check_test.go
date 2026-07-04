@@ -561,3 +561,85 @@ func TestRunAllPass(t *testing.T) {
 		t.Errorf("expected all checks pass, got: %v", err)
 	}
 }
+
+func TestLambdaTypeCheckMismatch(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "f",
+			"params": [],
+			"returnType": {"kind": "Void"},
+			"effects": [],
+			"grant": [],
+			"body": [{
+				"kind": "ExprStmt",
+				"expr": {
+					"kind": "Lambda",
+					"params": [{"name": "x", "type": {"kind": "Int"}}],
+					"returnType": {"kind": "Int"},
+					"body": [{
+						"kind": "ReturnStmt",
+						"value": {"kind": "Literal", "valueType": "String", "value": "not an int"}
+					}]
+				}
+			}]
+		}]
+	}`
+
+	root := mustParse(t, src)
+	tc := NewTypeChecker()
+	err := tc.Check(root)
+	if err == nil {
+		t.Fatal("expected type error inside lambda")
+	}
+	if !strings.Contains(err.Error(), "return type mismatch") {
+		t.Errorf("expected return type mismatch inside lambda, got: %v", err)
+	}
+}
+
+func TestLambdaCapabilityCheckFail(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [
+			{
+				"kind": "FunctionDecl",
+				"name": "dangerous",
+				"params": [],
+				"returnType": {"kind": "Void"},
+				"effects": [],
+				"grant": ["network"],
+				"body": []
+			},
+			{
+				"kind": "FunctionDecl",
+				"name": "caller",
+				"params": [],
+				"returnType": {"kind": "Void"},
+				"effects": [],
+				"grant": [],
+				"body": [{
+					"kind": "ExprStmt",
+					"expr": {
+						"kind": "Lambda",
+						"params": [],
+						"returnType": {"kind": "Void"},
+						"body": [{
+							"kind": "ExprStmt",
+							"expr": {"kind": "CallExpr", "callee": "dangerous", "args": []}
+						}]
+					}
+				}]
+			}
+		]
+	}`
+
+	root := mustParse(t, src)
+	err := CheckCapabilities(root)
+	if err == nil {
+		t.Fatal("expected capability error inside lambda")
+	}
+	if !strings.Contains(err.Error(), "lacks required capabilities") {
+		t.Errorf("expected capability error, got: %v", err)
+	}
+}

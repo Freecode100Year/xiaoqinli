@@ -6,6 +6,16 @@
 
 ---
 
+## 📢 最新更新与 Bug 修复 (2026-07-03)
+
+### 🆕 新增功能
+- **闭包静态校验强化（Lambda 闭包类型分析）**：在类型推断系统（`check/types.go`）中实现了对 `Lambda` 节点内部 Body 语句的自动类型推导和静态检验。引入了动态追踪 currentReturn 和 currentFunc 的上下文管理机制，完美兼容多层嵌套闭包的 Return 类型一致性校验。
+
+### 🐛 修复问题
+- **Capability 校验闭包及表达式漏检缺陷**：在 `check/capability.go` 中，补全了 `checkCapExpr` 缺失的 `Lambda`、`NewExpr`、`AwaitExpr`、`IfExpr` 和 `MatchExpr` 表达式的校验逻辑。现闭包内部的函数调用均能正确穿透并验证对所需 Capability 的继承限制，彻底消除了越权调用漏洞。
+
+---
+
 ## 📢 最新更新与 Bug 修复 (2026-07-02)
 
 ### 🆕 新增功能

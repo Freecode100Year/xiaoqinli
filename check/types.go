@@ -28,10 +28,12 @@ var builtinFuncs = map[string]struct {
 
 // TypeChecker performs static type checking on a typed AST.
 type TypeChecker struct {
-	funcTable   map[string]*ast.FunctionDecl
-	structTable map[string]*ast.StructDecl
-	enumTable   map[string]*ast.EnumDecl
-	errors      []string
+	funcTable     map[string]*ast.FunctionDecl
+	structTable   map[string]*ast.StructDecl
+	enumTable     map[string]*ast.EnumDecl
+	errors        []string
+	currentReturn ast.TypeExpr
+	currentFunc   *ast.FunctionDecl
 }
 
 // NewTypeChecker creates a new TypeChecker.
@@ -98,6 +100,14 @@ func (tc *TypeChecker) checkFunctionDecl(fd *ast.FunctionDecl) {
 		scope[p.Name] = p.Type
 	}
 
+	oldReturn := tc.currentReturn
+	tc.currentReturn = fd.ReturnType
+	defer func() { tc.currentReturn = oldReturn }()
+
+	oldFunc := tc.currentFunc
+	tc.currentFunc = fd
+	defer func() { tc.currentFunc = oldFunc }()
+
 	for _, stmt := range fd.Body {
 		tc.checkStmt(stmt, fd, scope)
 	}
@@ -116,7 +126,7 @@ func (tc *TypeChecker) checkStmt(n ast.Node, fn *ast.FunctionDecl, scope map[str
 	case *ast.ReturnStmt:
 		if node.Value != nil {
 			exprType := tc.inferType(node.Value, scope)
-			expected := fn.ReturnType.KindName
+			expected := tc.currentReturn.KindName
 			if expected != "" && expected != "Void" && exprType.KindName != "" && exprType.KindName != expected {
 				tc.addError(fmt.Sprintf(
 					"function '%s': return type mismatch, expected %s but got %s",
@@ -362,6 +372,17 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 		}
 		return elseType
 	case *ast.Lambda:
+		lambdaScope := forkScope(scope)
+		for _, p := range node.Params {
+			lambdaScope[p.Name] = p.Type
+		}
+		oldReturn := tc.currentReturn
+		tc.currentReturn = node.ReturnType
+		defer func() { tc.currentReturn = oldReturn }()
+
+		for _, s := range node.Body {
+			tc.checkStmt(s, tc.currentFunc, lambdaScope)
+		}
 		return none
 	default:
 		return none
