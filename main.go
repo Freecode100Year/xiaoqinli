@@ -12,7 +12,7 @@ import (
 	"xiaoqinli/server"
 )
 
-const Version = "3.2.0"
+const Version = "3.2.1"
 
 var allTargets = []string{
 	"go", "rust", "ts", "kotlin", "swift", "py",

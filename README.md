@@ -1,4 +1,4 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.2.0
+# Xiaoqinli (xql) 极简安全转译器 v3.2.1
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
@@ -8,7 +8,11 @@
 
 ## 📢 最新更新与 Bug 修复 (2026-07-04)
 
+### 🆕 新增功能
+- **项目主版本升级为 v3.2.1**：同步将主程序与文档版本更新至 3.2.1，确保版本统一。
+
 ### 🐛 修复问题
+- **示例代码兼容性校验与修复**：修复了 [examples/chrome_volume.xql.json](file:///C:/Users/sj929/xiaoqinli/examples/chrome_volume.xql.json) 示例因直接对 `String` 变量（或外部 API 的未定义类型）进行一元 `!` 运算和直接用作 `IfStmt` 的 condition 条件判断而导致 `XQL_E201` 静态校验失败的问题。现已全面补齐显式 `===` 和 `!==` 条件判断，使其完全通过编译期的静态类型安全流水线。
 - **Windows环境Rust编译测试链接器缺失报错修复**：修复了在 Windows 宿主机运行 `go test ./...` 时，如果系统未安装 MSVC 链接器 `link.exe`，会导致 Rust 目标代码转译回归测试（`TestRoundTrip/roundtrip_rust`）因无法链接而报错失败的问题。现已添加条件判断，在找不到 `link.exe` 链接器时自动跳过（Skip）该 Rust 编译测试，保证了整体测试套件在不完整编译链下的稳健性。
 
 ---
@@ -51,7 +55,7 @@
 ## 📢 最新更新与 Bug 修复 (2026-06-30)
 
 ### 🆕 新增功能
-- **Token 状态输出规范化**：在全局和项目规则中新增条款，要求每次任务完成、暂停或停止时，在回复的最后一句话显示当前 Token 消耗百分比及下一次 Token 重置的倒计时。
+- **Token 状态输出规范化**：在全局和项目规则中新增条款，要求每次任务完成、暂停或停止时，在回复的最后一句话显示当前 Token 消耗百分比及下一次 Token 重置的倒计时。*注：此规范属于宿主 AI Agent 交互的外部约束规范，并非 Xiaoqinli 核心编译器运行时的功能，核心编译器依然保持 100% 离线、静态和确定性。*
 - **前端全栈准则防灾级更新**：在《Antigravity CLI 前端全栈项目语义蓝图与编程准则》中增补了“10秒本地影子闪存与突发灾难自愈”条款，确立了 10 秒周期静默暂存（`.xql/.shadow_stage/`）、网络异常指数退避续传、以及突发断电/强退后的开机影子重组与 AI 记忆对齐召回。
 - **Chrome 网络诊断插件示例**：新增了 `examples/chrome_network.xql.json` 示例程序，利用 XQL 语言成功编译出一个 Chrome 扩展程序（Manifest V3，位于 `chrome-net-extension/` 目录下），实现了显示当前活动标签页的标题与 URL，物理联网类型与网络传输状态，并结合 Cloudflare DoH 异步解析 DNS（A记录）以测算真实延迟耗时。
 - **前端全栈准则规范化**：增补了《Antigravity CLI 前端全栈项目语义蓝图与编程准则》，确立了 HTML/JS/CSS 在 YOLO 模式下的权限熔断、基于 Tree-sitter 的骨架提取压缩规范、前端双层审计静态拦截红线（内联样式与 ESLint 检验）、UI 状态锁定，以及 3-track 时空同步回撤机制。
@@ -161,7 +165,7 @@ go build -o xql .
 
 1. **类型检查 (Type Check)**：验证变量、函数签名、返回值、操作符兼容性、数组及结构体字段类型等。
 2. **效果推断 (Effect Inference)**：自动推断并传播副作用（`network`/`filesystem`/`state`）。若纯函数声明为 `@effects(["pure"])` 但被检测到副作用，则编译失败。
-3. **能力安全验证 (Capability Check)**：基于 `@grant` 机制。被调用函数所需的能力集必须是调用函数声明能力的**子集**（能力继承），防止越权调用。
+3. **能力安全验证 (Capability Check)**：基于 `@grant` 机制。被调用函数所需的能力集必须是调用函数声明能力的**子集**（能力继承），防止越权调用。**校验范围目前已全面递归穿透至表达式层级**（包括 `Lambda` 闭包体、`NewExpr` 实例创建、`AwaitExpr`、`IfExpr`、`MatchExpr` 等），确保无越权调用盲区。
 
 ---
 
@@ -208,7 +212,7 @@ Xiaoqinli 提供了三种灵活的交互方式：
     2. **补丁上限**：单次会话最多允许写入 **20** 个物理补丁，超时熔断。
     3. **错误逃生机制**：允许 1 次携带 hint 的自然语言容错，超过限制强制断开。
     4. **物理沙盒根目录锁死**：完全锁定在工作区物理路径下，防止越权访问。
-*   **低延迟潜空间执行者 (local_patcher)**：在本地显卡上驻留的轻量智能体监控文件变更、拦截大于 64KB 的语法树，执行 LRU 滚动截断机制，实现秒级物理补丁应用与编译器测试。
+*   **低延迟潜空间执行者 (local_patcher)**：在本地显卡上驻留的轻量智能体监控文件变更、拦截大于 64KB 的语法树，执行 LRU 滚动截断机制，实现秒级物理补丁应用与编译器测试。*关于 `local_patcher` 的显存/内存上限与 LRU 滚动大小调优，请参考宿主机 [AGY_RULES.md](file:///C:/Users/sj929/xiaoqinli/AGY_RULES.md) 及 `~/.agy/skills/xql_cloud.skill` 配置文件。*
 
 ---
 
@@ -220,7 +224,11 @@ Xiaoqinli 提供了三种灵活的交互方式：
 
 *   **彻底解决 Tree-sitter 环境地基污染**：Tree-sitter 在解析多语言源码骨架时，需要在不同平台上编译对应的 Parser 二进制库（如 `.so`, `.dll`, `.wasm`）。Docker 镜像中预装了完整的 C++ 编译环境、各类语言的编译依赖以及 Linter（ESLint, Stylelint, Ruff 等），实现开箱即用的多语言逆向解析与静态审计。
 *   **YOLO 模式的绝对安全防火墙**：在开启 `--dangerously-skip-permissions` YOLO 全自动驾驶模式时，将本地 MCP 服务器完全隔离在 Docker 容器内部。容器仅通过数据卷（Volume）映射当前开发的项目目录，物理拦截任何由于 AI 幻觉引发的穿透宿主机、改动全局系统文件的高危破坏性行为。
+    > [!WARNING]
+    > **⚠️ 安全警示：** 开启 `--dangerously-skip-permissions` 将会完全绕过 4 道安全铁锁（白名单限制、20次补丁上限、错误规避通道、容器内沙箱目录限制）。除非是在 100% 可信的本地区域或隔离开发环境，否则**严禁**在生产环境或暴露于公网的容器外开放此模式。
 *   **10 秒内存影子闪存（tmpfs 硬件降噪）**：在容器内，高频的 10 秒无感暂存（`.xql/.shadow_stage/`）直接挂载至内存文件系统（`tmpfs`）运行。完全避免了在宿主机物理固态硬盘上频繁读写产生的磁盘碎片和 I/O 资源占用，实现零延迟、零硬盘损耗。
+    > [!NOTE]
+    > **💡 影子闪存持久化提示：** `tmpfs` 内存卷是临时（ephemeral）的。若容器重启，影子闪存中的历史暂存数据会完全丢失。若您需要持久化的灾难恢复（Disaster Recovery），建议将 `.xql/.shadow_stage` 挂载至宿主机的物理存储卷（Named Volume）而非 `tmpfs`。
 
 ### 快速部署 🚀
 
@@ -257,7 +265,7 @@ Xiaoqinli 提供了三种灵活的交互方式：
 
 ```
 xiaoqinli/
-  main.go                    # 命令行入口及版本管理 (v3.2.0)
+  main.go                    # 命令行入口及版本管理 (v3.2.1)
   ast/
     nodes.go                 # 24 种 AST 节点定义及 JSON 解析器
     hash.go                  # 节点内容寻址哈希 (CAS)

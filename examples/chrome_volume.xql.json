@@ -169,9 +169,10 @@
               {
                 "kind": "IfStmt",
                 "cond": {
-                  "kind": "UnaryExpr",
-                  "op": "!",
-                  "operand": { "kind": "Ident", "name": "hudElement" }
+                  "kind": "BinaryExpr",
+                  "op": "===",
+                  "left": { "kind": "Ident", "name": "hudElement" },
+                  "right": { "kind": "Literal", "valueType": "String", "value": "" }
                 },
                 "then": [
                   {
@@ -221,7 +222,12 @@
               },
               {
                 "kind": "IfStmt",
-                "cond": { "kind": "Ident", "name": "bar" },
+                "cond": {
+                  "kind": "BinaryExpr",
+                  "op": "!==",
+                  "left": { "kind": "Ident", "name": "bar" },
+                  "right": { "kind": "Literal", "valueType": "String", "value": "" }
+                },
                 "then": [
                   {
                     "kind": "ExprStmt",
@@ -254,7 +260,12 @@
               },
               {
                 "kind": "IfStmt",
-                "cond": { "kind": "Ident", "name": "text" },
+                "cond": {
+                  "kind": "BinaryExpr",
+                  "op": "!==",
+                  "left": { "kind": "Ident", "name": "text" },
+                  "right": { "kind": "Literal", "valueType": "String", "value": "" }
+                },
                 "then": [
                   {
                     "kind": "AssignStmt",
@@ -285,7 +296,12 @@
               },
               {
                 "kind": "IfStmt",
-                "cond": { "kind": "Ident", "name": "hudTimeout" },
+                "cond": {
+                  "kind": "BinaryExpr",
+                  "op": "!==",
+                  "left": { "kind": "Ident", "name": "hudTimeout" },
+                  "right": { "kind": "Literal", "valueType": "String", "value": "" }
+                },
                 "then": [
                   {
                     "kind": "ExprStmt",
@@ -340,9 +356,10 @@
               {
                 "kind": "IfStmt",
                 "cond": {
-                  "kind": "UnaryExpr",
-                  "op": "!",
-                  "operand": { "kind": "Ident", "name": "audioCtx" }
+                  "kind": "BinaryExpr",
+                  "op": "===",
+                  "left": { "kind": "Ident", "name": "audioCtx" },
+                  "right": { "kind": "Literal", "valueType": "String", "value": "" }
                 },
                 "then": [
                   {
@@ -416,9 +433,9 @@
                   {
                     "kind": "IfStmt",
                     "cond": {
-                      "kind": "UnaryExpr",
-                      "op": "!",
-                      "operand": {
+                      "kind": "BinaryExpr",
+                      "op": "!==",
+                      "left": {
                         "kind": "MemberExpr",
                         "object": {
                           "kind": "MemberExpr",
@@ -426,7 +443,8 @@
                           "field": "dataset"
                         },
                         "field": "volumeBoosterConnected"
-                      }
+                      },
+                      "right": { "kind": "Literal", "valueType": "String", "value": "true" }
                     },
                     "then": [
                       {
