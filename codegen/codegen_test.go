@@ -1120,7 +1120,7 @@ func TestStructCodegenAll(t *testing.T) {
 		{"kotlin", []string{"data class Point", "val x: Long", "Point(x ="}},
 		{"swift", []string{"struct Point", "var x: Int", "Point(x:"}},
 		{"py", []string{"@dataclass", "class Point", "x: int", "Point(x="}},
-		{"java", []string{"record Point", "long x", "new Point("}},
+		{"java", []string{"class Point", "long x", "new Point("}},
 		{"csharp", []string{"record Point", "long x", "new Point("}},
 		{"dart", []string{"class Point", "final int x", "Point(x:"}},
 		{"lua", []string{"x = 3"}},
@@ -1217,7 +1217,7 @@ func TestResultTypeRejection(t *testing.T) {
 	root := mustParse(t, src)
 
 	// These targets should reject Result
-	rejectTargets := []string{"ts", "dart", "nim", "julia", "lua", "ruby"}
+	rejectTargets := []string{"dart", "nim", "julia", "lua", "ruby"}
 	for _, tgt := range rejectTargets {
 		_, err := Generate(root, tgt)
 		if err == nil {
@@ -1228,7 +1228,7 @@ func TestResultTypeRejection(t *testing.T) {
 	}
 
 	// These targets should accept Result
-	acceptTargets := []string{"go", "rust", "kotlin", "swift", "py", "java", "csharp", "php", "zig"}
+	acceptTargets := []string{"go", "rust", "kotlin", "swift", "py", "java", "csharp", "php", "zig", "ts"}
 	for _, tgt := range acceptTargets {
 		_, err := Generate(root, tgt)
 		if err != nil {
@@ -2206,5 +2206,108 @@ func TestGenerateChromeHelpers(t *testing.T) {
 		if !strings.Contains(code, c) {
 			t.Errorf("Chrome helpers missing %q\n---\n%s", c, code)
 		}
+	}
+}
+
+func TestGenerateImportDecl(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [
+			{
+				"kind": "ImportDecl",
+				"path": "./utils.xql",
+				"as": "utils"
+			},
+			{
+				"kind": "FunctionDecl",
+				"name": "main",
+				"params": [],
+				"returnType": {"kind": "Void"},
+				"effects": [],
+				"grant": [],
+				"body": [
+					{
+						"kind": "VarDecl",
+						"name": "p",
+						"type": {"kind": "utils.Point"},
+						"value": null
+					},
+					{
+						"kind": "ExprStmt",
+						"expr": {
+							"kind": "CallExpr",
+							"callee": "utils.netCall",
+							"args": []
+						}
+					}
+				]
+			}
+		]
+	}`
+
+	root := mustParse(t, src)
+
+	// Go Target Check
+	goOut, err := Generate(root, "go")
+	if err != nil {
+		t.Fatalf("Generate go failed: %v", err)
+	}
+	goCode := string(goOut)
+	if strings.Contains(goCode, "import") {
+		t.Errorf("expected Go code to not contain import, got: %s", goCode)
+	}
+	if !strings.Contains(goCode, "var p Point") {
+		t.Errorf("expected var p Point in Go, got: %s", goCode)
+	}
+	if !strings.Contains(goCode, "netCall()") {
+		t.Errorf("expected netCall() in Go, got: %s", goCode)
+	}
+
+	// TypeScript Target Check
+	tsOut, err := Generate(root, "ts")
+	if err != nil {
+		t.Fatalf("Generate ts failed: %v", err)
+	}
+	tsCode := string(tsOut)
+	if !strings.Contains(tsCode, `import * as utils from "./utils";`) {
+		t.Errorf("expected import statement in TS, got: %s", tsCode)
+	}
+	if !strings.Contains(tsCode, "p: utils.Point") {
+		t.Errorf("expected p: utils.Point in TS, got: %s", tsCode)
+	}
+	if !strings.Contains(tsCode, "utils.netCall()") {
+		t.Errorf("expected utils.netCall() in TS, got: %s", tsCode)
+	}
+
+	// Python Target Check
+	pyOut, err := Generate(root, "py")
+	if err != nil {
+		t.Fatalf("Generate py failed: %v", err)
+	}
+	pyCode := string(pyOut)
+	if !strings.Contains(pyCode, "import utils as utils") {
+		t.Errorf("expected import utils in Python, got: %s", pyCode)
+	}
+	if !strings.Contains(pyCode, "p: utils.Point") {
+		t.Errorf("expected p: utils.Point in Python, got: %s", pyCode)
+	}
+	if !strings.Contains(pyCode, "utils.netCall()") {
+		t.Errorf("expected utils.netCall() in Python, got: %s", pyCode)
+	}
+
+	// Rust Target Check
+	rsOut, err := Generate(root, "rust")
+	if err != nil {
+		t.Fatalf("Generate rust failed: %v", err)
+	}
+	rsCode := string(rsOut)
+	if !strings.Contains(rsCode, "mod utils;") {
+		t.Errorf("expected mod utils in Rust, got: %s", rsCode)
+	}
+	if !strings.Contains(rsCode, "let p: utils::Point") {
+		t.Errorf("expected let p: utils::Point in Rust, got: %s", rsCode)
+	}
+	if !strings.Contains(rsCode, "utils::netCall()") {
+		t.Errorf("expected utils::netCall() in Rust, got: %s", rsCode)
 	}
 }

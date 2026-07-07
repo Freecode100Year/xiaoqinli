@@ -315,15 +315,15 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCResponse {
 	root, err := ast.Parse([]byte(source))
 	if err != nil {
-		return toolErrorResult(id, err.Error())
+		return toolErrorResult(id, err)
 	}
 	if err := check.RunAll(root); err != nil {
-		return toolErrorResult(id, err.Error())
+		return toolErrorResult(id, err)
 	}
 
 	output, err := codegen.Generate(root, target)
 	if err != nil {
-		return toolErrorResult(id, err.Error())
+		return toolErrorResult(id, err)
 	}
 
 	return jsonRPCResponse{
@@ -340,10 +340,10 @@ func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCRe
 func (s *MCPServer) toolValidate(id interface{}, source string) jsonRPCResponse {
 	root, err := ast.Parse([]byte(source))
 	if err != nil {
-		return toolErrorResult(id, err.Error())
+		return toolErrorResult(id, err)
 	}
 	if err := check.RunAll(root); err != nil {
-		return toolErrorResult(id, err.Error())
+		return toolErrorResult(id, err)
 	}
 	return jsonRPCResponse{
 		JSONRPC: "2.0",
@@ -420,15 +420,29 @@ func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
 	}
 }
 
-func toolErrorResult(id interface{}, msg string) jsonRPCResponse {
+func toolErrorResult(id interface{}, err error) jsonRPCResponse {
+	var diagnostics []check.Diagnostic
+	if we, ok := err.(check.WorkspaceError); ok {
+		diagnostics = we.Diagnostics
+	}
+
+	res := map[string]interface{}{
+		"isError": true,
+		"content": []map[string]interface{}{
+			{
+				"type": "text",
+				"text": err.Error(),
+			},
+		},
+	}
+
+	if len(diagnostics) > 0 {
+		res["diagnostics"] = diagnostics
+	}
+
 	return jsonRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
-		Result: map[string]interface{}{
-			"isError": true,
-			"content": []map[string]string{
-				{"type": "text", "text": msg},
-			},
-		},
+		Result:  res,
 	}
 }

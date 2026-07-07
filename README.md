@@ -1,8 +1,95 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.2.1
+# Xiaoqinli (xql) 极简安全转译器 v3.7.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-07 - 阶段七首战告捷)
+
+### 🆕 新增功能 - 阶段七：补齐 11 个非主力后端 (首战 Java 物理打通)
+- **项目主版本升级为 v3.7.0**：标志着非主力后端补齐工作正式打响，首发完美物理跑通 Java 后端！
+- **Java 后端物理编译运行 100% 绿灯**：
+  - 在 `eclipse-temurin:17-alpine` 物理编译器环境下打通了包含 3 个互相依赖的 Java 多文件项目物理编译及执行，输出完全符合断言。
+  - **纠正 record 与 XQL 属性访问规范冲突**：将原有的 `record` 翻译重构为更加贴合 XQL 字段直接读取语义的 `public static class` 结构体，配备全参构造函数。
+  - **实现跨文件命名空间与泛型 Result 兼容**：自动在非主模块文件中将 Result 包装类重映射为 `Main.Result`，成功通过 Java 静态类型强校验。
+  - **沉淀通用模块别名表工具 (CollectImports)**：从 Java 别名大小写纠正机制中，将别名提取过滤逻辑提炼成了跨后端通用的 [codegen/util.go](file:///C:/Users/sj929/xiaoqinli/codegen/util.go#L450) 中的 `CollectImports` 函数，为接下来的 C# 等语言打下了通用复用基石。
+- **确立 Docker 物理测试高隔离自愈测试框架**：
+  - 采用 `//go:build docker_e2e` 将 11 个后端的物理测试与日常 `go test` 完全隔离（不拖慢开发速度）。
+  - 在 [codegen/docker_e2e_test.go](file:///C:/Users/sj929/xiaoqinli/codegen/docker_e2e_test.go#L13-L24) 中实现了自动判定 Docker 状态并优雅 Skip 的安全自愈机制，杜绝环境挂起。
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-07 - 阶段六成果)
+
+### 🆕 新增功能 - 阶段六：主力后端物理编译运行与多文件 E2E 狗粮测试
+- **项目主版本升级为 v3.6.0**：标志着 xiaoqinli 成功落地第六阶段（端到端集成测试），并在真实物理工具链上编译运行四大主力后端，彻底消灭隐藏裂缝！
+- **主力后端 100% 物理编译运行（Go, Python, Rust, TS）**：
+  - 构造真实多模块项目 [examples/e2e_workspace/](file:///C:/Users/sj929/xiaoqinli/examples/e2e_workspace/)（覆盖 struct/class、for/switch 复杂流、字面量、scoped capability 校验与 Result 处理）。
+  - 对 Go/Python/Rust/TS 分别在本地编译运行并断言标准输出一致。
+- **TypeScript 后端误伤拦截解除与物理跑通**：
+  - 解除 `validateTypesForTarget` 对 `ts` 的误伤拦截。
+  - 为 TS/JS 目标的 `StructDecl`、`ClassDecl`、`FunctionDecl`、`EnumDecl` 自动注入 `export ` 关键字，解决 ES 模块依赖缺失的问题。
+  - 移除同名注入的 `Result` 包装类属性的 `private` 修饰符，改用 `readonly`，完美兼容 TypeScript 结构化类型系统（Structural Typing）。
+- **Rust 后端跨模块与类型转换修复**：
+  - 采用 `pub mod xxx;`（主模块）与 `use crate::xxx;`（子模块）的扁平路径编译设计，避免了嵌套子模块缺失的问题。
+  - 自动在结构体与 Result 字面量赋值中对 String 类型应用 `.to_string()` 转换。
+  - 自动为 Struct/Class 派生 `#[derive(Debug, Clone)]`。
+- **Go 后端重定义消除与 Unwrap 强类型断言**：
+  - 限制 Result 类仅在含有 `main` 的主文件中注入，避免同 package 共享符号重定义。
+  - 对 unwrap 方法调用变量赋值自动生成 Go 类型断言（`res.Unwrap().([]Type)`），消除 interface{} 类型的 Go 遍历限制。
+- **确立“物理验证原则”长期规范**：
+  - 写入 README 与 `Loop_Contracts.md`。任何对“后端特性支持”的声称，都必须附带真实工具链在宿主机上的实际执行片段作为证据，严禁在未做物理验证时声称支持。
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-06)
+
+### 🆕 新增功能 - 阶段四 & 五：细粒度 Capability 与 AI 友好诊断
+- **项目主版本升级为 v3.5.0**：标志着 xiaoqinli 成功落地第四阶段（Capability 系统细粒度化）与第五阶段（面向 LLM agent 的结构化诊断）！
+- **带 scope 的细粒度 Capability 层次包含校验**：
+  - 将扁平的字符串能力（如 `"network"`, `"fs"`) 升级为带层级 scope 划分的形式（如 `network:read`, `network:write`, `fs:read`）。
+  - 支持层次级通配包含校验：声明 `network:*` 或旧的 `"network"`（向下兼容）的 caller 能够自动调用所有 `network:xxx` 的 callee。反之（声明 `network:read` 的 caller 调用 `network:write` 的 callee）则在编译期强制拦截报错。
+- **面向 AI Agent 的零幻觉结构化 Diagnostic JSON 诊断**：
+  - 每一个编译错误均被重写或自动解析为结构化 JSON 报错，附带 `code`、`message`、`location`、及最具生产价值的 `suggested_fix`（具体的修复提示，例如对于 capability 缺失，自动提供需要追加的 `@grant` 的完整语句示例）。
+  - 在 MCP Server 层面暴露此结构化诊断：在 compile / validate 工具发生错误时，MCP 的返回结果除包含普通文本日志外，额外携带结构化的 `diagnostics` JSON 属性，极大提升了下游 AI agent 自愈/自改代码的效率与精度。
+- **Go 后端同包重名命名冲突拦截**：
+  - 为应对 Go 后端同包平铺编译下的重名冲突风险，特别增加了 Workspace 级别的全局符号唯一性静态校验（`XQL_E202`），在 Check 阶段最前端提前拦截由于依赖模块重名定义带来的编译崩溃。
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-06 - P2 阶段三成果)
+
+### 🆕 新增功能 - 阶段三：多文件项目支持
+- **项目主版本升级为 v3.4.0**：标志着 xiaoqinli 成功落地第三阶段（P2）：多文件项目支持！
+- **新增 `ImportDecl` AST 节点**：支持以相对路径导入被依赖文件的语法，并在 parser 和二进制编解码器中补齐该节点的往返传输。
+- **升级 Workspace 级跨文件符号解析**：支持多模块依赖链的解析与自检，并设计了静态 DFS 循环导入检测（`XQL_E402`）。类型检查器（`Type Checker`）原生支持了跨文件的函数调用、类型推导以及结构体/类字段的穿透属性校验。
+- **支持跨文件 Capability & Effect 传递追踪**：在能力与副作用的静态校验中，支持了跨文件函数依赖的传递链比对，确保跨模块调用的 Capability 和 @effects 安全边界。
+- **支持四大主力后端的多文件 Codegen 差异化转译**：
+  - **Go**：由于同目录下同 package 共享符号，转译为忽略 `ImportDecl` 并在 codegen 过程中自动剥离别名前缀，以最简方式直接运行编译。
+  - **Rust**：自动转译为 `mod utils;` 的模块引入，并自动将跨文件调用和类型转换为 Rust 惯例的双冒号 `::` 语法（例如 `utils::netCall()` 和 `utils::Point`）。
+  - **TypeScript**：编译为 `import * as utils from "./utils";` 模块导入。
+  - **Python**：编译为 `import utils as utils` 模块导入。
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-06 - P1 阶段二成果)
+
+### 🆕 新增功能
+- **项目主版本升级为 v3.3.0**：标志着 xiaoqinli 成功落地第二阶段（P1）：语言表达能力补全！
+- **新增四大核心 AST 节点支持**：
+  - 新增 `ClassDecl` 语法，支持声明带 private / public 可见性的类属性，在 check 阶段实现强字段类型和存在性推导，并在主力后端实现结构化映射（Go 生成 struct、Rust 生成 struct 并按 Visibility 输出 `pub` 字段前缀、TS 和 Python 完美映射 class 结构）。
+  - 新增 `SwitchStmt` 流程控制，并在各主力后端完美转译为各自最佳 of 实现（Go 的 `switch`、Rust 的 `match`、TS 的 `switch`，以及 Python 3.11+ 原生的 `match case` 语法）。
+  - 新增 `MapLiteral` 和 `ArrayLiteral` 复合字面量节点，并在四大主力后端（Go, TS, Python, Rust）分别编译成其最地道的字面量表示法（例如 Rust 编译为 std::collections::HashMap::from([...]) 和 vec![...]，Go 编译为 map[...]...{} 和 []...{} 等）。
+- **统一 Result 错误处理语义**：
+  - 成功编写并落地架构决策 ADR 001。
+  - 在 TS 和 Python 后端中分别通过注入轻量级的辅助 `Result` 包装类（支持 `ok(val)`、`err(err)`、`unwrap()` 和 `unwrapErr()`）实现了流控制语义的无感对齐，避免抛出不透明的 Exception。
+  - 在 Go 后端原生编译为 `(T, error)` 二元多返回值，Rust 后端生成原生 `Result<T, E>`。
+
+### 🐛 修复问题
+- **JSON 校验错误修复**：修复了 `nodes.go` 在 parse 时遇到 explicitly `null` 字段会抛出 `XQL_E101` 异常的缺陷，增强了 json parser 的稳健性。
+- **二进制 Codec 与 JSON 规范化一致性对齐**：引入了规范化 JSON 比对辅助方法，解决了 Go slice 序列化时 nil 与 [] 的伪差异，确保内容寻址哈希（TestStableHashDifferentOrder）和 AST Codec Roundtrip 终极一致。
 
 ---
 

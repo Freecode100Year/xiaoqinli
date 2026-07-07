@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"xiaoqinli/ast"
@@ -38,6 +39,29 @@ func GeneratePython(root ast.Node) ([]byte, error) {
 	}
 
 	var out strings.Builder
+	if g.needResult {
+		out.WriteString(`class Result:
+    def __init__(self, ok_val=None, err_val=None, is_ok=True):
+        self._ok = ok_val
+        self._err = err_val
+        self.is_ok = is_ok
+    @staticmethod
+    def ok(val):
+        return Result(ok_val=val, is_ok=True)
+    @staticmethod
+    def err(err_val):
+        return Result(err_val=err_val, is_ok=False)
+    def unwrap(self):
+        if not self.is_ok:
+            raise Exception("Called unwrap on Err Result")
+        return self._ok
+    def unwrap_err(self):
+        if self.is_ok:
+            raise Exception("Called unwrap_err on Ok Result")
+        return self._err
+
+`)
+	}
 	if g.needEnum {
 		out.WriteString("from enum import Enum\n\n")
 	}
@@ -53,13 +77,14 @@ type pyGen struct {
 	indent        int
 	needDataclass bool
 	needEnum      bool
+	needResult    bool
 }
 
 func (g *pyGen) write(s string)   { g.buf.WriteString(s) }
 func (g *pyGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
 func (g *pyGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
-func typeToPython(t ast.TypeExpr) string {
+func (g *pyGen) typeToPython(t ast.TypeExpr) string {
 	switch t.KindName {
 	case "Int":
 		return "int"
@@ -73,19 +98,27 @@ func typeToPython(t ast.TypeExpr) string {
 		return "None"
 	case "Array":
 		if t.Elem != nil {
-			return "list[" + typeToPython(*t.Elem) + "]"
+			return "list[" + g.typeToPython(*t.Elem) + "]"
 		}
 		return "list"
 	case "Option":
 		if t.Elem != nil {
-			return typeToPython(*t.Elem) + " | None"
+			return g.typeToPython(*t.Elem) + " | None"
 		}
 		return "object | None"
 	case "Result":
-		if t.OkType != nil {
-			return "tuple[" + typeToPython(*t.OkType) + ", Exception | None]"
+		g.needResult = true
+		return "Result"
+	case "Map":
+		kt := "object"
+		vt := "object"
+		if t.KeyType != nil {
+			kt = g.typeToPython(*t.KeyType)
 		}
-		return "tuple[object, Exception | None]"
+		if t.Elem != nil {
+			vt = g.typeToPython(*t.Elem)
+		}
+		return "dict[" + kt + ", " + vt + "]"
 	default:
 		return t.KindName
 	}
@@ -121,13 +154,32 @@ func (g *pyGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.ClassDecl:
+		return g.emitClassDecl(node)
 	case *ast.EnumDecl:
 		return g.emitEnumDecl(node)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
+	case *ast.SwitchStmt:
+		return g.emitSwitchStmt(node)
+	case *ast.ImportDecl:
+		return g.emitImportDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *pyGen) emitImportDecl(id *ast.ImportDecl) error {
+	path := id.Path
+	base := filepath.Base(path)
+	if strings.HasSuffix(base, ".xql.json") {
+		base = strings.TrimSuffix(base, ".xql.json")
+	} else if strings.HasSuffix(base, ".xql") {
+		base = strings.TrimSuffix(base, ".xql")
+	}
+	g.writeIndent()
+	g.writeln(fmt.Sprintf("import %s as %s", base, id.As))
+	return nil
 }
 
 func (g *pyGen) emitStructDecl(sd *ast.StructDecl) error {
@@ -139,7 +191,7 @@ func (g *pyGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
-		g.writeln(f.Name + ": " + typeToPython(f.Type))
+		g.writeln(f.Name + ": " + g.typeToPython(f.Type))
 	}
 	g.indent--
 	return nil
@@ -197,11 +249,11 @@ func (g *pyGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name + ": " + typeToPython(p.Type))
+		g.write(p.Name + ": " + g.typeToPython(p.Type))
 	}
 	g.write(")")
 
-	rt := typeToPython(fd.ReturnType)
+	rt := g.typeToPython(fd.ReturnType)
 	g.write(" -> " + rt)
 	g.writeln(":")
 
@@ -236,7 +288,7 @@ func (g *pyGen) emitReturn(rs *ast.ReturnStmt) error {
 
 func (g *pyGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
-	g.write(vd.Name + ": " + typeToPython(vd.Type))
+	g.write(vd.Name + ": " + g.typeToPython(vd.Type))
 	if vd.Value != nil {
 		g.write(" = ")
 		if err := g.emitExpr(vd.Value); err != nil {
@@ -324,11 +376,11 @@ func (g *pyGen) emitForStmt(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write(", ")
+		g.write(", (")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
-		g.write(")")
+		g.write(") + 1)")
 	case "each":
 		g.write("for " + fs.Var + " in ")
 		if err := g.emitExpr(fs.Iterable); err != nil {
@@ -401,12 +453,20 @@ func (g *pyGen) emitExpr(n ast.Node) error {
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}
-		g.write("." + node.Field)
+		field := node.Field
+		if field == "isOk" {
+			field = "is_ok"
+		}
+		g.write("." + field)
 		return nil
 	case *ast.StructLit:
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
 		return g.emitArrayLit(node)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLiteral(node)
+	case *ast.MapLiteral:
+		return g.emitMapLiteral(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -609,3 +669,87 @@ func (g *pyGen) emitLiteral(lit *ast.Literal) error {
 	}
 	return nil
 }
+
+func (g *pyGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.needDataclass = true
+	g.writeIndent()
+	g.writeln("@dataclass")
+	g.writeIndent()
+	g.writeln("class " + cd.Name + ":")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		g.writeln(f.Name + ": " + g.typeToPython(f.Type))
+	}
+	g.indent--
+	return nil
+}
+
+func (g *pyGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("match ")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(":")
+	g.indent++
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			g.write("case ")
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+			g.writeln(":")
+		} else {
+			g.writeln("case _:")
+		}
+		g.indent++
+		if len(c.Body) == 0 {
+			g.writeIndent()
+			g.writeln("pass")
+		} else {
+			for _, stmt := range c.Body {
+				if err := g.emitNode(stmt); err != nil {
+					return err
+				}
+			}
+		}
+		g.indent--
+	}
+	g.indent--
+	return nil
+}
+
+func (g *pyGen) emitMapLiteral(ml *ast.MapLiteral) error {
+	g.write("{")
+	for i, entry := range ml.Entries {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(entry.Key); err != nil {
+			return err
+		}
+		g.write(": ")
+		if err := g.emitExpr(entry.Value); err != nil {
+			return err
+		}
+	}
+	g.write("}")
+	return nil
+}
+
+func (g *pyGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
+	g.write("[")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write("]")
+	return nil
+}
+

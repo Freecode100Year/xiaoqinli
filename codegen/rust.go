@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"xiaoqinli/ast"
@@ -9,18 +10,34 @@ import (
 
 // GenerateRust produces Rust source code from the given typed AST.
 func GenerateRust(root ast.Node) ([]byte, error) {
-	g := &rsGen{buf: &strings.Builder{}, funcReturns: make(map[string]string)}
+	g := &rsGen{
+		buf:         &strings.Builder{},
+		funcReturns: make(map[string]string),
+		imports:     make(map[string]bool),
+		structTable: make(map[string]*ast.StructDecl),
+	}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
+	hasMain := false
 	for _, d := range prog.Decls {
 		if fd, ok := d.(*ast.FunctionDecl); ok {
 			g.funcReturns[fd.Name] = fd.ReturnType.KindName
+			if fd.Name == "main" {
+				hasMain = true
+			}
+		}
+		if id, ok := d.(*ast.ImportDecl); ok {
+			g.imports[id.As] = true
+		}
+		if sd, ok := d.(*ast.StructDecl); ok {
+			g.structTable[sd.Name] = sd
 		}
 	}
+	g.isMain = hasMain
 
 	for i, d := range prog.Decls {
 		if i > 0 {
@@ -38,9 +55,12 @@ type rsGen struct {
 	buf         *strings.Builder
 	indent      int
 	muts        map[string]bool
+	isMain      bool
 	scope       map[string]string // variable/param name → type kind
 	funcReturns map[string]string // function name → return type kind
 	currentFunc *ast.FunctionDecl
+	imports     map[string]bool   // import alias set
+	structTable map[string]*ast.StructDecl
 }
 
 func (g *rsGen) write(s string)   { g.buf.WriteString(s) }
@@ -85,9 +105,27 @@ func typeToRustInner(t ast.TypeExpr, param bool) string {
 		if t.OkType != nil {
 			ok = typeToRust(*t.OkType)
 		}
-		return "Result<" + ok + ", Box<dyn std::error::Error>>"
+		errT := "Box<dyn std::error::Error>"
+		if t.ErrType != nil {
+			errT = typeToRust(*t.ErrType)
+		}
+		return "Result<" + ok + ", " + errT + ">"
+	case "Map":
+		kt := "String"
+		vt := "String"
+		if t.KeyType != nil {
+			kt = typeToRust(*t.KeyType)
+		}
+		if t.Elem != nil {
+			vt = typeToRust(*t.Elem)
+		}
+		return "std::collections::HashMap<" + kt + ", " + vt + ">"
 	default:
-		return t.KindName
+		name := t.KindName
+		if strings.Contains(name, ".") {
+			name = strings.ReplaceAll(name, ".", "::")
+		}
+		return name
 	}
 }
 
@@ -121,13 +159,36 @@ func (g *rsGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.ClassDecl:
+		return g.emitClassDecl(node)
 	case *ast.EnumDecl:
 		return g.emitEnumDecl(node)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
+	case *ast.SwitchStmt:
+		return g.emitSwitchStmt(node)
+	case *ast.ImportDecl:
+		return g.emitImportDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *rsGen) emitImportDecl(id *ast.ImportDecl) error {
+	path := id.Path
+	base := filepath.Base(path)
+	if strings.HasSuffix(base, ".xql.json") {
+		base = strings.TrimSuffix(base, ".xql.json")
+	} else if strings.HasSuffix(base, ".xql") {
+		base = strings.TrimSuffix(base, ".xql")
+	}
+	g.writeIndent()
+	if g.isMain {
+		g.writeln(fmt.Sprintf("pub mod %s;", base))
+	} else {
+		g.writeln(fmt.Sprintf("use crate::%s;", base))
+	}
+	return nil
 }
 
 func (g *rsGen) emitEnumDecl(ed *ast.EnumDecl) error {
@@ -180,11 +241,17 @@ func (g *rsGen) emitMatchExpr(me *ast.MatchExpr) error {
 
 func (g *rsGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.writeIndent()
-	g.writeln("struct " + sd.Name + " {")
+	g.writeln("#[derive(Debug, Clone)]")
+	g.writeIndent()
+	g.writeln("pub struct " + sd.Name + " {")
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
-		g.writeln(f.Name + ": " + typeToRust(f.Type) + ",")
+		prefix := ""
+		if f.Visibility != "private" {
+			prefix = "pub "
+		}
+		g.writeln(prefix + f.Name + ": " + typeToRust(f.Type) + ",")
 	}
 	g.indent--
 	g.writeIndent()
@@ -201,7 +268,7 @@ func (g *rsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	}
 
 	g.writeIndent()
-	g.write("fn " + fd.Name + "(")
+	g.write("pub fn " + fd.Name + "(")
 	for i, p := range fd.Params {
 		if i > 0 {
 			g.write(", ")
@@ -343,12 +410,12 @@ func (g *rsGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		// for i in start..end {
+		// for i in start..=end {
 		g.write("for " + fs.Var + " in ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("..")
+		g.write("..=")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
@@ -451,6 +518,19 @@ func (g *rsGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		if node.Field == "isOk" {
+			if err := g.emitExpr(node.Object); err != nil {
+				return err
+			}
+			g.write(".is_ok()")
+			return nil
+		} else if node.Field == "isErr" {
+			if err := g.emitExpr(node.Object); err != nil {
+				return err
+			}
+			g.write(".is_err()")
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}
@@ -460,6 +540,10 @@ func (g *rsGen) emitExpr(n ast.Node) error {
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
 		return g.emitArrayLit(node)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLiteral(node)
+	case *ast.MapLiteral:
+		return g.emitMapLiteral(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -498,14 +582,29 @@ func (g *rsGen) emitIndexExpr(ie *ast.IndexExpr) error {
 }
 
 func (g *rsGen) emitStructLit(sl *ast.StructLit) error {
-	g.write(sl.TypeName + " { ")
+	typeName := sl.TypeName
+	if strings.Contains(typeName, ".") {
+		typeName = strings.ReplaceAll(typeName, ".", "::")
+	}
+	g.write(typeName + " { ")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
 		}
 		g.write(f.Name + ": ")
-		if err := g.emitExpr(f.Value); err != nil {
-			return err
+		
+		isStringLit := false
+		if lit, ok := f.Value.(*ast.Literal); ok && lit.ValueType == "String" {
+			isStringLit = true
+		}
+		if isStringLit {
+			if err := g.emitOwnedExpr(f.Value); err != nil {
+				return err
+			}
+		} else {
+			if err := g.emitExpr(f.Value); err != nil {
+				return err
+			}
 		}
 	}
 	g.write(" }")
@@ -520,8 +619,61 @@ func (g *rsGen) emitCall(ce *ast.CallExpr) error {
 		return g.emitRustPrint("print!", ce.Args)
 	case "sprintf":
 		return g.emitRustPrint("format!", ce.Args)
+	case "Result.ok":
+		g.write("Ok(")
+		if len(ce.Args) > 0 {
+			isStringLit := false
+			if lit, ok := ce.Args[0].(*ast.Literal); ok && lit.ValueType == "String" {
+				isStringLit = true
+			}
+			if isStringLit {
+				if err := g.emitOwnedExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			} else {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+		}
+		g.write(")")
+		return nil
+	case "Result.err":
+		g.write("Err(")
+		if len(ce.Args) > 0 {
+			isStringLit := false
+			if lit, ok := ce.Args[0].(*ast.Literal); ok && lit.ValueType == "String" {
+				isStringLit = true
+			}
+			if isStringLit {
+				if err := g.emitOwnedExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			} else {
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+			}
+		}
+		g.write(")")
+		return nil
 	default:
-		g.write(ce.Callee + "(")
+		callee := ce.Callee
+		if strings.Contains(callee, ".") {
+			parts := strings.Split(callee, ".")
+			if len(parts) == 2 {
+				if g.imports[parts[0]] {
+					callee = parts[0] + "::" + parts[1]
+				} else {
+					obj := parts[0]
+					method := parts[1]
+					if method == "unwrapErr" {
+						callee = obj + ".unwrap_err"
+					}
+				}
+			}
+		}
+		g.write(callee + "(")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
@@ -619,5 +771,93 @@ func (g *rsGen) emitLambda(lam *ast.Lambda) error {
 	g.indent--
 	g.writeIndent()
 	g.write("}")
+	return nil
+}
+
+func (g *rsGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.writeIndent()
+	g.writeln("#[derive(Debug, Clone)]")
+	g.writeIndent()
+	g.writeln("struct " + cd.Name + " {")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		prefix := ""
+		if f.Visibility == "public" {
+			prefix = "pub "
+		}
+		g.writeln(prefix + f.Name + ": " + typeToRust(f.Type) + ",")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *rsGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("match ")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(" {")
+	g.indent++
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+		} else {
+			g.write("_")
+		}
+		g.writeln(" => {")
+		g.indent++
+		for _, stmt := range c.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("}")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *rsGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
+	g.write("vec![")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write("]")
+	return nil
+}
+
+func (g *rsGen) emitMapLiteral(ml *ast.MapLiteral) error {
+	g.write("std::collections::HashMap::from([")
+	for i, entry := range ml.Entries {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write("(")
+		if err := g.emitExpr(entry.Key); err != nil {
+			return err
+		}
+		g.write(", ")
+		if err := g.emitExpr(entry.Value); err != nil {
+			return err
+		}
+		g.write(")")
+	}
+	g.write("])")
 	return nil
 }

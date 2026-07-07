@@ -10,7 +10,29 @@ import (
 
 // GenerateGo produces Go source code from the given typed AST.
 func GenerateGo(root ast.Node) ([]byte, error) {
-	g := &goGen{buf: &strings.Builder{}, indent: 0, needFmt: false}
+	g := &goGen{
+		buf:         &strings.Builder{},
+		indent:      0,
+		needFmt:     false,
+		structTable: make(map[string]*ast.StructDecl),
+		classTable:  make(map[string]*ast.ClassDecl),
+	}
+
+	walkTypes(root, func(t ast.TypeExpr, context string) {
+		if t.KindName == "Result" {
+			g.needResult = true
+		}
+	})
+
+	if prog, ok := root.(*ast.Program); ok {
+		for _, d := range prog.Decls {
+			if sd, ok := d.(*ast.StructDecl); ok {
+				g.structTable[sd.Name] = sd
+			} else if cd, ok := d.(*ast.ClassDecl); ok {
+				g.classTable[cd.Name] = cd
+			}
+		}
+	}
 
 	switch n := root.(type) {
 	case *ast.Program:
@@ -52,6 +74,46 @@ func GenerateGo(root ast.Node) ([]byte, error) {
 		out.WriteString(")\n")
 	}
 
+	hasMain := false
+	if prog, ok := root.(*ast.Program); ok {
+		for _, d := range prog.Decls {
+			if fd, ok := d.(*ast.FunctionDecl); ok && fd.Name == "main" {
+				hasMain = true
+			}
+		}
+	}
+	if g.needResult && hasMain {
+		out.WriteString(`
+type Result struct {
+	val  interface{}
+	err  interface{}
+	IsOk bool
+}
+
+func ResultOk(val interface{}) Result {
+	return Result{val: val, IsOk: true}
+}
+
+func ResultErr(err interface{}) Result {
+	return Result{err: err, IsOk: false}
+}
+
+func (r Result) Unwrap() interface{} {
+	if !r.IsOk {
+		panic(r.err)
+	}
+	return r.val
+}
+
+func (r Result) UnwrapErr() interface{} {
+	if r.IsOk {
+		panic("Called UnwrapErr on Ok Result")
+	}
+	return r.err
+}
+`)
+	}
+
 	out.WriteString("\n")
 	out.WriteString(g.buf.String())
 	return []byte(out.String()), nil
@@ -59,11 +121,15 @@ func GenerateGo(root ast.Node) ([]byte, error) {
 
 // goGen holds code-generation state.
 type goGen struct {
-	buf      *strings.Builder
-	indent   int
-	needFmt  bool
-	needTime bool
-	needOS   bool
+	buf         *strings.Builder
+	indent      int
+	needFmt     bool
+	needTime    bool
+	needOS      bool
+	needResult  bool
+	currentFunc *ast.FunctionDecl
+	structTable map[string]*ast.StructDecl
+	classTable  map[string]*ast.ClassDecl
 }
 
 func (g *goGen) write(s string) {
@@ -99,20 +165,32 @@ func typeToGo(t ast.TypeExpr) string {
 			return "[]" + typeToGo(*t.Elem)
 		}
 		return "[]interface{}"
+	case "Map":
+		kt := "interface{}"
+		vt := "interface{}"
+		if t.KeyType != nil {
+			kt = typeToGo(*t.KeyType)
+		}
+		if t.Elem != nil {
+			vt = typeToGo(*t.Elem)
+		}
+		return "map[" + kt + "]" + vt
 	case "Option":
 		if t.Elem != nil {
 			return "*" + typeToGo(*t.Elem)
 		}
 		return "interface{}"
 	case "Result":
-		// Result<T, E> maps to (T, error) at the function return level,
-		// handled specially in emitFunctionDecl.
-		if t.OkType != nil {
-			return typeToGo(*t.OkType)
-		}
-		return "interface{}"
+		return "Result"
 	default:
-		return t.KindName
+		name := t.KindName
+		if strings.Contains(name, ".") {
+			parts := strings.Split(name, ".")
+			if len(parts) == 2 {
+				name = parts[1]
+			}
+		}
+		return name
 	}
 }
 
@@ -146,16 +224,24 @@ func (g *goGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.ClassDecl:
+		return g.emitClassDecl(node)
 	case *ast.EnumDecl:
 		return g.emitEnumDecl(node)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
+	case *ast.SwitchStmt:
+		return g.emitSwitchStmt(node)
+	case *ast.ImportDecl:
+		// Go ignores ImportDecl because they share same package
+		return nil
 	default:
 		return fmt.Errorf("XQL_E401: cannot emit statement for node kind %s", n.Kind())
 	}
 }
 
 func (g *goGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.currentFunc = fd
 	// func name(params) returnType {
 	g.writeIndent()
 	g.write("func " + fd.Name + "(")
@@ -169,14 +255,7 @@ func (g *goGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 
 	// Return type.
 	retType := typeToGo(fd.ReturnType)
-	isResult := fd.ReturnType.KindName == "Result"
-	if isResult {
-		okT := "interface{}"
-		if fd.ReturnType.OkType != nil {
-			okT = typeToGo(*fd.ReturnType.OkType)
-		}
-		g.write(" (" + okT + ", error)")
-	} else if retType != "" {
+	if retType != "" {
 		g.write(" " + retType)
 	}
 
@@ -215,6 +294,9 @@ func (g *goGen) emitVarDecl(vd *ast.VarDecl) error {
 		g.write(vd.Name + " := ")
 		if err := g.emitExpr(vd.Value); err != nil {
 			return err
+		}
+		if ce, ok := vd.Value.(*ast.CallExpr); ok && (strings.HasSuffix(ce.Callee, ".unwrap") || strings.HasSuffix(ce.Callee, ".Unwrap")) {
+			g.write(".(" + typeToGo(vd.Type) + ")")
 		}
 	} else {
 		g.write("var " + vd.Name + " " + typeToGo(vd.Type))
@@ -290,12 +372,12 @@ func (g *goGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		// for i := start; i < end; i++ {
+		// for i := start; i <= end; i++ {
 		g.write("for " + fs.Var + " := ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("; " + fs.Var + " < ")
+		g.write("; " + fs.Var + " <= ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
@@ -358,6 +440,10 @@ func (g *goGen) emitExpr(n ast.Node) error {
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
 		return g.emitArrayLit(node)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLiteral(node)
+	case *ast.MapLiteral:
+		return g.emitMapLiteral(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -385,6 +471,20 @@ func (g *goGen) emitUnaryExpr(ue *ast.UnaryExpr) error {
 func (g *goGen) emitCallExpr(ce *ast.CallExpr) error {
 	// Map xql built-in functions to Go equivalents.
 	callee := ce.Callee
+	if strings.Contains(callee, ".") && !strings.HasPrefix(callee, "fmt.") && !strings.HasPrefix(callee, "time.") && !strings.HasPrefix(callee, "os.") && !strings.HasPrefix(callee, "Result.") {
+		parts := strings.Split(callee, ".")
+		if len(parts) == 2 {
+			obj := parts[0]
+			method := parts[1]
+			if method == "unwrap" {
+				callee = obj + ".Unwrap"
+			} else if method == "unwrapErr" {
+				callee = obj + ".UnwrapErr"
+			} else {
+				callee = parts[1]
+			}
+		}
+	}
 	switch callee {
 	case "println":
 		callee = "fmt.Println"
@@ -395,6 +495,12 @@ func (g *goGen) emitCallExpr(ce *ast.CallExpr) error {
 	case "sprintf":
 		callee = "fmt.Sprintf"
 		g.needFmt = true
+	case "Result.ok":
+		callee = "ResultOk"
+		g.needResult = true
+	case "Result.err":
+		callee = "ResultErr"
+		g.needResult = true
 	}
 
 	if strings.Contains(callee, "time.") {
@@ -444,7 +550,13 @@ func (g *goGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
-		g.writeln(f.Name + " " + typeToGo(f.Type))
+		name := f.Name
+		if f.Visibility == "public" {
+			name = capitalize(name)
+		} else {
+			name = uncapitalize(name)
+		}
+		g.writeln(name + " " + typeToGo(f.Type))
 	}
 	g.indent--
 	g.writeIndent()
@@ -453,12 +565,19 @@ func (g *goGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *goGen) emitStructLit(sl *ast.StructLit) error {
-	g.write(sl.TypeName + "{")
+	g.write(stripAlias(sl.TypeName) + "{")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(f.Name + ": ")
+		name := f.Name
+		vis := g.getFieldVisibility(name)
+		if vis == "public" {
+			name = capitalize(name)
+		} else {
+			name = uncapitalize(name)
+		}
+		g.write(name + ": ")
 		if err := g.emitExpr(f.Value); err != nil {
 			return err
 		}
@@ -549,7 +668,19 @@ func (g *goGen) emitMemberExpr(me *ast.MemberExpr) error {
 	if err := g.emitExpr(me.Object); err != nil {
 		return err
 	}
-	g.write("." + me.Field)
+	g.write(".")
+	name := me.Field
+	if name == "isOk" {
+		name = "IsOk"
+	} else {
+		vis := g.getFieldVisibility(name)
+		if vis == "public" {
+			name = capitalize(name)
+		} else {
+			name = uncapitalize(name)
+		}
+	}
+	g.write(name)
 	return nil
 }
 
@@ -619,4 +750,137 @@ func (g *goGen) emitLambda(lam *ast.Lambda) error {
 	g.writeIndent()
 	g.write("}")
 	return nil
+}
+
+func (g *goGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.writeIndent()
+	g.writeln("type " + cd.Name + " struct {")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		name := f.Name
+		if f.Visibility == "public" {
+			name = capitalize(name)
+		} else {
+			name = uncapitalize(name)
+		}
+		g.writeln(name + " " + typeToGo(f.Type))
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *goGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("switch ")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(" {")
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			g.write("case ")
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+			g.writeln(":")
+		} else {
+			g.writeln("default:")
+		}
+		g.indent++
+		for _, stmt := range c.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+	}
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *goGen) emitMapLiteral(ml *ast.MapLiteral) error {
+	g.write(typeToGo(ast.TypeExpr{KindName: "Map", KeyType: &ml.KeyType, Elem: &ml.ValueType}) + "{")
+	for i, entry := range ml.Entries {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(entry.Key); err != nil {
+			return err
+		}
+		g.write(": ")
+		if err := g.emitExpr(entry.Value); err != nil {
+			return err
+		}
+	}
+	g.write("}")
+	return nil
+}
+
+func (g *goGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
+	g.write(typeToGo(ast.TypeExpr{KindName: "Array", Elem: &al.ElemType}) + "{")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write("}")
+	return nil
+}
+
+func (g *goGen) getFieldVisibility(fieldName string) string {
+	for _, sd := range g.structTable {
+		for _, f := range sd.Fields {
+			if f.Name == fieldName {
+				return f.Visibility
+			}
+		}
+	}
+	for _, cd := range g.classTable {
+		for _, f := range cd.Fields {
+			if f.Name == fieldName {
+				return f.Visibility
+			}
+		}
+	}
+	return ""
+}
+
+func capitalize(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	r := []rune(s)
+	if r[0] >= 'a' && r[0] <= 'z' {
+		r[0] = r[0] - 'a' + 'A'
+	}
+	return string(r)
+}
+
+func uncapitalize(s string) string {
+	if len(s) == 0 {
+		return s
+	}
+	r := []rune(s)
+	if r[0] >= 'A' && r[0] <= 'Z' {
+		r[0] = r[0] - 'A' + 'a'
+	}
+	return string(r)
+}
+
+func stripAlias(name string) string {
+	if strings.Contains(name, ".") {
+		parts := strings.Split(name, ".")
+		if len(parts) == 2 {
+			return parts[1]
+		}
+	}
+	return name
 }

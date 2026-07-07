@@ -8,6 +8,9 @@ import (
 
 // Generate dispatches code generation to the appropriate backend by target name.
 func Generate(root ast.Node, target string) ([]byte, error) {
+	if err := validateNodesForTarget(root, target); err != nil {
+		return nil, err
+	}
 	if err := validateTypesForTarget(root, target); err != nil {
 		return nil, err
 	}
@@ -144,6 +147,10 @@ func scanMutables(stmts []ast.Node, muts map[string]bool, localVars map[string]b
 			scanExpr(n.Value, muts, localVars)
 		case *ast.ExprStmt:
 			scanExpr(n.Expr, muts, localVars)
+		case *ast.SwitchStmt:
+			for _, c := range n.Cases {
+				scanMutables(c.Body, muts, localVars)
+			}
 		}
 	}
 }
@@ -180,6 +187,10 @@ func scanExpr(expr ast.Node, muts map[string]bool, localVars map[string]bool) {
 		for _, elem := range e.Elements {
 			scanExpr(elem, muts, localVars)
 		}
+	case *ast.MatchExpr:
+		for _, arm := range e.Arms {
+			scanMutables(arm.Body, muts, localVars)
+		}
 	}
 }
 
@@ -194,7 +205,6 @@ func forkLocalVars(parent map[string]bool) map[string]bool {
 // unsupportedResultTargets lists targets that silently map Result<T> to just T,
 // losing error-handling semantics. These should reject Result types explicitly.
 var unsupportedResultTargets = map[string]bool{
-	"ts":         true,
 	"js":         true,
 	"javascript": true,
 	"dart":       true,
@@ -276,6 +286,21 @@ func walkTypes(n ast.Node, fn func(ast.TypeExpr, string)) {
 		for _, s := range node.Body {
 			walkTypes(s, fn)
 		}
+	case *ast.ClassDecl:
+		for _, f := range node.Fields {
+			fn(f.Type, fmt.Sprintf("field '%s' of class '%s'", f.Name, node.Name))
+		}
+	case *ast.SwitchStmt:
+		for _, c := range node.Cases {
+			for _, s := range c.Body {
+				walkTypes(s, fn)
+			}
+		}
+	case *ast.MapLiteral:
+		fn(node.KeyType, "map key literal type")
+		fn(node.ValueType, "map value literal type")
+	case *ast.ArrayLiteral:
+		fn(node.ElemType, "array literal element type")
 	}
 }
 
@@ -293,4 +318,148 @@ func containsStringExpr(n ast.Node) bool {
 		}
 	}
 	return false
+}
+
+func validateNodesForTarget(root ast.Node, target string) error {
+	if target == "go" || target == "rust" || target == "ts" || target == "js" || target == "javascript" || target == "py" || target == "java" {
+		return nil
+	}
+	var err error
+	walkNodes(root, func(n ast.Node) {
+		if err != nil {
+			return
+		}
+		if n == nil {
+			return
+		}
+		switch n.(type) {
+		case *ast.ClassDecl, *ast.SwitchStmt, *ast.MapLiteral, *ast.ArrayLiteral, *ast.ImportDecl:
+			err = fmt.Errorf("XQL_E401: target %q does not implement node kind %s", target, n.Kind())
+		}
+	})
+	return err
+}
+
+func walkNodes(n ast.Node, fn func(ast.Node)) {
+	if n == nil {
+		return
+	}
+	fn(n)
+	switch node := n.(type) {
+	case *ast.Program:
+		for _, d := range node.Decls {
+			walkNodes(d, fn)
+		}
+	case *ast.FunctionDecl:
+		for _, s := range node.Body {
+			walkNodes(s, fn)
+		}
+	case *ast.ReturnStmt:
+		walkNodes(node.Value, fn)
+	case *ast.VarDecl:
+		walkNodes(node.Value, fn)
+	case *ast.AssignStmt:
+		walkNodes(node.Target, fn)
+		walkNodes(node.Value, fn)
+	case *ast.IfStmt:
+		walkNodes(node.Cond, fn)
+		for _, s := range node.Then {
+			walkNodes(s, fn)
+		}
+		for _, s := range node.Else {
+			walkNodes(s, fn)
+		}
+	case *ast.WhileStmt:
+		walkNodes(node.Cond, fn)
+		for _, s := range node.Body {
+			walkNodes(s, fn)
+		}
+	case *ast.ForStmt:
+		walkNodes(node.Start, fn)
+		walkNodes(node.End, fn)
+		walkNodes(node.Iterable, fn)
+		for _, s := range node.Body {
+			walkNodes(s, fn)
+		}
+	case *ast.StructDecl:
+		// no children fields needed for node traversal
+	case *ast.ClassDecl:
+		// no children fields needed for node traversal
+	case *ast.MatchExpr:
+		walkNodes(node.Value, fn)
+		for _, arm := range node.Arms {
+			walkNodes(arm.Pattern, fn)
+			for _, s := range arm.Body {
+				walkNodes(s, fn)
+			}
+		}
+	case *ast.SwitchStmt:
+		walkNodes(node.Value, fn)
+		for _, c := range node.Cases {
+			walkNodes(c.Value, fn)
+			for _, s := range c.Body {
+				walkNodes(s, fn)
+			}
+		}
+	case *ast.BinaryExpr:
+		walkNodes(node.Left, fn)
+		walkNodes(node.Right, fn)
+	case *ast.UnaryExpr:
+		walkNodes(node.Operand, fn)
+	case *ast.CallExpr:
+		for _, arg := range node.Args {
+			walkNodes(arg, fn)
+		}
+	case *ast.MemberExpr:
+		walkNodes(node.Object, fn)
+	case *ast.StructLit:
+		for _, f := range node.Fields {
+			walkNodes(f.Value, fn)
+		}
+	case *ast.ArrayLit:
+		for _, elem := range node.Elements {
+			walkNodes(elem, fn)
+		}
+	case *ast.ArrayLiteral:
+		for _, elem := range node.Elements {
+			walkNodes(elem, fn)
+		}
+	case *ast.MapLiteral:
+		for _, entry := range node.Entries {
+			walkNodes(entry.Key, fn)
+			walkNodes(entry.Value, fn)
+		}
+	case *ast.IndexExpr:
+		walkNodes(node.Target, fn)
+		walkNodes(node.Index, fn)
+	case *ast.IfExpr:
+		walkNodes(node.Cond, fn)
+		walkNodes(node.Then, fn)
+		walkNodes(node.Else, fn)
+	case *ast.NewExpr:
+		for _, arg := range node.Args {
+			walkNodes(arg, fn)
+		}
+	case *ast.AwaitExpr:
+		walkNodes(node.Expr, fn)
+	case *ast.Lambda:
+		for _, s := range node.Body {
+			walkNodes(s, fn)
+		}
+	}
+}
+
+// CollectImports returns a map containing all the aliases imported in the program.
+func CollectImports(root ast.Node) map[string]bool {
+	imports := make(map[string]bool)
+	prog, ok := root.(*ast.Program)
+	if !ok {
+		return imports
+	}
+	for _, d := range prog.Decls {
+		if id, ok := d.(*ast.ImportDecl); ok {
+			imports[id.As] = true
+		}
+	}
+	return imports
 }

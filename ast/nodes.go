@@ -34,6 +34,14 @@ type Program struct {
 
 func (*Program) Kind() string { return "Program" }
 
+// ImportDecl represents an import declaration.
+type ImportDecl struct {
+	Path string
+	As   string
+}
+
+func (*ImportDecl) Kind() string { return "ImportDecl" }
+
 // --- Declarations & Statements ---
 
 // FunctionDecl represents a function declaration.
@@ -123,8 +131,9 @@ func (*ExprStmt) Kind() string { return "ExprStmt" }
 
 // StructField represents a field in a struct declaration.
 type StructField struct {
-	Name string   `json:"name"`
-	Type TypeExpr `json:"type"`
+	Name       string   `json:"name"`
+	Type       TypeExpr `json:"type"`
+	Visibility string   `json:"visibility,omitempty"` // "public" or "private"
 }
 
 // StructDecl represents a struct type declaration.
@@ -261,6 +270,58 @@ type AwaitExpr struct {
 
 func (*AwaitExpr) Kind() string { return "AwaitExpr" }
 
+// ClassField represents a field in a class declaration.
+type ClassField struct {
+	Name       string   `json:"name"`
+	Type       TypeExpr `json:"type"`
+	Visibility string   `json:"visibility,omitempty"` // "public" or "private"
+}
+
+// ClassDecl represents a class type declaration.
+type ClassDecl struct {
+	Name   string
+	Fields []ClassField
+}
+
+func (*ClassDecl) Kind() string { return "ClassDecl" }
+
+// SwitchCase represents a case in a switch statement.
+type SwitchCase struct {
+	Value Node   // nil for default case
+	Body  []Node
+}
+
+// SwitchStmt represents a switch statement.
+type SwitchStmt struct {
+	Value Node
+	Cases []SwitchCase
+}
+
+func (*SwitchStmt) Kind() string { return "SwitchStmt" }
+
+// MapEntry represents a key-value entry in a MapLiteral.
+type MapEntry struct {
+	Key   Node
+	Value Node
+}
+
+// MapLiteral represents a map literal.
+type MapLiteral struct {
+	KeyType   TypeExpr
+	ValueType TypeExpr
+	Entries   []MapEntry
+}
+
+func (*MapLiteral) Kind() string { return "MapLiteral" }
+
+// ArrayLiteral represents an array literal.
+type ArrayLiteral struct {
+	ElemType TypeExpr
+	Elements []Node
+}
+
+func (*ArrayLiteral) Kind() string { return "ArrayLiteral" }
+
 // Lambda represents an anonymous function / closure expression.
 type Lambda struct {
 	Params     []Param
@@ -289,6 +350,8 @@ func parseNode(raw map[string]interface{}) (Node, error) {
 	switch kind {
 	case "Program":
 		return parseProgram(raw)
+	case "ImportDecl":
+		return parseImportDecl(raw)
 	case "FunctionDecl":
 		return parseFunctionDecl(raw)
 	case "ReturnStmt":
@@ -311,14 +374,22 @@ func parseNode(raw map[string]interface{}) (Node, error) {
 		return parseExprStmt(raw)
 	case "StructDecl":
 		return parseStructDecl(raw)
+	case "ClassDecl":
+		return parseClassDecl(raw)
 	case "EnumDecl":
 		return parseEnumDecl(raw)
 	case "MatchExpr":
 		return parseMatchExpr(raw)
+	case "SwitchStmt":
+		return parseSwitchStmt(raw)
 	case "StructLit":
 		return parseStructLit(raw)
 	case "ArrayLit":
 		return parseArrayLit(raw)
+	case "ArrayLiteral":
+		return parseArrayLiteral(raw)
+	case "MapLiteral":
+		return parseMapLiteral(raw)
 	case "IndexExpr":
 		return parseIndexExpr(raw)
 	case "IfExpr":
@@ -364,7 +435,7 @@ func parseNodeList(raw []interface{}) ([]Node, error) {
 
 func parseChildNode(raw map[string]interface{}, field string) (Node, error) {
 	v, ok := raw[field]
-	if !ok {
+	if !ok || v == nil {
 		return nil, nil
 	}
 	m, ok := v.(map[string]interface{})
@@ -801,10 +872,42 @@ func parseStructDecl(raw map[string]interface{}) (*StructDecl, error) {
 				}
 				sf.Type = te
 			}
+			sf.Visibility, _ = fm["visibility"].(string)
 			sd.Fields = append(sd.Fields, sf)
 		}
 	}
 	return sd, nil
+}
+
+func parseClassDecl(raw map[string]interface{}) (*ClassDecl, error) {
+	cd := &ClassDecl{}
+	cd.Name, _ = raw["name"].(string)
+	if cd.Name == "" {
+		return nil, fmt.Errorf("XQL_E101: ClassDecl missing 'name'")
+	}
+	if fields, ok := raw["fields"].([]interface{}); ok {
+		for _, f := range fields {
+			fm, ok := f.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("XQL_E101: ClassDecl field is not an object")
+			}
+			cf := ClassField{}
+			cf.Name, _ = fm["name"].(string)
+			if cf.Name == "" {
+				return nil, fmt.Errorf("XQL_E101: ClassDecl field missing 'name'")
+			}
+			if t, ok := fm["type"]; ok {
+				te, err := parseTypeExpr(t)
+				if err != nil {
+					return nil, err
+				}
+				cf.Type = te
+			}
+			cf.Visibility, _ = fm["visibility"].(string)
+			cd.Fields = append(cd.Fields, cf)
+		}
+	}
+	return cd, nil
 }
 
 func parseStructLit(raw map[string]interface{}) (*StructLit, error) {
@@ -1000,3 +1103,111 @@ func parseLambda(raw map[string]interface{}) (*Lambda, error) {
 	}
 	return lam, nil
 }
+
+func parseSwitchStmt(raw map[string]interface{}) (*SwitchStmt, error) {
+	ss := &SwitchStmt{}
+	val, err := parseChildNode(raw, "value")
+	if err != nil {
+		return nil, err
+	}
+	ss.Value = val
+
+	cases, ok := raw["cases"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("XQL_E101: SwitchStmt missing 'cases'")
+	}
+	for _, c := range cases {
+		cm, ok := c.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("XQL_E101: SwitchStmt case is not an object")
+		}
+		sc := SwitchCase{}
+		val, err := parseChildNode(cm, "value")
+		if err != nil {
+			return nil, err
+		}
+		sc.Value = val // nil if default
+		if body, ok := cm["body"].([]interface{}); ok {
+			nodes, err := parseNodeList(body)
+			if err != nil {
+				return nil, err
+			}
+			sc.Body = nodes
+		}
+		ss.Cases = append(ss.Cases, sc)
+	}
+	return ss, nil
+}
+
+func parseMapLiteral(raw map[string]interface{}) (*MapLiteral, error) {
+	ml := &MapLiteral{}
+	if kt, ok := raw["keyType"]; ok {
+		te, err := parseTypeExpr(kt)
+		if err != nil {
+			return nil, err
+		}
+		ml.KeyType = te
+	}
+	if vt, ok := raw["valueType"]; ok {
+		te, err := parseTypeExpr(vt)
+		if err != nil {
+			return nil, err
+		}
+		ml.ValueType = te
+	}
+	entries, ok := raw["entries"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("XQL_E101: MapLiteral missing 'entries'")
+	}
+	for _, e := range entries {
+		em, ok := e.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("XQL_E101: MapLiteral entry is not an object")
+		}
+		key, err := parseChildNode(em, "key")
+		if err != nil {
+			return nil, err
+		}
+		val, err := parseChildNode(em, "value")
+		if err != nil {
+			return nil, err
+		}
+		ml.Entries = append(ml.Entries, MapEntry{Key: key, Value: val})
+	}
+	return ml, nil
+}
+
+func parseArrayLiteral(raw map[string]interface{}) (*ArrayLiteral, error) {
+	al := &ArrayLiteral{}
+	if t, ok := raw["elemType"]; ok {
+		te, err := parseTypeExpr(t)
+		if err != nil {
+			return nil, err
+		}
+		al.ElemType = te
+	}
+	if elems, ok := raw["elements"].([]interface{}); ok {
+		nodes, err := parseNodeList(elems)
+		if err != nil {
+			return nil, err
+		}
+		al.Elements = nodes
+	}
+	return al, nil
+}
+
+func parseImportDecl(raw map[string]interface{}) (*ImportDecl, error) {
+	id := &ImportDecl{}
+	path, _ := raw["path"].(string)
+	if path == "" {
+		return nil, fmt.Errorf("XQL_E101: ImportDecl missing 'path'")
+	}
+	id.Path = path
+	as, _ := raw["as"].(string)
+	if as == "" {
+		return nil, fmt.Errorf("XQL_E101: ImportDecl missing 'as'")
+	}
+	id.As = as
+	return id, nil
+}
+

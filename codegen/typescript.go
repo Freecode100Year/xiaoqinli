@@ -57,6 +57,57 @@ func generateJSTarget(root ast.Node, isJS bool) ([]byte, error) {
 	}
 
 	var out strings.Builder
+	if g.needResult {
+		if isJS {
+			out.WriteString(`class Result {
+    constructor(ok, err, isOk) {
+        this._ok = ok;
+        this._err = err;
+        this.isOk = isOk;
+    }
+    static ok(val) {
+        return new Result(val, null, true);
+    }
+    static err(err) {
+        return new Result(null, err, false);
+    }
+    unwrap() {
+        if (!this.isOk) throw new Error("Called unwrap on Err Result");
+        return this._ok;
+    }
+    unwrapErr() {
+        if (this.isOk) throw new Error("Called unwrapErr on Ok Result");
+        return this._err;
+    }
+}
+
+`)
+		} else {
+			out.WriteString(`class Result<T, E> {
+    constructor(
+        readonly _ok: T | null,
+        readonly _err: E | null,
+        readonly isOk: boolean
+    ) {}
+    static ok<T, E>(val: T): Result<T, E> {
+        return new Result<T, E>(val, null, true);
+    }
+    static err<T, E>(err: E): Result<T, E> {
+        return new Result<T, E>(null, err, false);
+    }
+    unwrap(): T {
+        if (!this.isOk) throw new Error("Called unwrap on Err Result");
+        return this._ok!;
+    }
+    unwrapErr(): E {
+        if (this.isOk) throw new Error("Called unwrapErr on Ok Result");
+        return this._err!;
+    }
+}
+
+`)
+		}
+	}
 	if g.needSprintf {
 		if isJS {
 			out.WriteString("function _xql_sprintf(fmt, ...args) {\n")
@@ -76,6 +127,7 @@ type tsGen struct {
 	indent      int
 	muts        map[string]bool
 	needSprintf bool
+	needResult  bool
 	isJS        bool
 }
 
@@ -83,7 +135,7 @@ func (g *tsGen) write(s string)   { g.buf.WriteString(s) }
 func (g *tsGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
 func (g *tsGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
-func typeToTS(t ast.TypeExpr) string {
+func (g *tsGen) typeToTS(t ast.TypeExpr) string {
 	if t.KindName == "" {
 		return "any"
 	}
@@ -98,19 +150,35 @@ func typeToTS(t ast.TypeExpr) string {
 		return "void"
 	case "Array":
 		if t.Elem != nil {
-			return typeToTS(*t.Elem) + "[]"
+			return g.typeToTS(*t.Elem) + "[]"
 		}
 		return "any[]"
 	case "Option":
 		if t.Elem != nil {
-			return typeToTS(*t.Elem) + " | null"
+			return g.typeToTS(*t.Elem) + " | null"
 		}
 		return "any | null"
 	case "Result":
+		g.needResult = true
+		okT := "any"
+		errT := "any"
 		if t.OkType != nil {
-			return typeToTS(*t.OkType)
+			okT = g.typeToTS(*t.OkType)
 		}
-		return "any"
+		if t.ErrType != nil {
+			errT = g.typeToTS(*t.ErrType)
+		}
+		return "Result<" + okT + ", " + errT + ">"
+	case "Map":
+		kt := "any"
+		vt := "any"
+		if t.KeyType != nil {
+			kt = g.typeToTS(*t.KeyType)
+		}
+		if t.Elem != nil {
+			vt = g.typeToTS(*t.Elem)
+		}
+		return "Map<" + kt + ", " + vt + ">"
 	default:
 		return t.KindName
 	}
@@ -146,17 +214,36 @@ func (g *tsGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.ClassDecl:
+		return g.emitClassDecl(node)
 	case *ast.EnumDecl:
 		return g.emitEnumDecl(node)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
+	case *ast.SwitchStmt:
+		return g.emitSwitchStmt(node)
+	case *ast.ImportDecl:
+		return g.emitImportDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
 }
 
+func (g *tsGen) emitImportDecl(id *ast.ImportDecl) error {
+	path := id.Path
+	if strings.HasSuffix(path, ".xql.json") {
+		path = strings.TrimSuffix(path, ".xql.json")
+	} else if strings.HasSuffix(path, ".xql") {
+		path = strings.TrimSuffix(path, ".xql")
+	}
+	g.writeIndent()
+	g.writeln(fmt.Sprintf("import * as %s from %q;", id.As, path))
+	return nil
+}
+
 func (g *tsGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	g.writeIndent()
+	g.write("export ")
 	if g.isJS {
 		g.write("const " + ed.Name + " = { ")
 		for i, v := range ed.Variants {
@@ -217,11 +304,15 @@ func (g *tsGen) emitStructDecl(sd *ast.StructDecl) error {
 		return nil
 	}
 	g.writeIndent()
-	g.writeln("interface " + sd.Name + " {")
+	g.writeln("export interface " + sd.Name + " {")
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
-		g.writeln(f.Name + ": " + typeToTS(f.Type) + ";")
+		if g.isJS {
+			g.writeln(f.Name + ";")
+		} else {
+			g.writeln(f.Name + ": " + g.typeToTS(f.Type) + ";")
+		}
 	}
 	g.indent--
 	g.writeIndent()
@@ -233,9 +324,7 @@ func (g *tsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.muts = collectMutables(fd.Body)
 
 	g.writeIndent()
-	if strings.HasPrefix(fd.Name, "onRequest") {
-		g.write("export ")
-	}
+	g.write("export ")
 	if hasAwait(fd.Body) {
 		g.write("async ")
 	}
@@ -244,15 +333,16 @@ func (g *tsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name)
-		if !g.isJS {
-			g.write(": " + typeToTS(p.Type))
+		if g.isJS {
+			g.write(p.Name)
+		} else {
+			g.write(p.Name + ": " + g.typeToTS(p.Type))
 		}
 	}
 	g.write(")")
 
 	if !g.isJS {
-		g.write(": " + typeToTS(fd.ReturnType))
+		g.write(": " + g.typeToTS(fd.ReturnType))
 	}
 	g.writeln(" {")
 	g.indent++
@@ -290,7 +380,7 @@ func (g *tsGen) emitVarDecl(vd *ast.VarDecl) error {
 	}
 	g.write(vd.Name)
 	if !g.isJS {
-		g.write(": " + typeToTS(vd.Type))
+		g.write(": " + g.typeToTS(vd.Type))
 	}
 	if vd.Value != nil {
 		g.write(" = ")
@@ -372,7 +462,7 @@ func (g *tsGen) emitForStmt(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("; " + fs.Var + " < ")
+		g.write("; " + fs.Var + " <= ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
@@ -444,6 +534,10 @@ func (g *tsGen) emitExpr(n ast.Node) error {
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
 		return g.emitArrayLit(node)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLiteral(node)
+	case *ast.MapLiteral:
+		return g.emitMapLiteral(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -636,14 +730,15 @@ func (g *tsGen) emitLambda(lam *ast.Lambda) error {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name)
-		if !g.isJS {
-			g.write(": " + typeToTS(p.Type))
+		if g.isJS {
+			g.write(p.Name)
+		} else {
+			g.write(p.Name + ": " + g.typeToTS(p.Type))
 		}
 	}
 	g.write(")")
 	if !g.isJS {
-		g.write(": " + typeToTS(lam.ReturnType))
+		g.write(": " + g.typeToTS(lam.ReturnType))
 	}
 	g.write(" => {")
 	if len(lam.Body) == 0 {
@@ -758,6 +853,122 @@ func hasAwaitNode(n ast.Node) bool {
 				}
 			}
 		}
+	case *ast.SwitchStmt:
+		if hasAwaitNode(node.Value) {
+			return true
+		}
+		for _, c := range node.Cases {
+			if c.Value != nil && hasAwaitNode(c.Value) {
+				return true
+			}
+			for _, s := range c.Body {
+				if hasAwaitNode(s) {
+					return true
+				}
+			}
+		}
+	case *ast.MapLiteral:
+		for _, entry := range node.Entries {
+			if hasAwaitNode(entry.Key) || hasAwaitNode(entry.Value) {
+				return true
+			}
+		}
+	case *ast.ArrayLiteral:
+		for _, elem := range node.Elements {
+			if hasAwaitNode(elem) {
+				return true
+			}
+		}
 	}
 	return false
 }
+
+func (g *tsGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.writeIndent()
+	g.writeln("export class " + cd.Name + " {")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		vis := f.Visibility
+		if vis == "" {
+			vis = "public"
+		}
+		if g.isJS {
+			g.writeln(f.Name + ";")
+		} else {
+			g.writeln(vis + " " + f.Name + ": " + g.typeToTS(f.Type) + ";")
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *tsGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("switch (")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			g.write("case ")
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+			g.writeln(":")
+		} else {
+			g.writeln("default:")
+		}
+		g.indent++
+		for _, stmt := range c.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.writeIndent()
+		g.writeln("break;")
+		g.indent--
+	}
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *tsGen) emitMapLiteral(ml *ast.MapLiteral) error {
+	g.write("new Map([")
+	for i, entry := range ml.Entries {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write("[")
+		if err := g.emitExpr(entry.Key); err != nil {
+			return err
+		}
+		g.write(", ")
+		if err := g.emitExpr(entry.Value); err != nil {
+			return err
+		}
+		g.write("]")
+	}
+	g.write("])")
+	return nil
+}
+
+func (g *tsGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
+	g.write("[")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write("]")
+	return nil
+}
+

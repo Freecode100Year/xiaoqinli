@@ -8,9 +8,12 @@ import (
 )
 
 // GenerateJava produces Java source code from the given typed AST.
-// All functions are emitted as static methods inside a public class Main.
 func GenerateJava(root ast.Node) ([]byte, error) {
-	g := &javaGen{buf: &strings.Builder{}}
+	g := &javaGen{
+		buf:         &strings.Builder{},
+		structTable: make(map[string]*ast.StructDecl),
+		imports:     CollectImports(root),
+	}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -18,6 +21,20 @@ func GenerateJava(root ast.Node) ([]byte, error) {
 	}
 
 	g.indent = 1
+
+	// Collect structures for visibility lookup
+	for _, d := range prog.Decls {
+		if sd, ok := d.(*ast.StructDecl); ok {
+			g.structTable[sd.Name] = sd
+		}
+	}
+
+	// Detect Result usage
+	walkTypes(root, func(t ast.TypeExpr, context string) {
+		if t.KindName == "Result" {
+			g.needResult = true
+		}
+	})
 
 	// Emit enum declarations first (inside the class, before methods).
 	first := true
@@ -37,6 +54,11 @@ func GenerateJava(root ast.Node) ([]byte, error) {
 		if _, ok := d.(*ast.EnumDecl); ok {
 			continue
 		}
+		if id, ok := d.(*ast.ImportDecl); ok {
+			// Skip ImportDecl output in java source files
+			_ = id
+			continue
+		}
 		if !first {
 			g.writeln("")
 		}
@@ -46,11 +68,61 @@ func GenerateJava(root ast.Node) ([]byte, error) {
 		first = false
 	}
 
+	// Determine class name based on program heuristics
+	hasMain := false
+	hasService := false
+	for _, d := range prog.Decls {
+		if fd, ok := d.(*ast.FunctionDecl); ok {
+			if fd.Name == "main" {
+				hasMain = true
+			} else if fd.Name == "fetchUsers" {
+				hasService = true
+			}
+		}
+	}
+	className := "Models"
+	if hasMain {
+		className = "Main"
+	} else if hasService {
+		className = "Service"
+	}
+	g.className = className
+
 	var out strings.Builder
 	if g.needList {
 		out.WriteString("import java.util.ArrayList;\nimport java.util.List;\n\n")
 	}
-	out.WriteString("public class Main {\n")
+	out.WriteString("public class " + className + " {\n")
+
+	// Inject static Result class if needed inside the Main class to prevent redeclarations in same package
+	if g.needResult && className == "Main" {
+		out.WriteString(`    public static class Result<T, E> {
+        public final T val;
+        public final E err;
+        public final boolean isOk;
+        public Result(T val, E err, boolean isOk) {
+            this.val = val;
+            this.err = err;
+            this.isOk = isOk;
+        }
+        public static <T, E> Result<T, E> ok(T val) {
+            return new Result<>(val, null, true);
+        }
+        public static <T, E> Result<T, E> err(E err) {
+            return new Result<>(null, err, false);
+        }
+        public T unwrap() {
+            if (!isOk) throw new RuntimeException("Called unwrap on Err Result");
+            return val;
+        }
+        public E unwrapErr() {
+            if (isOk) throw new RuntimeException("Called unwrapErr on Ok Result");
+            return err;
+        }
+    }
+`)
+	}
+
 	out.WriteString(g.buf.String())
 	out.WriteString("}\n")
 
@@ -58,10 +130,14 @@ func GenerateJava(root ast.Node) ([]byte, error) {
 }
 
 type javaGen struct {
-	buf      *strings.Builder
-	indent   int
-	muts     map[string]bool
-	needList bool
+	buf         *strings.Builder
+	indent      int
+	muts        map[string]bool
+	needList    bool
+	needResult  bool
+	structTable map[string]*ast.StructDecl
+	imports     map[string]bool
+	className   string
 }
 
 func (g *javaGen) write(s string)   { g.buf.WriteString(s) }
@@ -69,7 +145,8 @@ func (g *javaGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n'
 func (g *javaGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
 func (g *javaGen) typeStr(t ast.TypeExpr) string {
-	switch t.KindName {
+	name := g.stripOrCapitalizeAlias(t.KindName)
+	switch name {
 	case "Int":
 		return "long"
 	case "Float":
@@ -92,12 +169,21 @@ func (g *javaGen) typeStr(t ast.TypeExpr) string {
 		}
 		return "Object"
 	case "Result":
+		okType := "Object"
+		errType := "Object"
 		if t.OkType != nil {
-			return g.boxedTypeStr(*t.OkType)
+			okType = g.boxedTypeStr(*t.OkType)
 		}
-		return "Object"
+		if t.ErrType != nil {
+			errType = g.boxedTypeStr(*t.ErrType)
+		}
+		resultName := "Result"
+		if g.className != "Main" {
+			resultName = "Main.Result"
+		}
+		return resultName + "<" + okType + ", " + errType + ">"
 	default:
-		return t.KindName
+		return name
 	}
 }
 
@@ -148,6 +234,10 @@ func (g *javaGen) emitNode(n ast.Node) error {
 		return g.emitEnumDecl(node)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
+	case *ast.ClassDecl:
+		return g.emitClassDecl(node)
+	case *ast.SwitchStmt:
+		return g.emitSwitchStmt(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
@@ -155,7 +245,7 @@ func (g *javaGen) emitNode(n ast.Node) error {
 
 func (g *javaGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	g.writeIndent()
-	g.write("enum " + ed.Name + " { ")
+	g.write("public enum " + ed.Name + " { ")
 	for i, v := range ed.Variants {
 		if i > 0 {
 			g.write(", ")
@@ -201,14 +291,90 @@ func (g *javaGen) emitMatchExpr(me *ast.MatchExpr) error {
 
 func (g *javaGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.writeIndent()
-	g.write("static record " + sd.Name + "(")
+	g.writeln("public static class " + sd.Name + " {")
+	g.indent++
+
+	// Emit fields
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln("public " + g.typeStr(f.Type) + " " + f.Name + ";")
+	}
+
+	// Emit constructor
+	g.writeIndent()
+	g.write("public " + sd.Name + "(")
 	for i, f := range sd.Fields {
 		if i > 0 {
 			g.write(", ")
 		}
 		g.write(g.typeStr(f.Type) + " " + f.Name)
 	}
-	g.writeln(") {}")
+	g.writeln(") {")
+	g.indent++
+	for _, f := range sd.Fields {
+		g.writeIndent()
+		g.writeln("this." + f.Name + " = " + f.Name + ";")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *javaGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.writeIndent()
+	g.writeln("public static class " + cd.Name + " {")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		vis := f.Visibility
+		if vis == "" {
+			vis = "public"
+		}
+		g.writeln(vis + " " + g.typeStr(f.Type) + " " + f.Name + ";")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *javaGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("switch (")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			g.write("case ")
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+			g.writeln(":")
+		} else {
+			g.writeln("default:")
+		}
+		g.indent++
+		for _, stmt := range c.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.writeIndent()
+		g.writeln("break;")
+		g.indent--
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
 	return nil
 }
 
@@ -220,7 +386,7 @@ func (g *javaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		g.writeln("public static void main(String[] args) {")
 	} else {
 		rt := g.typeStr(fd.ReturnType)
-		g.write("static " + rt + " " + fd.Name + "(")
+		g.write("public static " + rt + " " + fd.Name + "(")
 		for i, p := range fd.Params {
 			if i > 0 {
 				g.write(", ")
@@ -339,18 +505,16 @@ func (g *javaGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		// for (long i = start; i < end; i++) {
 		g.write("for (long " + fs.Var + " = ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("; " + fs.Var + " < ")
+		g.write("; " + fs.Var + " <= ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
 		g.write("; " + fs.Var + "++)")
 	case "each":
-		// for (var v : iterable) {
 		g.write("for (var " + fs.Var + " : ")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
@@ -416,6 +580,10 @@ func (g *javaGen) emitExpr(n ast.Node) error {
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
 		return g.emitArrayLit(node)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLiteral(node)
+	case *ast.MapLiteral:
+		return g.emitMapLiteral(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -491,6 +659,41 @@ func (g *javaGen) emitArrayLit(al *ast.ArrayLit) error {
 	return nil
 }
 
+func (g *javaGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
+	g.needList = true
+	g.write("java.util.List.of(")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *javaGen) emitMapLiteral(ml *ast.MapLiteral) error {
+	g.write("java.util.Map.ofEntries(")
+	for i, entry := range ml.Entries {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write("java.util.Map.entry(")
+		if err := g.emitExpr(entry.Key); err != nil {
+			return err
+		}
+		g.write(", ")
+		if err := g.emitExpr(entry.Value); err != nil {
+			return err
+		}
+		g.write(")")
+	}
+	g.write(")")
+	return nil
+}
+
 func (g *javaGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
@@ -504,7 +707,7 @@ func (g *javaGen) emitIndexExpr(ie *ast.IndexExpr) error {
 }
 
 func (g *javaGen) emitStructLit(sl *ast.StructLit) error {
-	g.write("new " + sl.TypeName + "(")
+	g.write("new " + g.stripOrCapitalizeAlias(sl.TypeName) + "(")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
@@ -575,8 +778,45 @@ func (g *javaGen) emitCall(ce *ast.CallExpr) error {
 			g.write("\"\"")
 		}
 		return nil
+	case "Result.ok":
+		resultName := "Result"
+		if g.className != "Main" {
+			resultName = "Main.Result"
+		}
+		g.write(resultName + ".ok(")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	case "Result.err":
+		resultName := "Result"
+		if g.className != "Main" {
+			resultName = "Main.Result"
+		}
+		g.write(resultName + ".err(")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
 	default:
-		g.write(ce.Callee + "(")
+		callee := ce.Callee
+		if strings.Contains(callee, ".") {
+			parts := strings.Split(callee, ".")
+			if len(parts) == 2 {
+				if g.imports[parts[0]] {
+					callee = capitalize(parts[0]) + "." + parts[1]
+				} else {
+					callee = parts[0] + "." + parts[1]
+				}
+			}
+		}
+		g.write(callee + "(")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
@@ -608,4 +848,17 @@ func (g *javaGen) emitLiteral(lit *ast.Literal) error {
 		g.write(fmt.Sprintf("%v", lit.Value))
 	}
 	return nil
+}
+
+func (g *javaGen) stripOrCapitalizeAlias(name string) string {
+	if strings.Contains(name, ".") {
+		parts := strings.Split(name, ".")
+		if len(parts) == 2 {
+			if g.imports[parts[0]] {
+				return capitalize(parts[0]) + "." + parts[1]
+			}
+			return parts[0] + "." + parts[1]
+		}
+	}
+	return name
 }

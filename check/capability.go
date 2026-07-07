@@ -2,6 +2,7 @@ package check
 
 import (
 	"fmt"
+	"strings"
 
 	"xiaoqinli/ast"
 )
@@ -10,18 +11,42 @@ import (
 type Capability []string
 
 // Contains checks whether the required capability set is a subset of the
-// provided capabilities.
+// provided capabilities, supporting scoped capabilities like network:read.
 func (c Capability) Contains(required Capability) error {
-	set := make(map[string]struct{}, len(c))
-	for _, abil := range c {
-		set[abil] = struct{}{}
-	}
 	for _, need := range required {
-		if _, ok := set[need]; !ok {
+		matched := false
+		for _, abil := range c {
+			if matchCapability(abil, need) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
 			return fmt.Errorf("XQL_E301: missing required capability: %s", need)
 		}
 	}
 	return nil
+}
+
+func matchCapability(haveAbil, needAbil string) bool {
+	normalize := func(abil string) (string, string) {
+		if !strings.Contains(abil, ":") {
+			return abil, "*"
+		}
+		parts := strings.SplitN(abil, ":", 2)
+		return parts[0], parts[1]
+	}
+
+	haveMod, haveScope := normalize(haveAbil)
+	needMod, needScope := normalize(needAbil)
+
+	if haveMod != needMod {
+		return false
+	}
+	if haveScope == "*" {
+		return true
+	}
+	return haveScope == needScope
 }
 
 // VerifyCapability ensures that the caller's capabilities are a superset
@@ -33,12 +58,23 @@ func VerifyCapability(callerCap, requiredCap Capability) error {
 // CheckCapabilities walks the AST and verifies capability inheritance:
 // when function A calls function B, B's @grant must be a subset of A's @grant.
 func CheckCapabilities(root ast.Node) error {
+	return CheckCapabilitiesWithTC(root, NewTypeChecker())
+}
+
+func CheckCapabilitiesWithTC(root ast.Node, tc *TypeChecker) error {
+	if root == nil {
+		return fmt.Errorf("root node is nil")
+	}
 	// Collect all function declarations and their grants.
 	funcGrants := make(map[string]Capability)
 	collectGrants(root, funcGrants)
 
 	var errs []string
-	checkCaps(root, funcGrants, &errs)
+	checkCaps(root, funcGrants, &errs, tc)
+
+	for _, e := range errs {
+		tc.addError(e)
+	}
 
 	if len(errs) > 0 {
 		msg := "XQL_E302: capability check failed:\n"
@@ -51,6 +87,9 @@ func CheckCapabilities(root ast.Node) error {
 }
 
 func collectGrants(n ast.Node, out map[string]Capability) {
+	if n == nil {
+		return
+	}
 	switch node := n.(type) {
 	case *ast.Program:
 		for _, d := range node.Decls {
@@ -61,124 +100,173 @@ func collectGrants(n ast.Node, out map[string]Capability) {
 	}
 }
 
-func checkCaps(n ast.Node, funcGrants map[string]Capability, errs *[]string) {
+func checkCaps(n ast.Node, funcGrants map[string]Capability, errs *[]string, tc *TypeChecker) {
+	if n == nil {
+		return
+	}
 	switch node := n.(type) {
 	case *ast.Program:
 		for _, d := range node.Decls {
-			checkCaps(d, funcGrants, errs)
+			checkCaps(d, funcGrants, errs, tc)
 		}
 	case *ast.FunctionDecl:
 		callerCap := Capability(node.Grant)
 		for _, stmt := range node.Body {
-			checkCapStmt(stmt, node.Name, callerCap, funcGrants, errs)
+			checkCapStmt(stmt, node.Name, callerCap, funcGrants, errs, tc)
 		}
 	}
 }
 
-func checkCapStmt(n ast.Node, callerName string, callerCap Capability, funcGrants map[string]Capability, errs *[]string) {
+func checkCapStmt(n ast.Node, callerName string, callerCap Capability, funcGrants map[string]Capability, errs *[]string, tc *TypeChecker) {
+	if n == nil {
+		return
+	}
 	switch node := n.(type) {
 	case *ast.ExprStmt:
-		checkCapExpr(node.Expr, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Expr, callerName, callerCap, funcGrants, errs, tc)
 	case *ast.ReturnStmt:
 		if node.Value != nil {
-			checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs)
+			checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs, tc)
 		}
 	case *ast.VarDecl:
 		if node.Value != nil {
-			checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs)
+			checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs, tc)
 		}
 	case *ast.AssignStmt:
-		checkCapExpr(node.Target, callerName, callerCap, funcGrants, errs)
-		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Target, callerName, callerCap, funcGrants, errs, tc)
+		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs, tc)
 	case *ast.IfStmt:
-		checkCapExpr(node.Cond, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Cond, callerName, callerCap, funcGrants, errs, tc)
 		for _, s := range node.Then {
-			checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+			checkCapStmt(s, callerName, callerCap, funcGrants, errs, tc)
 		}
 		for _, s := range node.Else {
-			checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+			checkCapStmt(s, callerName, callerCap, funcGrants, errs, tc)
 		}
 	case *ast.WhileStmt:
-		checkCapExpr(node.Cond, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Cond, callerName, callerCap, funcGrants, errs, tc)
 		for _, s := range node.Body {
-			checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+			checkCapStmt(s, callerName, callerCap, funcGrants, errs, tc)
 		}
 	case *ast.ForStmt:
 		if node.Start != nil {
-			checkCapExpr(node.Start, callerName, callerCap, funcGrants, errs)
+			checkCapExpr(node.Start, callerName, callerCap, funcGrants, errs, tc)
 		}
 		if node.End != nil {
-			checkCapExpr(node.End, callerName, callerCap, funcGrants, errs)
+			checkCapExpr(node.End, callerName, callerCap, funcGrants, errs, tc)
 		}
 		if node.Iterable != nil {
-			checkCapExpr(node.Iterable, callerName, callerCap, funcGrants, errs)
+			checkCapExpr(node.Iterable, callerName, callerCap, funcGrants, errs, tc)
 		}
 		for _, s := range node.Body {
-			checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+			checkCapStmt(s, callerName, callerCap, funcGrants, errs, tc)
 		}
 	case *ast.BreakStmt, *ast.ContinueStmt:
 		// No capability checking needed.
 	case *ast.MatchExpr:
-		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs, tc)
 		for _, arm := range node.Arms {
 			for _, s := range arm.Body {
-				checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+				checkCapStmt(s, callerName, callerCap, funcGrants, errs, tc)
+			}
+		}
+	case *ast.SwitchStmt:
+		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs, tc)
+		for _, c := range node.Cases {
+			if c.Value != nil {
+				checkCapExpr(c.Value, callerName, callerCap, funcGrants, errs, tc)
+			}
+			for _, s := range c.Body {
+				checkCapStmt(s, callerName, callerCap, funcGrants, errs, tc)
 			}
 		}
 	}
 }
 
-func checkCapExpr(n ast.Node, callerName string, callerCap Capability, funcGrants map[string]Capability, errs *[]string) {
+func checkCapExpr(n ast.Node, callerName string, callerCap Capability, funcGrants map[string]Capability, errs *[]string, tc *TypeChecker) {
+	if n == nil {
+		return
+	}
 	switch node := n.(type) {
 	case *ast.CallExpr:
-		if calleeCap, ok := funcGrants[node.Callee]; ok {
+		calleeName := node.Callee
+		var calleeCap Capability
+		found := false
+		if strings.Contains(calleeName, ".") {
+			parts := strings.Split(calleeName, ".")
+			if len(parts) == 2 {
+				alias := parts[0]
+				funcName := parts[1]
+				if depTC, ok := tc.imports[alias]; ok {
+					if fd, ok := depTC.funcTable[funcName]; ok {
+						calleeCap = Capability(fd.Grant)
+						found = true
+					}
+				}
+			}
+		} else {
+			if cap, ok := funcGrants[calleeName]; ok {
+				calleeCap = cap
+				found = true
+			}
+		}
+		if found {
 			if err := callerCap.Contains(calleeCap); err != nil {
 				*errs = append(*errs, fmt.Sprintf(
 					"function '%s' calls '%s' but lacks required capabilities: %v",
-					callerName, node.Callee, calleeCap))
+					callerName, calleeName, calleeCap))
 			}
 		}
 		for _, arg := range node.Args {
-			checkCapExpr(arg, callerName, callerCap, funcGrants, errs)
+			checkCapExpr(arg, callerName, callerCap, funcGrants, errs, tc)
 		}
 	case *ast.BinaryExpr:
-		checkCapExpr(node.Left, callerName, callerCap, funcGrants, errs)
-		checkCapExpr(node.Right, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Left, callerName, callerCap, funcGrants, errs, tc)
+		checkCapExpr(node.Right, callerName, callerCap, funcGrants, errs, tc)
 	case *ast.UnaryExpr:
-		checkCapExpr(node.Operand, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Operand, callerName, callerCap, funcGrants, errs, tc)
 	case *ast.MemberExpr:
-		checkCapExpr(node.Object, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Object, callerName, callerCap, funcGrants, errs, tc)
 	case *ast.StructLit:
 		for _, fi := range node.Fields {
-			checkCapExpr(fi.Value, callerName, callerCap, funcGrants, errs)
+			checkCapExpr(fi.Value, callerName, callerCap, funcGrants, errs, tc)
 		}
 	case *ast.ArrayLit:
 		for _, elem := range node.Elements {
-			checkCapExpr(elem, callerName, callerCap, funcGrants, errs)
+			checkCapExpr(elem, callerName, callerCap, funcGrants, errs, tc)
 		}
 	case *ast.IndexExpr:
-		checkCapExpr(node.Target, callerName, callerCap, funcGrants, errs)
-		checkCapExpr(node.Index, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Target, callerName, callerCap, funcGrants, errs, tc)
+		checkCapExpr(node.Index, callerName, callerCap, funcGrants, errs, tc)
 	case *ast.NewExpr:
 		for _, arg := range node.Args {
-			checkCapExpr(arg, callerName, callerCap, funcGrants, errs)
+			checkCapExpr(arg, callerName, callerCap, funcGrants, errs, tc)
 		}
 	case *ast.AwaitExpr:
-		checkCapExpr(node.Expr, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Expr, callerName, callerCap, funcGrants, errs, tc)
 	case *ast.IfExpr:
-		checkCapExpr(node.Cond, callerName, callerCap, funcGrants, errs)
-		checkCapExpr(node.Then, callerName, callerCap, funcGrants, errs)
-		checkCapExpr(node.Else, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Cond, callerName, callerCap, funcGrants, errs, tc)
+		checkCapExpr(node.Then, callerName, callerCap, funcGrants, errs, tc)
+		checkCapExpr(node.Else, callerName, callerCap, funcGrants, errs, tc)
 	case *ast.MatchExpr:
-		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs)
+		checkCapExpr(node.Value, callerName, callerCap, funcGrants, errs, tc)
 		for _, arm := range node.Arms {
 			for _, s := range arm.Body {
-				checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+				checkCapStmt(s, callerName, callerCap, funcGrants, errs, tc)
 			}
 		}
 	case *ast.Lambda:
 		for _, s := range node.Body {
-			checkCapStmt(s, callerName, callerCap, funcGrants, errs)
+			checkCapStmt(s, callerName, callerCap, funcGrants, errs, tc)
+		}
+	case *ast.ArrayLiteral:
+		for _, elem := range node.Elements {
+			checkCapExpr(elem, callerName, callerCap, funcGrants, errs, tc)
+		}
+	case *ast.MapLiteral:
+		for _, entry := range node.Entries {
+			checkCapExpr(entry.Key, callerName, callerCap, funcGrants, errs, tc)
+			checkCapExpr(entry.Value, callerName, callerCap, funcGrants, errs, tc)
 		}
 	}
 }
