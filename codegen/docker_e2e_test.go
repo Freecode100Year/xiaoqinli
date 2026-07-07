@@ -48,7 +48,9 @@ func runDockerE2E(t *testing.T, image string, files map[string][]byte, cmdStr st
 		"sh", "-c", cmdStr,
 	}
 
-	cmd := exec.Command("docker", args...)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "docker", args...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

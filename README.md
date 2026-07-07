@@ -1,8 +1,21 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.8.0
+# Xiaoqinli (xql) 极简安全转译器 v3.9.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-07 - 阶段七 Kotlin 物理打通)
+
+### 🆕 新增功能 - 阶段七：补齐 11 个非主力后端 (Kotlin 目标物理跑通)
+- **项目主版本升级为 v3.9.0**：非主力后端补齐工作再创捷报，Kotlin 后端完美物理跑通！
+- **Kotlin 后端物理编译运行 100% 绿灯**：
+  - 在 `zenika/kotlin:alpine` 物理环境下打通了包含 3 个互相依赖的 Kotlin 多文件项目编译与 JVM 执行，输出完全符合断言。
+  - **优雅利用包级别命名空间（Package Namespace）**：针对 Kotlin 的语言特性，我们利用 Kotlin 原生极简的包声明（如 `package main`, `package service`），并引入精准的 `import` 语句导入子模块包。成功在完全不破坏顶级函数与 data class 地道语法的提前下，破除了 JVM 顶级多文件重名与无名包（default package）跨包引用限制。
+- **固化 Docker 物理测试底座安全防护**：
+  - **加入强制 120 秒 Context 超时拦截**：为 [codegen/docker_e2e_test.go](file:///C:/Users/sj929/xiaoqinli/codegen/docker_e2e_test.go#L51) 底层的 `runDockerE2E` 函数配置了 `context.WithTimeout`。彻底根治并防范了因 Docker Hub 网络抖动拉取镜像卡死而导致整个单元测试挂起死锁的隐患。
+  - **杜绝频繁重启打扰**：确认由于超时控制和 Docker Daemon 连接重连机制就绪，我们在测试脚本执行时**不再强制重启宿主机 Docker 引擎**，保持宿主机静默与温启动状态，极大提升开发体验。
 
 ---
 

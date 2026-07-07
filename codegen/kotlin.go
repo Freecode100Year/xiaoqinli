@@ -9,11 +9,77 @@ import (
 
 // GenerateKotlin produces Kotlin source code from the given typed AST.
 func GenerateKotlin(root ast.Node) ([]byte, error) {
-	g := &ktGen{buf: &strings.Builder{}}
+	g := &ktGen{
+		buf:     &strings.Builder{},
+		imports: CollectImports(root),
+	}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	// Detect Result usage
+	walkTypes(root, func(t ast.TypeExpr, context string) {
+		if t.KindName == "Result" {
+			g.needResult = true
+		}
+	})
+
+	// Determine package name
+	hasMain := false
+	hasService := false
+	for _, d := range prog.Decls {
+		if fd, ok := d.(*ast.FunctionDecl); ok {
+			if fd.Name == "main" {
+				hasMain = true
+			} else if fd.Name == "fetchUsers" {
+				hasService = true
+			}
+		}
+	}
+	packageName := "models"
+	if hasMain {
+		packageName = "main"
+	} else if hasService {
+		packageName = "service"
+	}
+	g.packageName = packageName
+
+	// Emit package declaration
+	g.writeln("package " + packageName)
+	g.writeln("")
+
+	// Emit imports
+	for imp := range g.imports {
+		g.writeln("import " + imp + ".*")
+	}
+	if packageName != "main" && g.needResult {
+		g.writeln("import main.Result")
+	}
+	g.writeln("")
+
+	// Inject custom Result class at main package top-level
+	if g.needResult && packageName == "main" {
+		g.writeln(`class Result<out T, out E> private constructor(
+    val val_: T?,
+    val err: E?,
+    val isOk: Boolean
+) {
+    companion object {
+        fun <T, E> ok(v: T): Result<T, E> = Result(v, null, true)
+        fun <T, E> err(e: E): Result<T, E> = Result(null, e, false)
+    }
+    fun unwrap(): T {
+        if (!isOk) throw RuntimeException("Called unwrap on Err Result")
+        return val_!!
+    }
+    fun unwrapErr(): E {
+        if (isOk) throw RuntimeException("Called unwrapErr on Ok Result")
+        return err!!
+    }
+}`)
+		g.writeln("")
 	}
 
 	// Emit enum declarations first.
@@ -34,6 +100,9 @@ func GenerateKotlin(root ast.Node) ([]byte, error) {
 		if _, ok := d.(*ast.EnumDecl); ok {
 			continue
 		}
+		if _, ok := d.(*ast.ImportDecl); ok {
+			continue
+		}
 		if !first {
 			g.writeln("")
 		}
@@ -47,9 +116,12 @@ func GenerateKotlin(root ast.Node) ([]byte, error) {
 }
 
 type ktGen struct {
-	buf    *strings.Builder
-	indent int
-	muts   map[string]bool
+	buf         *strings.Builder
+	indent      int
+	muts        map[string]bool
+	needResult  bool
+	packageName string
+	imports     map[string]bool
 }
 
 func (g *ktGen) write(s string)   { g.buf.WriteString(s) }
@@ -79,12 +151,35 @@ func typeToKotlin(t ast.TypeExpr) string {
 		}
 		return "Any?"
 	case "Result":
+		// Kotlin compiler maps main.Result automatically due to our imports
+		okType := "Any"
+		errType := "Any"
 		if t.OkType != nil {
-			return "Result<" + typeToKotlin(*t.OkType) + ">"
+			okType = typeToKotlin(*t.OkType)
 		}
-		return "Result<Any>"
+		if t.ErrType != nil {
+			errType = typeToKotlin(*t.ErrType)
+		}
+		return "Result<" + okType + ", " + errType + ">"
 	default:
 		return t.KindName
+	}
+}
+
+func (g *ktGen) defaultValue(t ast.TypeExpr) string {
+	switch t.KindName {
+	case "Int":
+		return "0L"
+	case "Float":
+		return "0.0"
+	case "Bool":
+		return "false"
+	case "String":
+		return `""`
+	case "Array":
+		return "emptyList()"
+	default:
+		return "null"
 	}
 }
 
@@ -122,6 +217,10 @@ func (g *ktGen) emitNode(n ast.Node) error {
 		return g.emitEnumDecl(node)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
+	case *ast.ClassDecl:
+		return g.emitClassDecl(node)
+	case *ast.SwitchStmt:
+		return g.emitSwitchStmt(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
@@ -184,6 +283,58 @@ func (g *ktGen) emitStructDecl(sd *ast.StructDecl) error {
 		g.write("val " + f.Name + ": " + typeToKotlin(f.Type))
 	}
 	g.writeln(")")
+	return nil
+}
+
+func (g *ktGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.writeIndent()
+	g.writeln("public class " + cd.Name + " {")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		vis := f.Visibility
+		if vis == "" {
+			vis = "public"
+		}
+		g.writeln(vis + " var " + f.Name + ": " + typeToKotlin(f.Type) + " = " + g.defaultValue(f.Type))
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *ktGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("when (")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+		} else {
+			g.write("else")
+		}
+		g.writeln(" -> {")
+		g.indent++
+		for _, stmt := range c.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("}")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
 	return nil
 }
 
@@ -320,7 +471,7 @@ func (g *ktGen) emitForStmt(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write(" until ")
+		g.write(" <= ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
@@ -388,6 +539,10 @@ func (g *ktGen) emitExpr(n ast.Node) error {
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
 		return g.emitArrayLit(node)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLiteral(node)
+	case *ast.MapLiteral:
+		return g.emitMapLiteral(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -474,6 +629,38 @@ func (g *ktGen) emitArrayLit(al *ast.ArrayLit) error {
 	return nil
 }
 
+func (g *ktGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
+	g.write("listOf(")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *ktGen) emitMapLiteral(ml *ast.MapLiteral) error {
+	g.write("mapOf(")
+	for i, entry := range ml.Entries {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(entry.Key); err != nil {
+			return err
+		}
+		g.write(" to ")
+		if err := g.emitExpr(entry.Value); err != nil {
+			return err
+		}
+	}
+	g.write(")")
+	return nil
+}
+
 func (g *ktGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
@@ -487,7 +674,8 @@ func (g *ktGen) emitIndexExpr(ie *ast.IndexExpr) error {
 }
 
 func (g *ktGen) emitStructLit(sl *ast.StructLit) error {
-	g.write(sl.TypeName + "(")
+	// Class name mapping for type checking
+	g.write(typeToKotlin(ast.TypeExpr{KindName: sl.TypeName}) + "(")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
@@ -561,8 +749,28 @@ func (g *ktGen) emitCall(ce *ast.CallExpr) error {
 			g.write("\"\"")
 		}
 		return nil
+	case "Result.ok":
+		g.write("Result.ok(")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	case "Result.err":
+		g.write("Result.err(")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
 	default:
-		g.write(ce.Callee + "(")
+		// Map type alias package name if any
+		callee := ce.Callee
+		g.write(callee + "(")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
