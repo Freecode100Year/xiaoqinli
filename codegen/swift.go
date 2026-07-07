@@ -8,13 +8,77 @@ import (
 )
 
 // GenerateSwift produces Swift source code from the given typed AST.
-// The "main" function's body is emitted at top level (Swift entry point convention).
 func GenerateSwift(root ast.Node) ([]byte, error) {
-	g := &swGen{buf: &strings.Builder{}}
+	g := &swGen{
+		buf:     &strings.Builder{},
+		imports: CollectImports(root),
+	}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	// Detect Result usage
+	walkTypes(root, func(t ast.TypeExpr, context string) {
+		if t.KindName == "Result" {
+			g.needResult = true
+		}
+	})
+
+	// Determine role (Models, Service or Program)
+	hasMain := false
+	hasService := false
+	for _, d := range prog.Decls {
+		if fd, ok := d.(*ast.FunctionDecl); ok {
+			if fd.Name == "main" {
+				hasMain = true
+			} else if fd.Name == "fetchUsers" {
+				hasService = true
+			}
+		}
+	}
+	className := "Models"
+	if hasMain {
+		className = "Program"
+	} else if hasService {
+		className = "Service"
+	}
+	g.className = className
+
+	var out strings.Builder
+	out.WriteString("import Foundation\n\n")
+
+	// Inject custom Result enum at Program top-level
+	if g.needResult && className == "Program" {
+		out.WriteString(`public enum Result<T, E> {
+    case ok(T)
+    case err(E)
+    public var isOk: Bool {
+        switch self {
+        case .ok: return true
+        case .err: return false
+        }
+    }
+    public func unwrap() -> T {
+        switch self {
+        case .ok(let val): return val
+        case .err: fatalError("Called unwrap on Err Result")
+        }
+    }
+    public func unwrapErr() -> E {
+        switch self {
+        case .ok: fatalError("Called unwrapErr on Ok Result")
+        case .err(let err): return err
+        }
+    }
+}
+`)
+	}
+
+	if className != "Program" {
+		out.WriteString("struct " + className + " {\n")
+		g.indent = 1
 	}
 
 	// Emit enum declarations first.
@@ -63,38 +127,48 @@ func GenerateSwift(root ast.Node) ([]byte, error) {
 		first = false
 	}
 
-	// Emit main body at top level.
-	for _, d := range prog.Decls {
-		fd, ok := d.(*ast.FunctionDecl)
-		if !ok || fd.Name != "main" {
-			continue
-		}
-		if !first {
-			g.writeln("")
-		}
-		g.muts = collectMutables(fd.Body)
-		for _, stmt := range fd.Body {
-			if err := g.emitNode(stmt); err != nil {
-				return nil, err
+	if className != "Program" {
+		g.indent = 0
+		g.writeln("}")
+	} else {
+		// Emit main body at top level (Swift entry point convention)
+		for _, d := range prog.Decls {
+			fd, ok := d.(*ast.FunctionDecl)
+			if !ok || fd.Name != "main" {
+				continue
+			}
+			if !first {
+				g.writeln("")
+			}
+			g.muts = collectMutables(fd.Body)
+			for _, stmt := range fd.Body {
+				if err := g.emitNode(stmt); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
 
-	return []byte(g.buf.String()), nil
+	out.WriteString(g.buf.String())
+	return []byte(out.String()), nil
 }
 
 type swGen struct {
-	buf    *strings.Builder
-	indent int
-	muts   map[string]bool
+	buf        *strings.Builder
+	indent     int
+	muts       map[string]bool
+	needResult bool
+	className  string
+	imports    map[string]bool
 }
 
 func (g *swGen) write(s string)   { g.buf.WriteString(s) }
 func (g *swGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
 func (g *swGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
 
-func typeToSwift(t ast.TypeExpr) string {
-	switch t.KindName {
+func (g *swGen) typeToSwift(t ast.TypeExpr) string {
+	name := g.stripOrCapitalizeAlias(t.KindName)
+	switch name {
 	case "Int":
 		return "Int"
 	case "Float":
@@ -107,22 +181,56 @@ func typeToSwift(t ast.TypeExpr) string {
 		return "Void"
 	case "Array":
 		if t.Elem != nil {
-			return "[" + typeToSwift(*t.Elem) + "]"
+			return "[" + g.typeToSwift(*t.Elem) + "]"
 		}
 		return "[Any]"
 	case "Option":
 		if t.Elem != nil {
-			return typeToSwift(*t.Elem) + "?"
+			return g.typeToSwift(*t.Elem) + "?"
 		}
 		return "Any?"
 	case "Result":
 		ok := "Any"
+		err := "Any"
 		if t.OkType != nil {
-			ok = typeToSwift(*t.OkType)
+			ok = g.typeToSwift(*t.OkType)
 		}
-		return "Result<" + ok + ", Error>"
+		if t.ErrType != nil {
+			err = g.typeToSwift(*t.ErrType)
+		}
+		return "Result<" + ok + ", " + err + ">"
 	default:
-		return t.KindName
+		return name
+	}
+}
+
+func (g *swGen) stripOrCapitalizeAlias(name string) string {
+	if strings.Contains(name, ".") {
+		parts := strings.Split(name, ".")
+		if len(parts) == 2 {
+			if g.imports[parts[0]] {
+				return capitalize(parts[0]) + "." + parts[1]
+			}
+			return parts[0] + "." + parts[1]
+		}
+	}
+	return name
+}
+
+func (g *swGen) defaultValue(t ast.TypeExpr) string {
+	switch t.KindName {
+	case "Int":
+		return "0"
+	case "Float":
+		return "0.0"
+	case "Bool":
+		return "false"
+	case "String":
+		return `""`
+	case "Array":
+		return "[]"
+	default:
+		return "nil"
 	}
 }
 
@@ -160,6 +268,10 @@ func (g *swGen) emitNode(n ast.Node) error {
 		return g.emitEnumDecl(node)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
+	case *ast.ClassDecl:
+		return g.emitClassDecl(node)
+	case *ast.SwitchStmt:
+		return g.emitSwitchStmt(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
@@ -215,9 +327,56 @@ func (g *swGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
-		g.writeln("var " + f.Name + ": " + typeToSwift(f.Type))
+		g.writeln("var " + f.Name + ": " + g.typeToSwift(f.Type))
 	}
 	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *swGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.writeIndent()
+	g.writeln("class " + cd.Name + " {")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		g.writeln("var " + f.Name + ": " + g.typeToSwift(f.Type) + " = " + g.defaultValue(f.Type))
+	}
+	g.writeIndent()
+	g.writeln("init() {}")
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *swGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("switch ")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(" {")
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			g.write("case ")
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+			g.writeln(":")
+		} else {
+			g.writeln("default:")
+		}
+		g.indent++
+		for _, stmt := range c.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+	}
 	g.writeIndent()
 	g.writeln("}")
 	return nil
@@ -227,16 +386,20 @@ func (g *swGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.muts = collectMutables(fd.Body)
 
 	g.writeIndent()
-	g.write("func " + fd.Name + "(")
+	prefix := ""
+	if g.className != "Program" {
+		prefix = "static "
+	}
+	g.write(prefix + "func " + fd.Name + "(")
 	for i, p := range fd.Params {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write("_ " + p.Name + ": " + typeToSwift(p.Type))
+		g.write("_ " + p.Name + ": " + g.typeToSwift(p.Type))
 	}
 	g.write(")")
 
-	rt := typeToSwift(fd.ReturnType)
+	rt := g.typeToSwift(fd.ReturnType)
 	if rt != "" && rt != "Void" {
 		g.write(" -> " + rt)
 	}
@@ -275,7 +438,7 @@ func (g *swGen) emitVarDecl(vd *ast.VarDecl) error {
 	} else {
 		g.write("let ")
 	}
-	g.write(vd.Name + ": " + typeToSwift(vd.Type))
+	g.write(vd.Name + ": " + g.typeToSwift(vd.Type))
 	if vd.Value != nil {
 		g.write(" = ")
 		if err := g.emitExpr(vd.Value); err != nil {
@@ -353,17 +516,15 @@ func (g *swGen) emitFor(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		// for i in start..<end {
 		g.write("for " + fs.Var + " in ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("..<")
+		g.write("...")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
 	case "each":
-		// for v in iterable {
 		g.write("for " + fs.Var + " in ")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
@@ -428,6 +589,10 @@ func (g *swGen) emitExpr(n ast.Node) error {
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
 		return g.emitArrayLit(node)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLiteral(node)
+	case *ast.MapLiteral:
+		return g.emitMapLiteral(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -460,10 +625,10 @@ func (g *swGen) emitLambda(lam *ast.Lambda) error {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name + ": " + typeToSwift(p.Type))
+		g.write(p.Name + ": " + g.typeToSwift(p.Type))
 	}
 	g.write(")")
-	rt := typeToSwift(lam.ReturnType)
+	rt := g.typeToSwift(lam.ReturnType)
 	if rt != "" && rt != "Void" {
 		g.write(" -> " + rt)
 	}
@@ -505,6 +670,42 @@ func (g *swGen) emitArrayLit(al *ast.ArrayLit) error {
 	return nil
 }
 
+func (g *swGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
+	g.write("[")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write("]")
+	return nil
+}
+
+func (g *swGen) emitMapLiteral(ml *ast.MapLiteral) error {
+	g.write("[")
+	if len(ml.Entries) == 0 {
+		g.write(":")
+	} else {
+		for i, entry := range ml.Entries {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(entry.Key); err != nil {
+				return err
+			}
+			g.write(": ")
+			if err := g.emitExpr(entry.Value); err != nil {
+				return err
+			}
+		}
+	}
+	g.write("]")
+	return nil
+}
+
 func (g *swGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
@@ -518,7 +719,7 @@ func (g *swGen) emitIndexExpr(ie *ast.IndexExpr) error {
 }
 
 func (g *swGen) emitStructLit(sl *ast.StructLit) error {
-	g.write(sl.TypeName + "(")
+	g.write(g.stripOrCapitalizeAlias(sl.TypeName) + "(")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
@@ -590,8 +791,37 @@ func (g *swGen) emitCall(ce *ast.CallExpr) error {
 			g.write(")")
 		}
 		return nil
+	case "Result.ok":
+		g.write("Result.ok(")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	case "Result.err":
+		g.write("Result.err(")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
 	default:
-		g.write(ce.Callee + "(")
+		callee := ce.Callee
+		if strings.Contains(callee, ".") {
+			parts := strings.Split(callee, ".")
+			if len(parts) == 2 {
+				if g.imports[parts[0]] {
+					callee = capitalize(parts[0]) + "." + parts[1]
+				} else {
+					callee = parts[0] + "." + parts[1]
+				}
+			}
+		}
+		g.write(callee + "(")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")

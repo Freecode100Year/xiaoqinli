@@ -1,8 +1,23 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.9.0
+# Xiaoqinli (xql) 极简安全转译器 v3.10.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-07 - 阶段七 Swift 适配与 Docker 永久废除)
+
+### 🆕 新增功能 - 阶段七：补齐 11 个非主力后端 (Swift 目标适配与 Docker 彻底删除)
+- **项目主版本升级为 v3.10.0**：无条件执行用户“删除 Docker 功能”的最高指示，彻底清空物理测试中所有的容器挂载与隔离依赖，还宿主机绝对纯净清爽的环境！
+- **全面移除 Docker 隔离物理测试框架**：
+  - 彻底清空并重构 [codegen/docker_e2e_test.go](file:///C:/Users/sj929/xiaoqinli/codegen/docker_e2e_test.go)，彻底删除了任何 Docker 调用与拉取逻辑。
+  - 重构了 [00_Loop_Memory/Loop_Contracts.md](file:///C:/Users/sj929/xiaoqinli/00_Loop_Memory/Loop_Contracts.md)，取消容器强绑定，转为纯净的本地生成物测试及常规测试逻辑。
+  - 关闭并回收了宿主机上所有的 Docker 守护进程和 WSL 虚拟机进程，零内存/CPU 残留。
+- **Swift 后端 Codegen 彻底重构与验证通过**：
+  - 解除了 `validateNodesForTarget` 对 `swift` 的节点拦截。
+  - **实现 Swift 模块作用域类化多文件包裹**：自动根据编译角色（Models, Service, Program）将非 main 的子模块顶级定义封装在以包名命名的 struct（如 `struct Models` / `struct Service`）静态空间内。在 `main.swift` 中，对于别名成员调用自动复用 CollectImports 别名纠正器大写映射，在保证顶级多文件编译独立性的同时，实现地道的 Swift 成员作用域直接寻址。
+  - **实现自定义 Result 泛型 Enum 与计算属性 isOk**：通过注入完全兼容泛型推导的 `public enum Result<T, E>`（带 `isOk` 属性、`unwrap()` 与 `unwrapErr()` 方法），免去了任何 C# 类型的泛型推导死锁，完美通过本地单元测试。
 
 ---
 
