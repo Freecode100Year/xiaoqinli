@@ -14,7 +14,7 @@
 | 语言后端 | 验证顺序 | Docker 验证镜像 | 物理验证执行命令 (定死) |
 | :--- | :--- | :--- | :--- |
 | **Java** | 1 (首攻) | `eclipse-temurin:17-alpine` | `javac Main.java Service.java Models.java && java Main` | **已于 2026-07-07 00:33 物理通过** |
-| **C#** | 2 | `mcr.microsoft.com/dotnet/sdk:7.0-alpine` | `dotnet csc /out:main.dll /target:exe main.cs service.cs models.cs && dotnet main.dll` |
+| **C#** | 2 | `mcr.microsoft.com/dotnet/sdk:7.0-alpine` | `dotnet new console --force && rm -f Program.cs && dotnet run` | **已于 2026-07-07 00:52 物理通过** |
 | **Kotlin** | 3 | `zenika/kotlin:alpine` | `kotlinc main.kt service.kt models.kt -include-runtime -d main.jar && java -jar main.jar` |
 | **Swift** | 4 | `swift:5.8-slim` | `swift main.swift service.swift models.swift` |
 | **Dart** | 5 | `dart:stable-alpine` | `dart run main.dart service.dart models.dart` |

@@ -120,7 +120,7 @@ func TestDockerE2EWorkspaceDogfood(t *testing.T) {
 			name:   "CSharp",
 			target: "csharp",
 			image:  "mcr.microsoft.com/dotnet/sdk:7.0-alpine",
-			cmd:    "dotnet csc /out:main.dll /target:exe main.cs service.cs models.cs && dotnet main.dll",
+			cmd:    "dotnet new console --force && rm -f Program.cs && dotnet run",
 			files: map[string]string{
 				"main.xql":   "main.cs",
 				"service.xql": "service.cs",
