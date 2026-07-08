@@ -15,6 +15,55 @@ func GenerateDart(root ast.Node) ([]byte, error) {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
+	// Detect Result usage
+	walkTypes(root, func(t ast.TypeExpr, context string) {
+		if t.KindName == "Result" {
+			g.needResult = true
+		}
+	})
+
+	// Emit import 'dart:io' and user imports first.
+	g.writeln("import 'dart:io';")
+	for _, d := range prog.Decls {
+		if id, ok := d.(*ast.ImportDecl); ok {
+			if err := g.emitImportDecl(id); err != nil {
+				return nil, err
+			}
+		}
+	}
+	g.writeln("")
+
+	// Inject custom Result class if needed
+	if g.needResult {
+		g.writeln(`class Result<T, E> {
+  final T? _ok;
+  final E? _err;
+  final bool isOk;
+
+  Result._(this._ok, this._err, this.isOk);
+
+  factory Result.ok(T val) => Result._(val, null, true);
+  factory Result.err(E err) => Result._(null, err, false);
+
+  T unwrap() {
+    if (!isOk) {
+      throw StateError('Called unwrap on Err Result');
+    }
+    return _ok as T;
+  }
+
+  E unwrapErr() {
+    if (isOk) {
+      throw StateError('Called unwrapErr on Ok Result');
+    }
+    return _err as E;
+  }
+}
+`)
+	}
+
+
+
 	// Emit enum declarations first.
 	first := true
 	for _, d := range prog.Decls {
@@ -31,6 +80,9 @@ func GenerateDart(root ast.Node) ([]byte, error) {
 
 	for _, d := range prog.Decls {
 		if _, ok := d.(*ast.EnumDecl); ok {
+			continue
+		}
+		if _, ok := d.(*ast.ImportDecl); ok {
 			continue
 		}
 		if !first {
@@ -67,6 +119,7 @@ type dartGen struct {
 	indent      int
 	muts        map[string]bool
 	needSprintf bool
+	needResult  bool
 }
 
 func (g *dartGen) write(s string)   { g.buf.WriteString(s) }
@@ -90,18 +143,50 @@ func typeToDart(t ast.TypeExpr) string {
 			return "List<" + typeToDart(*t.Elem) + ">"
 		}
 		return "List<dynamic>"
+	case "Map":
+		kt := "dynamic"
+		vt := "dynamic"
+		if t.KeyType != nil {
+			kt = typeToDart(*t.KeyType)
+		}
+		if t.Elem != nil {
+			vt = typeToDart(*t.Elem)
+		}
+		return "Map<" + kt + ", " + vt + ">"
 	case "Option":
 		if t.Elem != nil {
 			return typeToDart(*t.Elem) + "?"
 		}
 		return "dynamic"
 	case "Result":
+		okType := "dynamic"
+		errType := "dynamic"
 		if t.OkType != nil {
-			return typeToDart(*t.OkType)
+			okType = typeToDart(*t.OkType)
 		}
-		return "dynamic"
+		if t.ErrType != nil {
+			errType = typeToDart(*t.ErrType)
+		}
+		return "Result<" + okType + ", " + errType + ">"
 	default:
 		return t.KindName
+	}
+}
+
+func (g *dartGen) defaultValue(t ast.TypeExpr) string {
+	switch t.KindName {
+	case "Int":
+		return "0"
+	case "Float":
+		return "0.0"
+	case "Bool":
+		return "false"
+	case "String":
+		return `""`
+	case "Array":
+		return "[]"
+	default:
+		return "null"
 	}
 }
 
@@ -133,10 +218,16 @@ func (g *dartGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.ClassDecl:
+		return g.emitClassDecl(node)
 	case *ast.EnumDecl:
 		return g.emitEnumDecl(node)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
+	case *ast.SwitchStmt:
+		return g.emitSwitchStmt(node)
+	case *ast.ImportDecl:
+		return g.emitImportDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
@@ -252,9 +343,9 @@ func (g *dartGen) emitReturn(rs *ast.ReturnStmt) error {
 func (g *dartGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
 	if g.muts[vd.Name] {
-		g.write(typeToDart(vd.Type) + " " + vd.Name)
+		g.write("var " + vd.Name)
 	} else {
-		g.write("final " + typeToDart(vd.Type) + " " + vd.Name)
+		g.write("final " + vd.Name)
 	}
 	if vd.Value != nil {
 		g.write(" = ")
@@ -404,6 +495,10 @@ func (g *dartGen) emitExpr(n ast.Node) error {
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
 		return g.emitArrayLit(node)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLiteral(node)
+	case *ast.MapLiteral:
+		return g.emitMapLiteral(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -607,5 +702,101 @@ func (g *dartGen) emitLiteral(lit *ast.Literal) error {
 	default:
 		g.write(fmt.Sprintf("%v", lit.Value))
 	}
+	return nil
+}
+
+func (g *dartGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.writeIndent()
+	g.writeln("class " + cd.Name + " {")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		g.writeln(typeToDart(f.Type) + " " + f.Name + " = " + g.defaultValue(f.Type) + ";")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *dartGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("switch (")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			g.write("case ")
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+			g.writeln(":")
+		} else {
+			g.writeln("default:")
+		}
+		g.indent++
+		for _, stmt := range c.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.writeIndent()
+		g.writeln("break;")
+		g.indent--
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *dartGen) emitMapLiteral(ml *ast.MapLiteral) error {
+	keyType := typeToDart(ml.KeyType)
+	valType := typeToDart(ml.ValueType)
+	g.write("<" + keyType + ", " + valType + ">{")
+	for i, entry := range ml.Entries {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(entry.Key); err != nil {
+			return err
+		}
+		g.write(": ")
+		if err := g.emitExpr(entry.Value); err != nil {
+			return err
+		}
+	}
+	g.write("}")
+	return nil
+}
+
+func (g *dartGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
+	elemType := typeToDart(al.ElemType)
+	g.write("<" + elemType + ">[")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write("]")
+	return nil
+}
+
+func (g *dartGen) emitImportDecl(id *ast.ImportDecl) error {
+	path := id.Path
+	if strings.HasSuffix(path, ".xql.json") {
+		path = strings.TrimSuffix(path, ".xql.json") + ".dart"
+	} else if strings.HasSuffix(path, ".xql") {
+		path = strings.TrimSuffix(path, ".xql") + ".dart"
+	}
+	g.writeIndent()
+	g.writeln(fmt.Sprintf("import %q as %s;", path, id.As))
 	return nil
 }

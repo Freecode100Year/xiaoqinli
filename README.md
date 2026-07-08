@@ -1,8 +1,21 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.10.0
+# Xiaoqinli (xql) 极简安全转译器 v3.11.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-08 - 阶段七 Dart 适配与物理跑通)
+
+### 🆕 新增功能 - 阶段七：补齐 11 个非主力后端 (Dart 目标适配与物理跑通)
+- **项目主版本升级为 v3.11.0**：非主力后端补齐工作再创佳绩，Dart 后端完美适配与物理跑通！
+- **Dart 后端 Codegen 彻底重构与验证通过**：
+  - 解除了 `validateNodesForTarget` 对 `dart` 的节点拦截，使其完美支持 `ClassDecl`, `SwitchStmt`, `MapLiteral`, `ArrayLiteral` 以及 `ImportDecl` 节点的生成。
+  - **优雅利用局部变量动态类型推断（var/final）**：针对 Dart 多文件编译中各自定义的泛型 `Result` 类在跨文件赋值时引发的 `Type mismatch`（类型不匹配）死锁，我们将生成的局部变量声明类型统一重构为 `var`/`final`。成功利用 Dart 编译器的顶级局部类型推断，优雅破除了多文件 `Result` 冲突。
+  - **实现 Result 注入与 typeToDart 完美兼容**：自动分析 Result 引用并注入安全、现代的泛型 `Result<T, E>` 辅助类定义，并在 `typeToDart` 中实现了对 `Result<okType, errType>` 与 `Map<keyType, valueType>` 的全面支持。
+  - **实现 ImportDecl 别名导入映射**：自动转换模块导入路径为相对路径 `.dart` 形式，并使用 Dart 别名语法 `import 'path.dart' as alias;`，在保证多文件编译独立性的同时，实现地道的成员作用域寻址。
+  - **CI 容器自动化物理集成测试**：在 `.github/workflows/e2e-backends.yml` 中加入了 Setup Dart SDK 的步骤，保证在 GitHub CI 中进行真实的物理 E2E 断言测试。
 
 ---
 

@@ -119,6 +119,17 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 				"models.xql":  "models.swift",
 			},
 		},
+		{
+			name:     "Dart",
+			target:   "dart",
+			checkCmd: "dart",
+			runCmd:   "dart run main.dart service.dart models.dart",
+			files: map[string]string{
+				"main.xql":   "main.dart",
+				"service.xql": "service.dart",
+				"models.xql":  "models.dart",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -151,6 +162,8 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 					out, err = GenerateKotlin(node)
 				case "swift":
 					out, err = GenerateSwift(node)
+				case "dart":
+					out, err = GenerateDart(node)
 				}
 
 				if err != nil {

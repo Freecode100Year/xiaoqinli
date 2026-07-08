@@ -40,5 +40,8 @@ jobs:
       with:
         swift-version: '5.8'
 
+    - name: Setup Dart SDK
+      uses: dart-lang/setup-dart@v1
+
     - name: Run local E2E test without skips
       run: go test -v ./codegen -run TestLocalE2EWorkspaceDogfood -count=1

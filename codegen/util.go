@@ -207,7 +207,6 @@ func forkLocalVars(parent map[string]bool) map[string]bool {
 var unsupportedResultTargets = map[string]bool{
 	"js":         true,
 	"javascript": true,
-	"dart":       true,
 	"nim":        true,
 	"julia":      true,
 	"lua":        true,
@@ -321,7 +320,7 @@ func containsStringExpr(n ast.Node) bool {
 }
 
 func validateNodesForTarget(root ast.Node, target string) error {
-	if target == "go" || target == "rust" || target == "ts" || target == "js" || target == "javascript" || target == "py" || target == "java" || target == "csharp" || target == "kotlin" || target == "swift" {
+	if target == "go" || target == "rust" || target == "ts" || target == "js" || target == "javascript" || target == "py" || target == "java" || target == "csharp" || target == "kotlin" || target == "swift" || target == "dart" {
 		return nil
 	}
 	var err error
