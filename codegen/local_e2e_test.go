@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"fmt"
 
 	"xiaoqinli/ast"
 )
@@ -63,7 +64,17 @@ func runLocalE2E(t *testing.T, checkCmd string, runCmd string, files map[string]
 		lastOutput = string(out)
 
 		if err != nil {
-			t.Fatalf("Step %q failed: %v\nOutput: %s", step, err, lastOutput)
+			var fileDebug strings.Builder
+			fileDebug.WriteString("\n=== DEBUG: Generated Files Content ===\n")
+			entries, _ := os.ReadDir(tmpDir)
+			for _, entry := range entries {
+				if entry.Type().IsRegular() {
+					content, _ := os.ReadFile(filepath.Join(tmpDir, entry.Name()))
+					fileDebug.WriteString(fmt.Sprintf("--- File: %s ---\n%s\n", entry.Name(), string(content)))
+				}
+			}
+			fileDebug.WriteString("======================================\n")
+			t.Fatalf("Step %q failed: %v\nOutput: %s\n%s", step, err, lastOutput, fileDebug.String())
 		}
 	}
 
@@ -157,7 +168,7 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 			name:     "Zig",
 			target:   "zig",
 			checkCmd: "zig",
-			runCmd:   "zig run main.zig service.zig models.zig",
+			runCmd:   "zig run main.zig",
 			files: map[string]string{
 				"main.xql":   "main.zig",
 				"service.xql": "service.zig",
