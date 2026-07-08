@@ -343,7 +343,8 @@ func (g *dartGen) emitReturn(rs *ast.ReturnStmt) error {
 func (g *dartGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
 	if g.muts[vd.Name] {
-		g.write("var " + vd.Name)
+		// Mutable var: use explicit type so the name is typed (e.g. `int i = 0;`)
+		g.write(typeToDart(vd.Type) + " " + vd.Name)
 	} else {
 		g.write("final " + vd.Name)
 	}

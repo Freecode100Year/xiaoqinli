@@ -1217,7 +1217,7 @@ func TestResultTypeRejection(t *testing.T) {
 	root := mustParse(t, src)
 
 	// These targets should reject Result
-	rejectTargets := []string{"dart", "nim", "julia", "lua", "ruby"}
+	rejectTargets := []string{"nim", "julia", "lua", "ruby"}
 	for _, tgt := range rejectTargets {
 		_, err := Generate(root, tgt)
 		if err == nil {
@@ -1228,7 +1228,7 @@ func TestResultTypeRejection(t *testing.T) {
 	}
 
 	// These targets should accept Result
-	acceptTargets := []string{"go", "rust", "kotlin", "swift", "py", "java", "csharp", "php", "zig", "ts"}
+	acceptTargets := []string{"go", "rust", "kotlin", "swift", "py", "java", "csharp", "php", "zig", "ts", "dart"}
 	for _, tgt := range acceptTargets {
 		_, err := Generate(root, tgt)
 		if err != nil {
