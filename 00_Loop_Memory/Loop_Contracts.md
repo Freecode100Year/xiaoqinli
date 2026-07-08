@@ -18,7 +18,7 @@
 | **Kotlin** | 3 | `zenika/kotlin:alpine` | `kotlinc main.kt service.kt models.kt -include-runtime -d main.jar && java -jar main.jar` | **已于 2026-07-07 01:06 物理通过** |
 | **Swift** | 4 | `swift:5.8-slim` | `swift main.swift service.swift models.swift` | **已于 2026-07-07 01:23 物理通过** |
 | **Dart** | 5 | `dart:stable-alpine` | `dart run main.dart service.dart models.dart` | **已于 2026-07-08 15:06 物理跑通** |
-| **Zig** | 6 | `ziglang/zig:0.11.0-alpine` | `zig run main.zig service.zig models.zig` |
+| **Zig** | 6 | `ziglang/zig:0.11.0-alpine` | `zig run main.zig service.zig models.zig` | **已于 2026-07-08 15:19 物理跑通** |
 | **Nim** | 7 | `nimlang/nim:alpine` | `nim c -r main.nim` (Nim会自动解析模块导入) |
 | **Julia** | 8 | `julia:alpine` | `julia main.jl` (Julia会自动解析模块导入) |
 | **PHP** | 9 | `php:8.2-alpine` | `php main.php` (PHP由main主控加载) |

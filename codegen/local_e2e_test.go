@@ -130,6 +130,17 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 				"models.xql":  "models.dart",
 			},
 		},
+		{
+			name:     "Zig",
+			target:   "zig",
+			checkCmd: "zig",
+			runCmd:   "zig run main.zig service.zig models.zig",
+			files: map[string]string{
+				"main.xql":   "main.zig",
+				"service.xql": "service.zig",
+				"models.xql":  "models.zig",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -164,6 +175,8 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 					out, err = GenerateSwift(node)
 				case "dart":
 					out, err = GenerateDart(node)
+				case "zig":
+					out, err = GenerateZig(node)
 				}
 
 				if err != nil {

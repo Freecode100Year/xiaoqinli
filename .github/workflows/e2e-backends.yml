@@ -43,5 +43,10 @@ jobs:
     - name: Setup Dart SDK
       uses: dart-lang/setup-dart@v1
 
+    - name: Setup Zig toolchain
+      uses: goto-bus-stop/setup-zig@v2
+      with:
+        version: '0.11.0'
+
     - name: Run local E2E test without skips
       run: go test -v ./codegen -run TestLocalE2EWorkspaceDogfood -count=1

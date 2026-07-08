@@ -23,6 +23,44 @@ func GenerateZig(root ast.Node) ([]byte, error) {
 		}
 	}
 
+	// Detect Result usage
+	walkTypes(root, func(t ast.TypeExpr, context string) {
+		if t.KindName == "Result" {
+			g.needResult = true
+		}
+	})
+
+	// Emit import statements first
+	for _, d := range prog.Decls {
+		if id, ok := d.(*ast.ImportDecl); ok {
+			if err := g.emitImportDecl(id); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Inject custom Result generic definition if needed
+	if g.needResult {
+		g.writeln(`fn Result(comptime T: type, comptime E: type) type {
+    return struct {
+        val: T,
+        err: E,
+        isOk: bool,
+
+        const Self = @this();
+        pub fn unwrap(self: Self) T {
+            if (!self.isOk) @panic("Called unwrap on Err Result");
+            return self.val;
+        }
+        pub fn unwrapErr(self: Self) E {
+            if (self.isOk) @panic("Called unwrapErr on Ok Result");
+            return self.err;
+        }
+    };
+}
+`)
+	}
+
 	// Emit enum declarations first.
 	first := true
 	for _, d := range prog.Decls {
@@ -39,6 +77,9 @@ func GenerateZig(root ast.Node) ([]byte, error) {
 
 	for _, d := range prog.Decls {
 		if _, ok := d.(*ast.EnumDecl); ok {
+			continue
+		}
+		if _, ok := d.(*ast.ImportDecl); ok {
 			continue
 		}
 		if !first {
@@ -59,11 +100,12 @@ func GenerateZig(root ast.Node) ([]byte, error) {
 }
 
 type zigGen struct {
-	buf       *strings.Builder
-	indent    int
-	muts      map[string]bool
-	needStd   bool
-	scope     map[string]string // variable/param name → type kind
+	buf         *strings.Builder
+	indent      int
+	muts        map[string]bool
+	needStd     bool
+	needResult  bool
+	scope       map[string]string // variable/param name → type kind
 	funcReturns map[string]string // function name → return type kind
 }
 
@@ -94,10 +136,15 @@ func typeToZig(t ast.TypeExpr) string {
 		}
 		return "?*anyopaque"
 	case "Result":
+		okType := "void"
+		errType := "void"
 		if t.OkType != nil {
-			return "anyerror!" + typeToZig(*t.OkType)
+			okType = typeToZig(*t.OkType)
 		}
-		return "anyerror!void"
+		if t.ErrType != nil {
+			errType = typeToZig(*t.ErrType)
+		}
+		return "Result(" + okType + ", " + errType + ")"
 	default:
 		return t.KindName
 	}
@@ -131,10 +178,16 @@ func (g *zigGen) emitNode(n ast.Node) error {
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
 		return g.emitStructDecl(node)
+	case *ast.ClassDecl:
+		return g.emitClassDecl(node)
 	case *ast.EnumDecl:
 		return g.emitEnumDecl(node)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
+	case *ast.SwitchStmt:
+		return g.emitSwitchStmt(node)
+	case *ast.ImportDecl:
+		return g.emitImportDecl(node)
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
@@ -143,7 +196,7 @@ func (g *zigGen) emitNode(n ast.Node) error {
 func (g *zigGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	for i, v := range ed.Variants {
 		g.writeIndent()
-		g.writeln(fmt.Sprintf("const %s%s: i64 = %d;", ed.Name, v, i))
+		g.writeln(fmt.Sprintf("pub const %s%s: i64 = %d;", ed.Name, v, i))
 	}
 	return nil
 }
@@ -182,7 +235,7 @@ func (g *zigGen) emitMatchExpr(me *ast.MatchExpr) error {
 
 func (g *zigGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.writeIndent()
-	g.writeln("const " + sd.Name + " = struct {")
+	g.writeln("pub const " + sd.Name + " = struct {")
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
@@ -202,10 +255,7 @@ func (g *zigGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	}
 
 	g.writeIndent()
-	if fd.Name == "main" {
-		g.write("pub ")
-	}
-	g.write("fn " + fd.Name + "(")
+	g.write("pub fn " + fd.Name + "(")
 	for i, p := range fd.Params {
 		if i > 0 {
 			g.write(", ")
@@ -411,6 +461,10 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
 		return g.emitArrayLit(node)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLiteral(node)
+	case *ast.MapLiteral:
+		return g.emitMapLiteral(node)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -569,6 +623,24 @@ func (g *zigGen) emitCall(ce *ast.CallExpr) error {
 		}
 		g.write("})")
 		return nil
+	case "Result.ok":
+		g.write(".{ .val = ")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write(", .err = undefined, .isOk = true }")
+		return nil
+	case "Result.err":
+		g.write(".{ .val = undefined, .err = ")
+		if len(ce.Args) > 0 {
+			if err := g.emitExpr(ce.Args[0]); err != nil {
+				return err
+			}
+		}
+		g.write(", .isOk = false }")
+		return nil
 	default:
 		g.write(ce.Callee + "(")
 		for i, arg := range ce.Args {
@@ -602,4 +674,113 @@ func (g *zigGen) emitLiteral(lit *ast.Literal) error {
 		g.write(fmt.Sprintf("%v", lit.Value))
 	}
 	return nil
+}
+
+func (g *zigGen) defaultValue(t ast.TypeExpr) string {
+	switch t.KindName {
+	case "Int":
+		return "0"
+	case "Float":
+		return "0.0"
+	case "Bool":
+		return "false"
+	case "String":
+		return `""`
+	case "Array":
+		elemType := "u8"
+		if t.Elem != nil {
+			elemType = typeToZig(*t.Elem)
+		}
+		return "&[_]" + elemType + "{}"
+	default:
+		return "null"
+	}
+}
+
+func (g *zigGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.writeIndent()
+	g.writeln("pub const " + cd.Name + " = struct {")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		g.writeln(f.Name + ": " + typeToZig(f.Type) + " = " + g.defaultValue(f.Type) + ",")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("};")
+	return nil
+}
+
+func (g *zigGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("switch (")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	hasDefault := false
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+		} else {
+			g.write("else")
+			hasDefault = true
+		}
+		g.writeln(" => {")
+		g.indent++
+		for _, stmt := range c.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("},")
+	}
+	if !hasDefault {
+		g.writeIndent()
+		g.writeln("else => {},")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *zigGen) emitImportDecl(id *ast.ImportDecl) error {
+	path := id.Path
+	if strings.HasSuffix(path, ".xql.json") {
+		path = strings.TrimSuffix(path, ".xql.json") + ".zig"
+	} else if strings.HasSuffix(path, ".xql") {
+		path = strings.TrimSuffix(path, ".xql") + ".zig"
+	}
+	g.writeIndent()
+	g.writeln(fmt.Sprintf("pub const %s = @import(%q);", id.As, path))
+	return nil
+}
+
+func (g *zigGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
+	elemType := "u8"
+	if al.ElemType.KindName != "" {
+		elemType = typeToZig(al.ElemType)
+	}
+	g.write("&[_]" + elemType + "{ ")
+	for i, elem := range al.Elements {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(elem); err != nil {
+			return err
+		}
+	}
+	g.write(" }")
+	return nil
+}
+
+func (g *zigGen) emitMapLiteral(ml *ast.MapLiteral) error {
+	return fmt.Errorf("XQL_E401: Zig target does not support MapLiteral")
 }

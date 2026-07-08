@@ -1,8 +1,22 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.11.0
+# Xiaoqinli (xql) 极简安全转译器 v3.12.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-08 - 阶段七 Zig 开启与物理跑通)
+
+### 🆕 新增功能 - 阶段七：补齐 11 个非主力后端 (Zig 目标适配与物理跑通)
+- **项目主版本升级为 v3.12.0**：非主力后端物理开发工作再次突破，Zig 后端完美适配与物理跑通！
+- **Zig 后端 Codegen 彻底重构与验证通过**：
+  - 解除了 `validateNodesForTarget` 对 `zig` 的节点拦截，使其支持 `ClassDecl`, `SwitchStmt`, `MapLiteral`, `ArrayLiteral` 以及 `ImportDecl` 的编译生成。
+  - **实现泛型 Result 匿名结构体强制转换（Coercion）**：为克服 Zig 强类型编译器无法隐式推导泛型双参数 struct（如 `Result(T, E)`）在 `Result.ok`/`Result.err` 出口处的类型问题，我们利用了 Zig 语言原生的匿名结构体强制转换特性。在 `Result.ok`/`Result.err` 处，直接生成 `.{ .val = v, .err = undefined, .isOk = true }` 匿名结构体，极简而优雅地破除了类型推导死锁。
+  - **泛型 Result 实例级 unwrap 支持**：在每个包含 `Result` 类型的文件中注入了带 `.unwrap()` 与 `.unwrapErr()` 的泛型 `Result(comptime T, comptime E)` struct 定义，并在 `typeToZig` 中完美转换。
+  - **实现 ImportDecl 别名导入映射**：自动转换别名模块导入路径为相对路径 `.zig` 形式，并使用 Zig 语法 `pub const alias = @import("path.zig");`，实现地道的成员作用域寻址。
+  - **导出 pub 命名空间公开化**：将 Zig 的所有顶级函数（`pub fn`）、顶级结构体（`pub const Struct`）与枚举声明（`pub const Enum`）强制标注为 `pub`（公开），彻底解决了多文件独立编译时跨包/跨文件访问私有符号的问题。
+  - **CI 容器自动化物理集成测试**：在 `.github/workflows/e2e-backends.yml` 中加入了 `setup-zig` 的集成步骤，保证在 GitHub CI 中进行真实的物理 E2E 断言测试。
 
 ---
 
