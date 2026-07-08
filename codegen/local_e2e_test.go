@@ -34,19 +34,42 @@ func runLocalE2E(t *testing.T, checkCmd string, runCmd string, files map[string]
 		_ = os.WriteFile(filepath.Join(tmpDir, name), content, 0644)
 	}
 
-	// 3. Compile & run command via powershell
-	cmd := exec.Command("powershell", "-Command", runCmd)
-	cmd.Dir = tmpDir
-	out, err := cmd.CombinedOutput()
-	outputStr := string(out)
+	// 3. Compile & run command steps
+	steps := strings.Split(runCmd, ";")
+	var lastOutput string
+	for _, step := range steps {
+		step = strings.TrimSpace(step)
+		if step == "" {
+			continue
+		}
 
-	if err != nil {
-		t.Fatalf("Local execution failed: %v\nOutput: %s", err, outputStr)
+		// Handle C# Program.cs cleanup cross-platform
+		if strings.Contains(step, "Remove-Item") || strings.Contains(step, "Program.cs") && (strings.Contains(step, "rm ") || strings.Contains(step, "Remove-Item")) {
+			programPath := filepath.Join(tmpDir, "Program.cs")
+			if _, err := os.Stat(programPath); err == nil {
+				_ = os.Remove(programPath)
+			}
+			continue
+		}
+
+		args := strings.Fields(step)
+		if len(args) == 0 {
+			continue
+		}
+
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Dir = tmpDir
+		out, err := cmd.CombinedOutput()
+		lastOutput = string(out)
+
+		if err != nil {
+			t.Fatalf("Step %q failed: %v\nOutput: %s", step, err, lastOutput)
+		}
 	}
 
 	// 4. Assert stdout contains target names from workspace dogfood XQL data
-	if !strings.Contains(outputStr, "Alice") || !strings.Contains(outputStr, "Bob") {
-		t.Fatalf("Output assertion failed. Expected output to contain 'Alice' and 'Bob'. Actual output:\n%s", outputStr)
+	if !strings.Contains(lastOutput, "Alice") || !strings.Contains(lastOutput, "Bob") {
+		t.Fatalf("Output assertion failed. Expected output to contain 'Alice' and 'Bob'. Actual output:\n%s", lastOutput)
 	}
 }
 
