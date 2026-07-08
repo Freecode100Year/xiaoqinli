@@ -145,8 +145,8 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 		{
 			name:     "Swift",
 			target:   "swift",
-			checkCmd: "swift",
-			runCmd:   "swift main.swift service.swift models.swift",
+			checkCmd: "swiftc",
+			runCmd:   "swiftc main.swift service.swift models.swift -o main_out && ./main_out",
 			files: map[string]string{
 				"main.xql":   "main.swift",
 				"service.xql": "service.swift",

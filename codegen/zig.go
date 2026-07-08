@@ -47,7 +47,7 @@ func GenerateZig(root ast.Node) ([]byte, error) {
         err: E,
         isOk: bool,
 
-        const Self = @this();
+        const Self = @This();
         pub fn unwrap(self: Self) T {
             if (!self.isOk) @panic("Called unwrap on Err Result");
             return self.val;
