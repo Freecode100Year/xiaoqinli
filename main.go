@@ -4,32 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
 
-	"xiaoqinli/ast"
-	"xiaoqinli/check"
-	"xiaoqinli/codegen"
+	"xiaoqinli/compiler"
 	"xiaoqinli/server"
 )
 
-const Version = "3.5.0"
+const Version = compiler.Version
 
-var allTargets = []string{
-	"go", "rust", "ts", "kotlin", "swift", "py",
-	"java", "csharp", "dart", "lua", "ruby", "php",
-	"zig", "nim", "julia", "cpp", "c", "scala", "haskell",
-	"mql4", "mql5",
-	"ocaml", "fsharp", "elixir", "clojure",
-	"ada", "awk", "bash", "crystal", "d", "fortran",
-	"objc", "pascal", "perl", "powershell", "tcl", "v",
-	"vala",
-	"groovy",
-	"bat",
-	"shortcut",
-	"chrome",
-}
-
-const usage = `xiaoqinli - AST-First transpiler v` + Version + `
+func getUsage() string {
+	return fmt.Sprintf(`xiaoqinli - AST-First transpiler v%s
 
 Usage:
   xiaoqinli compile --file <path.xql.json> --target <lang> [--out <output>]
@@ -38,13 +22,15 @@ Usage:
   xiaoqinli stdio                           MCP stdio mode
   xiaoqinli http [<:port>] [--mode rest]    MCP/REST HTTP mode (default :8080)
 
-Targets: go | rust | ts | kotlin | swift | py | java | csharp | dart | lua | ruby | php | zig | nim | julia | cpp | c | scala | haskell | ocaml | fsharp | elixir | clojure | mql4 | mql5 | ada | awk | bash | bat | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v | vala | groovy | shortcut | chrome (default: go)
+Targets: %s (default: go)
 
-Exit codes: 0=success 1=validation failed 2=compilation error 3=argument error`
+Exit codes: 0=success 1=validation failed 2=compilation error 3=argument error`,
+		Version, strings.Join(compiler.GetSupportedTargets(), " | "))
+}
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintln(os.Stderr, usage)
+		fmt.Fprintln(os.Stderr, getUsage())
 		os.Exit(3)
 	}
 
@@ -54,7 +40,7 @@ func main() {
 	case "validate":
 		cmdValidate(os.Args[2:])
 	case "targets":
-		for _, t := range allTargets {
+		for _, t := range compiler.GetSupportedTargets() {
 			fmt.Println(t)
 		}
 	case "stdio":
@@ -66,7 +52,7 @@ func main() {
 	case "http":
 		cmdHTTP(os.Args[2:])
 	default:
-		fmt.Fprintf(os.Stderr, "error: unknown command '%s'\n\n%s\n", os.Args[1], usage)
+		fmt.Fprintf(os.Stderr, "error: unknown command '%s'\n\n%s\n", os.Args[1], getUsage())
 		os.Exit(3)
 	}
 }
@@ -94,14 +80,21 @@ func cmdValidate(args []string) {
 		os.Exit(3)
 	}
 
-	root, err := loadAST(filePath)
+	data, err := os.ReadFile(filePath)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+		fmt.Fprintf(os.Stderr, "XQL_E404: %v\n", err)
 		os.Exit(1)
 	}
 
-	if err := check.RunAll(root); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
+	pr := compiler.ParseAST(compiler.ParseRequest{Data: data, FilePath: filePath})
+	if !pr.Success {
+		fmt.Fprintf(os.Stderr, "%s\n", pr.Error)
+		os.Exit(1)
+	}
+
+	vr := compiler.Validate(compiler.ValidateRequest{AST: pr.AST})
+	if !vr.Success {
+		fmt.Fprintf(os.Stderr, "%s\n", vr.Error)
 		os.Exit(1)
 	}
 
@@ -122,73 +115,30 @@ func cmdCompile(args []string) {
 		target = "go"
 	}
 
-	// Load and parse AST.
-	root, err := loadAST(filePath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
+	// Use the compiler library for the full pipeline.
+	result := compiler.CompileFromFile(filePath, target, outPath)
 
-	// Compile MUST first pass validate (architecture requirement).
-	if err := check.RunAll(root); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-
-	// Code generation.
-	output, err := codegen.Generate(root, target)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "XQL_E401: codegen error: %v\n", err)
+	if !result.Success {
+		fmt.Fprintf(os.Stderr, "%s\n", result.Error)
+		// Output structured diagnostics for AI/IDE consumers.
+		if len(result.Diagnostics) > 0 {
+			diagJSON, _ := json.MarshalIndent(result.Diagnostics, "", "  ")
+			fmt.Fprintf(os.Stderr, "Diagnostics: %s\n", string(diagJSON))
+		}
 		os.Exit(2)
 	}
 
 	// Output result.
 	if outPath != "" {
 		if target == "chrome" {
-			if err := unpackChromeBundle(output, outPath); err != nil {
-				fmt.Fprintf(os.Stderr, "error: %v\n", err)
-				os.Exit(2)
-			}
 			fmt.Fprintf(os.Stderr, "ok: Chrome extension unpacked to %s/\n", outPath)
 			fmt.Fprintf(os.Stderr, "    Load unpacked in chrome://extensions (Developer mode)\n")
 		} else {
-			if err := os.WriteFile(outPath, output, 0644); err != nil {
-				fmt.Fprintf(os.Stderr, "error writing output: %v\n", err)
-				os.Exit(2)
-			}
 			fmt.Fprintf(os.Stderr, "ok: compiled to %s\n", outPath)
 		}
 	} else {
-		fmt.Print(string(output))
+		fmt.Print(string(result.Code))
 	}
-}
-
-func unpackChromeBundle(data []byte, dir string) error {
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("cannot create directory %s: %v", dir, err)
-	}
-	var bundle map[string]interface{}
-	if err := json.Unmarshal(data, &bundle); err != nil {
-		return fmt.Errorf("invalid bundle: %v", err)
-	}
-	for name, content := range bundle {
-		var fileData []byte
-		switch v := content.(type) {
-		case string:
-			fileData = []byte(v)
-		default:
-			b, err := json.MarshalIndent(v, "", "  ")
-			if err != nil {
-				return fmt.Errorf("marshal %s: %v", name, err)
-			}
-			fileData = append(b, '\n')
-		}
-		p := filepath.Join(dir, name)
-		if err := os.WriteFile(p, fileData, 0644); err != nil {
-			return fmt.Errorf("write %s: %v", name, err)
-		}
-	}
-	return nil
 }
 
 func cmdHTTP(args []string) {
@@ -217,15 +167,3 @@ func cmdHTTP(args []string) {
 	}
 }
 
-// loadAST reads a .xql.json file and parses it into a typed AST.
-func loadAST(path string) (ast.Node, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("XQL_E404: %v", err)
-	}
-	root, err := ast.Parse(data)
-	if err != nil {
-		return nil, err
-	}
-	return root, nil
-}

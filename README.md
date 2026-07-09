@@ -1,8 +1,40 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.12.0
+# Xiaoqinli (xql) 极简安全转译器 v3.13.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-09 - v3.13.0 库化导出)
+
+### 🆕 新增功能 - 库化导出：compiler 包公共 API
+- **项目主版本升级为 v3.13.0**：新增 `compiler` 包，将编译流水线（AST 解析 → 语义检查 → 代码生成）导出为可被外部 Go 项目直接 import 调用的库函数。
+- **6 个公共函数导出**：
+  - `compiler.ParseAST(req)` — 将 `.xql.json` 字节解析为类型化 AST
+  - `compiler.Validate(req)` — 仅执行语义检查（类型、Effect、Capability）
+  - `compiler.Compile(req)` — 完整编译流程：验证 + 代码生成 + 可选磁盘写入
+  - `compiler.CompileFromFile(path, target, out)` — 端到端便利函数
+  - `compiler.GetSupportedTargets()` — 返回 42+ 种目标语言列表
+  - `compiler.GetVersion()` — 返回库版本号
+- **结构化诊断输出**：`CompileResult.Diagnostics` 直接桥接 `check.WorkspaceError`，AI Agent 和 IDE 可直接消费 JSON 格式的错误码 + 建议修复
+- **main.go 精简化**：CLI 入口从 232 行精简至 170 行，全部通过调用 `compiler` 包实现，消除了对 `ast/check/codegen` 的直接依赖
+- **100% 向后兼容**：现有 CLI / MCP stdio / REST HTTP 用户零感知
+
+#### 库使用示例
+```go
+import "xiaoqinli/compiler"
+
+// 一行编译
+result := compiler.CompileFromFile("app.xql.json", "go", "")
+if !result.Success {
+    log.Fatal(result.Error)
+}
+fmt.Println(string(result.Code))
+```
+
+### 🐛 Bug 修复
+- 无（纯新增功能，无破坏性变更）
 
 ---
 
