@@ -192,11 +192,12 @@ func computeStats(root ast.Node, code []byte, duration time.Duration) CompileSta
 				walker(stmt)
 			}
 		case *ast.StructDecl:
-			s.StructCount++
-			for _, f := range node.Fields {
-				// Field is not a Node, but we can count them if we want.
-				// For now, just count the decl.
-			}
+				s.StructCount++
+				for _, f := range node.Fields {
+					// Field is not a Node, but we can count them if we want.
+					// For now, just count the decl.
+					_ = f
+				}
 		case *ast.ClassDecl:
 			s.ClassCount++
 		case *ast.ReturnStmt:

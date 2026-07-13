@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -75,7 +74,6 @@ type rpcError struct {
 
 // ServeStdio runs the MCP server in stdio mode, reading JSON-RPC from stdin.
 func (s *MCPServer) ServeStdio() error {
-	log.Println("[MCP] Starting stdio server")
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 0, 4*1024*1024), 64*1024*1024)
 	enc := json.NewEncoder(os.Stdout)
@@ -88,7 +86,6 @@ func (s *MCPServer) ServeStdio() error {
 
 		var req jsonRPCRequest
 		if err := json.Unmarshal(line, &req); err != nil {
-			log.Printf("[MCP] Parse error: %v", err)
 			resp := jsonRPCResponse{
 				JSONRPC: "2.0",
 				Error:   &rpcError{Code: -32700, Message: "parse error"},
@@ -96,8 +93,6 @@ func (s *MCPServer) ServeStdio() error {
 			enc.Encode(resp)
 			continue
 		}
-
-		log.Printf("[MCP] Request: %s (ID: %v)", req.Method, req.ID)
 
 		if req.ID == nil {
 			s.handleNotification(&req)
@@ -113,7 +108,6 @@ func (s *MCPServer) ServeStdio() error {
 func (s *MCPServer) safeHandleRequest(req *jsonRPCRequest) (resp jsonRPCResponse) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("[MCP] Panic recovered: %v", r)
 			resp = jsonRPCResponse{
 				JSONRPC: "2.0",
 				ID:      req.ID,
@@ -132,13 +126,12 @@ func (s *MCPServer) safeHandleRequest(req *jsonRPCRequest) (resp jsonRPCResponse
 func (s *MCPServer) ServeHTTP(addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", s.handleHTTPMCP)
-	log.Printf("[MCP] HTTP listening on %s", addr)
+	fmt.Fprintf(os.Stderr, "MCP HTTP listening on %s\n", addr)
 	return http.ListenAndServe(addr, mux)
 }
 
 func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
-		log.Printf("[MCP] HTTP method not allowed: %s", r.Method)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
@@ -147,14 +140,12 @@ func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		log.Printf("[MCP] HTTP read error: %v", err)
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
 
 	var req jsonRPCRequest
 	if err := json.Unmarshal(body, &req); err != nil {
-		log.Printf("[MCP] HTTP parse error: %v", err)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(jsonRPCResponse{
 			JSONRPC: "2.0",
@@ -162,8 +153,6 @@ func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-
-	log.Printf("[MCP] HTTP Request: %s (ID: %v)", req.Method, req.ID)
 
 	if req.ID == nil {
 		s.handleNotification(&req)
@@ -181,6 +170,7 @@ func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
 // ---------------------------------------------------------------------------
 
 func (s *MCPServer) handleNotification(req *jsonRPCRequest) {
+	// Notifications (no ID) require no response. Log for debugging only.
 	switch req.Method {
 	case "notifications/initialized", "notifications/cancelled":
 		// expected lifecycle notifications — no action needed
@@ -202,7 +192,6 @@ func (s *MCPServer) handleRequest(req *jsonRPCRequest) jsonRPCResponse {
 	case "prompts/get":
 		return s.handlePromptsGet(req)
 	default:
-		log.Printf("[MCP] Unknown method: %s", req.Method)
 		return jsonRPCResponse{
 			JSONRPC: "2.0",
 			ID:      req.ID,
@@ -219,7 +208,7 @@ func (s *MCPServer) handleInitialize(req *jsonRPCRequest) jsonRPCResponse {
 			"protocolVersion": "2025-03-26",
 			"serverInfo": map[string]string{
 				"name":    "xiaoqinli",
-				"version": "3.13.1",
+				"version": "3.2.0",
 			},
 			"capabilities": map[string]interface{}{
 				"tools":   map[string]interface{}{},
@@ -255,10 +244,10 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 			"inputSchema": map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
-				"source": map[string]string{
-					"type":        "string",
-					"description": "The .xql.json AST as a JSON string",
-				},
+					"source": map[string]string{
+						"type":        "string",
+						"description": "The .xql.json AST as a JSON string",
+					},
 				},
 				"required": []string{"source"},
 			},
@@ -267,7 +256,7 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 			"name":        "targets",
 			"description": "List all supported target languages with their flags and file extensions",
 			"inputSchema": map[string]interface{}{
-				"type": "object",
+				"type":       "object",
 				"properties": map[string]interface{}{},
 			},
 		},
@@ -275,36 +264,52 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 	return jsonRPCResponse{
 		JSONRPC: "2.0",
 		ID:      req.ID,
-		Result: map[string]interface{}{\"tools\": tools},
+		Result:  map[string]interface{}{"tools": tools},
 	}
 }
 
 func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 	var params struct {
-		Name      string          `json:\"name\"`
-		Arguments json.RawMessage `json:\"arguments\"`
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
 	}
 	if err := json.Unmarshal(req.Params, &params); err != nil {
 		return jsonRPCResponse{
-		JSONRPC: \"2.0\",
-		ID:      req.ID,
-		Error:   &rpcError{Code: -32602, Message: \"invalid params\"},
-	}
-	}
-
-	var args struct {
-		Source string `json:\"source\"`
-		Target string `json:\"target\"`
-	}
-	if err := json.Unmarshal(params.Arguments, &args); err != nil {
-		return jsonRPCResponse{
-		JSONRPC: \"2.0\",
-		ID:      req.ID,
-		Error:   &rpcError{Code: -32 laze(\" l")
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &rpcError{Code: -32602, Message: "invalid params"},
 		}
 	}
 
-	return s.toolCompile(req.ID, args.Source, args.Target)
+	var args struct {
+		Source string `json:"source"`
+		Target string `json:"target"`
+	}
+	if err := json.Unmarshal(params.Arguments, &args); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &rpcError{Code: -32602, Message: "invalid tool arguments"},
+		}
+	}
+	if args.Target == "" {
+		args.Target = "go"
+	}
+
+	switch params.Name {
+	case "compile":
+		return s.toolCompile(req.ID, args.Source, args.Target)
+	case "validate":
+		return s.toolValidate(req.ID, args.Source)
+	case "targets":
+		return s.toolTargets(req.ID)
+	default:
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &rpcError{Code: -32602, Message: "unknown tool: " + params.Name},
+		}
+	}
 }
 
 func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCResponse {
@@ -326,7 +331,7 @@ func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCRe
 		ID:      id,
 		Result: map[string]interface{}{
 			"content": []map[string]string{
-				{"type": "text", \"text\": string(output)},
+				{"type": "text", "text": string(output)},
 			},
 		},
 	}
@@ -343,21 +348,74 @@ func (s *MCPServer) toolValidate(id interface{}, source string) jsonRPCResponse 
 	return jsonRPCResponse{
 		JSONRPC: "2.0",
 		ID:      id,
-		Result: map[string]interface{}{s
-		\"content\": []map[string]string{
-				{\"type\": \"text\", \"text\": \"ok: all checks passed\"},
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": "ok: all checks passed"},
 			},
 		},
 	}
 }
 
-func (s *MCPServer) toolTargets(id interface{}, target string) jsonRPCResponse {
+func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
+	targets := []map[string]string{
+		{"flag": "go", "ext": ".go", "name": "Go"},
+		{"flag": "rust", "ext": ".rs", "name": "Rust"},
+		{"flag": "ts", "ext": ".ts", "name": "TypeScript"},
+		{"flag": "py", "ext": ".py", "name": "Python"},
+		{"flag": "cpp", "ext": ".cpp", "name": "C++"},
+		{"flag": "c", "ext": ".c", "name": "C"},
+		{"flag": "java", "ext": ".java", "name": "Java"},
+		{"flag": "csharp", "ext": ".cs", "name": "C#"},
+		{"flag": "kotlin", "ext": ".kt", "name": "Kotlin"},
+		{"flag": "swift", "ext": ".swift", "name": "Swift"},
+		{"flag": "scala", "ext": ".scala", "name": "Scala"},
+		{"flag": "haskell", "ext": ".hs", "name": "Haskell"},
+		{"flag": "dart", "ext": ".dart", "name": "Dart"},
+		{"flag": "lua", "ext": ".lua", "name": "Lua"},
+		{"flag": "ruby", "ext": ".rb", "name": "Ruby"},
+		{"flag": "php", "ext": ".php", "name": "PHP"},
+		{"flag": "zig", "ext": ".zig", "name": "Zig"},
+		{"flag": "nim", "ext": ".nim", "name": "Nim"},
+		{"flag": "julia", "ext": ".jl", "name": "Julia"},
+		{"flag": "mql4", "ext": ".mq4", "name": "MQL4"},
+		{"flag": "mql5", "ext": ".mq5", "name": "MQL5"},
+		{"flag": "ada", "ext": ".adb", "name": "Ada"},
+		{"flag": "awk", "ext": ".awk", "name": "AWK"},
+		{"flag": "bash", "ext": ".sh", "name": "Bash"},
+		{"flag": "crystal", "ext": ".cr", "name": "Crystal"},
+		{"flag": "d", "ext": ".d", "name": "D"},
+		{"flag": "fortran", "ext": ".f90", "name": "Fortran"},
+		{"flag": "objc", "ext": ".m", "name": "Objective-C"},
+		{"flag": "pascal", "ext": ".pas", "name": "Pascal"},
+		{"flag": "perl", "ext": ".pl", "name": "Perl"},
+		{"flag": "powershell", "ext": ".ps1", "name": "PowerShell"},
+		{"flag": "tcl", "ext": ".tcl", "name": "Tcl"},
+		{"flag": "v", "ext": ".v", "name": "V"},
+		{"flag": "ocaml", "ext": ".ml", "name": "OCaml"},
+		{"flag": "fsharp", "ext": ".fs", "name": "F#"},
+		{"flag": "elixir", "ext": ".ex", "name": "Elixir"},
+		{"flag": "clojure", "ext": ".clj", "name": "Clojure"},
+		{"flag": "vala", "ext": ".vala", "name": "Vala"},
+		{"flag": "groovy", "ext": ".groovy", "name": "Groovy"},
+		{"flag": "bat", "ext": ".bat", "name": "Batch"},
+		{"flag": "shortcut", "ext": ".shortcut", "name": "Apple Shortcuts"},
+		{"flag": "chrome", "ext": ".crx.json", "name": "Chrome Extension"},
+	}
+	lines := make([]string, len(targets))
+	for i, t := range targets {
+		lines[i] = t["flag"] + " (" + t["name"] + ", " + t["ext"] + ")"
+	}
+	text := fmt.Sprintf("Supported targets (%d languages):\n", len(targets))
+	for _, l := range lines {
+		text += "  " + l + "\n"
+	}
 	return jsonRPCResponse{
-		JSONRPC: \"2.0\",
+		JSONRPC: "2.0",
 		ID:      id,
 		Result: map[string]interface{}{
-			\"content\": []map[string]string{
-				{\"type\": \"text\", \"text\": \"Supported targets: Go, Rust, TS, Py, etc.\},
+			"content": []map[string]string{
+				{"type": "text", "text": text},
+			},
 		},
 	}
 }
@@ -387,5 +445,4 @@ func toolErrorResult(id interface{}, err error) jsonRPCResponse {
 		ID:      id,
 		Result:  res,
 	}
-}
 }

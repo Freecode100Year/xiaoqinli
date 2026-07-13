@@ -339,13 +339,21 @@ type Lambda struct {
 
 func (*Lambda) Kind() string { return "Lambda" }
 
-// ===================== JSON Parsing ================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================================= laze(" laze(\" laze(\" l")
+// ===================== JSON Parsing =====================
+
+// Parse parses .xql.json bytes into a typed AST tree.
+func Parse(data []byte) (Node, error) {
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("XQL_E101: invalid JSON: %w", err)
+	}
+	return parseNode(raw)
 }
 
 func parseNode(raw map[string]interface{}) (Node, error) {
 	kind, ok := raw["kind"].(string)
 	if !ok {
-		return nil, fmt.Errorf("XQL_E101: node missing 'kind' field으로 l")
+		return nil, fmt.Errorf("XQL_E101: node missing 'kind' field")
 	}
 	switch kind {
 	case "Program":
@@ -498,4 +506,650 @@ func parseStringList(raw interface{}) []string {
 		}
 	}
 	return out
+}
+
+// --- Individual node parsers ---
+
+func parseProgram(raw map[string]interface{}) (*Program, error) {
+	decls, ok := raw["declarations"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("XQL_E101: Program missing 'declarations'")
+	}
+	nodes, err := parseNodeList(decls)
+	if err != nil {
+		return nil, err
+	}
+	return &Program{Decls: nodes}, nil
+}
+
+func parseImportDecl(raw map[string]interface{}) (*ImportDecl, error) {
+	id := &ImportDecl{}
+	id.Path, _ = raw["path"].(string)
+	id.As, _ = raw["as"].(string)
+	return id, nil
+}
+
+func parseFunctionDecl(raw map[string]interface{}) (*FunctionDecl, error) {
+	fd := &FunctionDecl{}
+	fd.Name, _ = raw["name"].(string)
+	if fd.Name == "" {
+		return nil, fmt.Errorf("XQL_E101: FunctionDecl missing 'name'")
+	}
+
+	if params, ok := raw["params"].([]interface{}); ok {
+		for _, p := range params {
+			pm, ok := p.(map[string]interface{})
+			if !ok {
+				return nil, fmt.Errorf("XQL_E101: param is not an object")
+			}
+			param := Param{}
+			param.Name, _ = pm["name"].(string)
+			if t, ok := pm["type"]; ok {
+				te, err := parseTypeExpr(t)
+				if err != nil {
+					return nil, err
+				}
+				param.Type = te
+			}
+			fd.Params = append(fd.Params, param)
+		}
+	}
+
+	if rt, ok := raw["returnType"]; ok {
+		te, err := parseTypeExpr(rt)
+		if err != nil {
+			return nil, err
+		}
+		fd.ReturnType = te
+	}
+
+	fd.Effects = parseStringList(raw["effects"])
+	fd.Grant = parseStringList(raw["grant"])
+
+	if body, ok := raw["body"].([]interface{}); ok {
+		nodes, err := parseNodeList(body)
+		if err != nil {
+			return nil, err
+		}
+		fd.Body = nodes
+	}
+	return fd, nil
+}
+
+func parseReturnStmt(raw map[string]interface{}) (*ReturnStmt, error) {
+	rs := &ReturnStmt{}
+	if v, ok := raw["value"]; ok && v != nil {
+		val, err := parseChildNode(raw, "value")
+		if err != nil {
+			return nil, err
+		}
+		rs.Value = val
+	}
+	return rs, nil
+}
+
+func parseVarDecl(raw map[string]interface{}) (*VarDecl, error) {
+	vd := &VarDecl{}
+	vd.Name, _ = raw["name"].(string)
+	if vd.Name == "" {
+		return nil, fmt.Errorf("XQL_E101: VarDecl missing 'name'")
+	}
+	if t, ok := raw["type"]; ok {
+		te, err := parseTypeExpr(t)
+		if err != nil {
+			return nil, err
+		}
+		vd.Type = te
+	}
+	if v, ok := raw["value"]; ok && v != nil {
+		val, err := parseChildNode(raw, "value")
+		if err != nil {
+			return nil, err
+		}
+		vd.Value = val
+	}
+	return vd, nil
+}
+
+func parseAssignStmt(raw map[string]interface{}) (*AssignStmt, error) {
+	as := &AssignStmt{}
+	switch t := raw["target"].(type) {
+	case string:
+		if t == "" {
+			return nil, fmt.Errorf("XQL_E101: AssignStmt missing 'target'")
+		}
+		as.Target = &Ident{Name: t}
+	case map[string]interface{}:
+		node, err := parseNode(t)
+		if err != nil {
+			return nil, err
+		}
+		as.Target = node
+	default:
+		return nil, fmt.Errorf("XQL_E101: AssignStmt missing 'target'")
+	}
+	val, err := parseChildNode(raw, "value")
+	if err != nil {
+		return nil, err
+	}
+	as.Value = val
+	return as, nil
+}
+
+func parseIfStmt(raw map[string]interface{}) (*IfStmt, error) {
+	is := &IfStmt{}
+	cond, err := parseChildNode(raw, "cond")
+	if err != nil {
+		return nil, err
+	}
+	if cond == nil {
+		cond, err = parseChildNode(raw, "condition")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if cond == nil {
+		return nil, fmt.Errorf("XQL_E101: IfStmt missing 'cond'")
+	}
+	is.Cond = cond
+
+	if then, ok := raw["then"].([]interface{}); ok {
+		nodes, err := parseNodeList(then)
+		if err != nil {
+			return nil, err
+		}
+		is.Then = nodes
+	}
+	if els, ok := raw["else"].([]interface{}); ok {
+		nodes, err := parseNodeList(els)
+		if err != nil {
+			return nil, err
+		}
+		is.Else = nodes
+	}
+	return is, nil
+}
+
+func parseWhileStmt(raw map[string]interface{}) (*WhileStmt, error) {
+	ws := &WhileStmt{}
+	cond, err := parseChildNode(raw, "cond")
+	if err != nil {
+		return nil, err
+	}
+	if cond == nil {
+		cond, err = parseChildNode(raw, "condition")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if cond == nil {
+		return nil, fmt.Errorf("XQL_E101: WhileStmt missing 'cond'")
+	}
+	ws.Cond = cond
+	if body, ok := raw["body"].([]interface{}); ok {
+		nodes, err := parseNodeList(body)
+		if err != nil {
+			return nil, err
+		}
+		ws.Body = nodes
+	}
+	return ws, nil
+}
+
+func parseForStmt(raw map[string]interface{}) (*ForStmt, error) {
+	fs := &ForStmt{}
+	fs.Form, _ = raw["form"].(string)
+	if fs.Form != "range" && fs.Form != "each" {
+		return nil, fmt.Errorf("XQL_E101: ForStmt 'form' must be \"range\" or \"each\", got %q", fs.Form)
+	}
+	fs.Var, _ = raw["var"].(string)
+	if fs.Var == "" {
+		return nil, fmt.Errorf("XQL_E101: ForStmt missing 'var'")
+	}
+	if fs.Form == "range" {
+		start, err := parseChildNode(raw, "start")
+		if err != nil {
+			return nil, err
+		}
+		if start == nil {
+			return nil, fmt.Errorf("XQL_E101: ForStmt range form missing 'start'")
+		}
+		fs.Start = start
+		end, err := parseChildNode(raw, "end")
+		if err != nil {
+			return nil, err
+		}
+		if end == nil {
+			return nil, fmt.Errorf("XQL_E101: ForStmt range form missing 'end'")
+		}
+		fs.End = end
+	} else {
+		iter, err := parseChildNode(raw, "iterable")
+		if err != nil {
+			return nil, err
+		}
+		if iter == nil {
+			return nil, fmt.Errorf("XQL_E101: ForStmt each form missing 'iterable'")
+		}
+		fs.Iterable = iter
+	}
+	if body, ok := raw["body"].([]interface{}); ok {
+		nodes, err := parseNodeList(body)
+		if err != nil {
+			return nil, err
+		}
+		fs.Body = nodes
+	}
+	return fs, nil
+}
+
+func parseExprStmt(raw map[string]interface{}) (*ExprStmt, error) {
+	es := &ExprStmt{}
+	expr, err := parseChildNode(raw, "expr")
+	if err != nil {
+		return nil, err
+	}
+	es.Expr = expr
+	return es, nil
+}
+
+func parseStructDecl(raw map[string]interface{}) (*StructDecl, error) {
+	sd := &StructDecl{}
+	sd.Name, _ = raw["name"].(string)
+	if fields, ok := raw["fields"].([]interface{}); ok {
+		for _, f := range fields {
+			fm, ok := f.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			sf := StructField{}
+			sf.Name, _ = fm["name"].(string)
+			if t, ok := fm["type"]; ok {
+				te, err := parseTypeExpr(t)
+				if err != nil {
+					return nil, err
+				}
+				sf.Type = te
+			}
+			sf.Visibility, _ = fm["visibility"].(string)
+			sd.Fields = append(sd.Fields, sf)
+		}
+	}
+	return sd, nil
+}
+
+func parseClassDecl(raw map[string]interface{}) (*ClassDecl, error) {
+	cd := &ClassDecl{}
+	cd.Name, _ = raw["name"].(string)
+	if fields, ok := raw["fields"].([]interface{}); ok {
+		for _, f := range fields {
+			fm, ok := f.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			cf := ClassField{}
+			cf.Name, _ = fm["name"].(string)
+			if t, ok := fm["type"]; ok {
+				te, err := parseTypeExpr(t)
+				if err != nil {
+					return nil, err
+				}
+				cf.Type = te
+			}
+			cf.Visibility, _ = fm["visibility"].(string)
+			cd.Fields = append(cd.Fields, cf)
+		}
+	}
+	return cd, nil
+}
+
+func parseEnumDecl(raw map[string]interface{}) (*EnumDecl, error) {
+	ed := &EnumDecl{}
+	ed.Name, _ = raw["name"].(string)
+	ed.Variants = parseStringList(raw["variants"])
+	return ed, nil
+}
+
+func parseMatchExpr(raw map[string]interface{}) (*MatchExpr, error) {
+	me := &MatchExpr{}
+	val, err := parseChildNode(raw, "value")
+	if err != nil {
+		return nil, err
+	}
+	me.Value = val
+	if arms, ok := raw["arms"].([]interface{}); ok {
+		for _, a := range arms {
+			am, ok := a.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			arm := MatchArm{}
+			if p, ok := am["pattern"]; ok && p != nil {
+				pattern, err := parseNode(p.(map[string]interface{}))
+				if err != nil {
+					return nil, err
+				}
+				arm.Pattern = pattern
+			}
+			if bodyArr, ok := am["body"].([]interface{}); ok {
+				nodes, err := parseNodeList(bodyArr)
+				if err != nil {
+					return nil, err
+				}
+				arm.Body = nodes
+			}
+			me.Arms = append(me.Arms, arm)
+		}
+	}
+	return me, nil
+}
+
+func parseSwitchStmt(raw map[string]interface{}) (*SwitchStmt, error) {
+	ss := &SwitchStmt{}
+	val, err := parseChildNode(raw, "value")
+	if err != nil {
+		return nil, err
+	}
+	ss.Value = val
+	if cases, ok := raw["cases"].([]interface{}); ok {
+		for _, c := range cases {
+			cm, ok := c.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			sc := SwitchCase{}
+			if v, ok := cm["value"]; ok && v != nil {
+				caseVal, err := parseNode(v.(map[string]interface{}))
+				if err != nil {
+					return nil, err
+				}
+				sc.Value = caseVal
+			}
+			if bodyArr, ok := cm["body"].([]interface{}); ok {
+				nodes, err := parseNodeList(bodyArr)
+				if err != nil {
+					return nil, err
+				}
+				sc.Body = nodes
+			}
+			ss.Cases = append(ss.Cases, sc)
+		}
+	}
+	return ss, nil
+}
+
+func parseStructLit(raw map[string]interface{}) (*StructLit, error) {
+	sl := &StructLit{}
+	sl.TypeName, _ = raw["typeName"].(string)
+	if fields, ok := raw["fields"].([]interface{}); ok {
+		for _, f := range fields {
+			fm, ok := f.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			sfi := StructFieldInit{}
+			sfi.Name, _ = fm["name"].(string)
+			if v, ok := fm["value"]; ok && v != nil {
+				val, err := parseNode(v.(map[string]interface{}))
+				if err != nil {
+					return nil, err
+				}
+				sfi.Value = val
+			}
+			sl.Fields = append(sl.Fields, sfi)
+		}
+	}
+	return sl, nil
+}
+
+func parseArrayLit(raw map[string]interface{}) (*ArrayLit, error) {
+	al := &ArrayLit{}
+	if t, ok := raw["elemType"]; ok {
+		te, err := parseTypeExpr(t)
+		if err != nil {
+			return nil, err
+		}
+		al.ElemType = te
+	}
+	if elems, ok := raw["elements"].([]interface{}); ok {
+		nodes, err := parseNodeList(elems)
+		if err != nil {
+			return nil, err
+		}
+		al.Elements = nodes
+	}
+	return al, nil
+}
+
+func parseArrayLiteral(raw map[string]interface{}) (*ArrayLiteral, error) {
+	al := &ArrayLiteral{}
+	if t, ok := raw["elemType"]; ok {
+		te, err := parseTypeExpr(t)
+		if err != nil {
+			return nil, err
+		}
+		al.ElemType = te
+	}
+	if elems, ok := raw["elements"].([]interface{}); ok {
+		nodes, err := parseNodeList(elems)
+		if err != nil {
+			return nil, err
+		}
+		al.Elements = nodes
+	}
+	return al, nil
+}
+
+func parseMapLiteral(raw map[string]interface{}) (*MapLiteral, error) {
+	ml := &MapLiteral{}
+	if t, ok := raw["keyType"]; ok {
+		te, err := parseTypeExpr(t)
+		if err != nil {
+			return nil, err
+		}
+		ml.KeyType = te
+	}
+	if t, ok := raw["valueType"]; ok {
+		te, err := parseTypeExpr(t)
+		if err != nil {
+			return nil, err
+		}
+		ml.ValueType = te
+	}
+	if entries, ok := raw["entries"].([]interface{}); ok {
+		for _, e := range entries {
+			em, ok := e.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			entry := MapEntry{}
+			if k, ok := em["key"]; ok && k != nil {
+				keyNode, err := parseNode(k.(map[string]interface{}))
+				if err != nil {
+					return nil, err
+				}
+				entry.Key = keyNode
+			}
+			if v, ok := em["value"]; ok && v != nil {
+				valNode, err := parseNode(v.(map[string]interface{}))
+				if err != nil {
+					return nil, err
+				}
+				entry.Value = valNode
+			}
+			ml.Entries = append(ml.Entries, entry)
+		}
+	}
+	return ml, nil
+}
+
+func parseIndexExpr(raw map[string]interface{}) (*IndexExpr, error) {
+	ie := &IndexExpr{}
+	target, err := parseChildNode(raw, "target")
+	if err != nil {
+		return nil, err
+	}
+	ie.Target = target
+	index, err := parseChildNode(raw, "index")
+	if err != nil {
+		return nil, err
+	}
+	ie.Index = index
+	return ie, nil
+}
+
+func parseIfExpr(raw map[string]interface{}) (*IfExpr, error) {
+	ie := &IfExpr{}
+	cond, err := parseChildNode(raw, "condition")
+	if err != nil {
+		return nil, err
+	}
+	ie.Cond = cond
+	thenNode, err := parseChildNode(raw, "then")
+	if err != nil {
+		return nil, err
+	}
+	ie.Then = thenNode
+	elseNode, err := parseChildNode(raw, "else")
+	if err != nil {
+		return nil, err
+	}
+	ie.Else = elseNode
+	return ie, nil
+}
+
+func parseLambda(raw map[string]interface{}) (*Lambda, error) {
+	l := &Lambda{}
+	if params, ok := raw["params"].([]interface{}); ok {
+		for _, p := range params {
+			pm, ok := p.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			param := Param{}
+			param.Name, _ = pm["name"].(string)
+			if t, ok := pm["type"]; ok {
+				te, err := parseTypeExpr(t)
+				if err != nil {
+					return nil, err
+				}
+				param.Type = te
+			}
+			l.Params = append(l.Params, param)
+		}
+	}
+	if rt, ok := raw["returnType"]; ok {
+		te, err := parseTypeExpr(rt)
+		if err != nil {
+			return nil, err
+		}
+		l.ReturnType = te
+	}
+	if bodyArr, ok := raw["body"].([]interface{}); ok {
+		nodes, err := parseNodeList(bodyArr)
+		if err != nil {
+			return nil, err
+		}
+		l.Body = nodes
+	}
+	return l, nil
+}
+
+func parseBinaryExpr(raw map[string]interface{}) (*BinaryExpr, error) {
+	be := &BinaryExpr{}
+	be.Op, _ = raw["op"].(string)
+	left, err := parseChildNode(raw, "left")
+	if err != nil {
+		return nil, err
+	}
+	be.Left = left
+	right, err := parseChildNode(raw, "right")
+	if err != nil {
+		return nil, err
+	}
+	be.Right = right
+	return be, nil
+}
+
+func parseUnaryExpr(raw map[string]interface{}) (*UnaryExpr, error) {
+	ue := &UnaryExpr{}
+	ue.Op, _ = raw["op"].(string)
+	operand, err := parseChildNode(raw, "operand")
+	if err != nil {
+		return nil, err
+	}
+	ue.Operand = operand
+	return ue, nil
+}
+
+func parseCallExpr(raw map[string]interface{}) (*CallExpr, error) {
+	ce := &CallExpr{}
+	ce.Callee, _ = raw["callee"].(string)
+	if args, ok := raw["args"].([]interface{}); ok {
+		for _, a := range args {
+			am, ok := a.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			arg, err := parseNode(am)
+			if err != nil {
+				return nil, err
+			}
+			ce.Args = append(ce.Args, arg)
+		}
+	}
+	return ce, nil
+}
+
+func parseLiteral(raw map[string]interface{}) (*Literal, error) {
+	l := &Literal{}
+	l.ValueType, _ = raw["valueType"].(string)
+	l.Value = raw["value"]
+	return l, nil
+}
+
+func parseIdent(raw map[string]interface{}) (*Ident, error) {
+	i := &Ident{}
+	i.Name, _ = raw["name"].(string)
+	return i, nil
+}
+
+func parseMemberExpr(raw map[string]interface{}) (*MemberExpr, error) {
+	me := &MemberExpr{}
+	me.Field, _ = raw["field"].(string)
+	obj, err := parseChildNode(raw, "object")
+	if err != nil {
+		return nil, err
+	}
+	me.Object = obj
+	return me, nil
+}
+
+func parseNewExpr(raw map[string]interface{}) (*NewExpr, error) {
+	ne := &NewExpr{}
+	ne.Callee, _ = raw["callee"].(string)
+	if args, ok := raw["args"].([]interface{}); ok {
+		for _, a := range args {
+			am, ok := a.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			arg, err := parseNode(am)
+			if err != nil {
+				return nil, err
+			}
+			ne.Args = append(ne.Args, arg)
+		}
+	}
+	return ne, nil
+}
+
+func parseAwaitExpr(raw map[string]interface{}) (*AwaitExpr, error) {
+	ae := &AwaitExpr{}
+	expr, err := parseChildNode(raw, "expr")
+	if err != nil {
+		return nil, err
+	}
+	ae.Expr = expr
+	return ae, nil
 }
