@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"xiaoqinli/ast"
 	"xiaoqinli/check"
@@ -14,7 +15,7 @@ import (
 )
 
 // Version is the library version (bumped from 3.5.0 for the lib export).
-const Version = "3.13.0"
+const Version = "3.13.1"
 
 // allTargets mirrors the list in main.go (single source of truth).
 var allTargets = []string{
@@ -86,6 +87,7 @@ func Validate(req ValidateRequest) ValidateResult {
 
 // Compile runs the full pipeline: validate → codegen → optional write.
 func Compile(req CompileRequest) CompileResult {
+	start := time.Now()
 	if req.AST == nil {
 		return CompileResult{
 			Error: "AST is nil", ErrorCode: "XQL_E001",
@@ -131,7 +133,14 @@ func Compile(req CompileRequest) CompileResult {
 		}
 	}
 
-	return CompileResult{Success: true, Code: code}
+	// Compute Stats
+	stats := computeStats(req.AST, code, time.Since(start))
+
+	return CompileResult{
+		Success: true,
+		Code:    code,
+		Stats:   stats,
+	}
 }
 
 // CompileFromFile is a convenience wrapper: read file → parse → compile.
@@ -158,8 +167,133 @@ func CompileFromFile(path, target, outputPath string) CompileResult {
 
 // ---------- internal helpers ----------
 
-// writeOutput writes compiled bytes to disk. For Chrome targets it delegates
-// to the JSON-bundle unpacker; everything else is a plain file write.
+func computeStats(root ast.Node, code []byte, duration time.Duration) CompileStats {
+	s := CompileStats{
+		DurationMs:     duration.Milliseconds(),
+		GeneratedBytes: len(code),
+		GeneratedLines: strings.Count(string(code), "\n") + 1,
+	}
+
+	// Walk AST to count nodes
+	var walker func(ast.Node)
+	walker = func(n ast.Node) {
+		if n == nil {
+			return
+		}
+		s.TotalNodes++
+		switch node := n.(type) {
+		case *ast.Program:
+			for _, d := range node.Decls {
+				walker(d)
+			}
+		case *ast.FunctionDecl:
+			s.FunctionCount++
+			for _, stmt := range node.Body {
+				walker(stmt)
+			}
+		case *ast.StructDecl:
+			s.StructCount++
+			for _, f := range node.Fields {
+				// Field is not a Node, but we can count them if we want.
+				// For now, just count the decl.
+			}
+		case *ast.ClassDecl:
+			s.ClassCount++
+		case *ast.ReturnStmt:
+			walker(node.Value)
+		case *ast.VarDecl:
+			walker(node.Value)
+		case *ast.AssignStmt:
+			walker(node.Target)
+			walker(node.Value)
+		case *ast.IfStmt:
+			walker(node.Cond)
+			for _, n := range node.Then {
+				walker(n)
+			}
+			for _, n := range node.Else {
+				walker(n)
+			}
+		case *ast.WhileStmt:
+			walker(node.Cond)
+			for _, n := range node.Body {
+				walker(n)
+			}
+		case *ast.ForStmt:
+			walker(node.Start)
+			walker(node.End)
+			walker(node.Iterable)
+			for _, n := range node.Body {
+				walker(n)
+			}
+		case *ast.ExprStmt:
+			walker(node.Expr)
+		case *ast.BinaryExpr:
+			walker(node.Left)
+			walker(node.Right)
+		case *ast.UnaryExpr:
+			walker(node.Operand)
+		case *ast.CallExpr:
+			for _, arg := range node.Args {
+				walker(arg)
+			}
+		case *ast.MemberExpr:
+			walker(node.Object)
+		case *ast.StructLit:
+			for _, f := range node.Fields {
+				walker(f.Value)
+			}
+		case *ast.ArrayLit:
+			for _, e := range node.Elements {
+				walker(e)
+			}
+		case *ast.IndexExpr:
+			walker(node.Target)
+			walker(node.Index)
+		case *ast.IfExpr:
+			walker(node.Cond)
+			walker(node.Then)
+			walker(node.Else)
+		case *ast.NewExpr:
+			for _, arg := range node.Args {
+				walker(arg)
+			}
+		case *ast.AwaitExpr:
+			walker(node.Expr)
+		case *ast.Lambda:
+			for _, n := range node.Body {
+				walker(n)
+			}
+		case *ast.MatchExpr:
+			walker(node.Value)
+			for _, arm := range node.Arms {
+				for _, n := range arm.Body {
+					walker(n)
+				}
+			}
+		case *ast.SwitchStmt:
+			walker(node.Value)
+			for _, c := range node.Cases {
+				walker(c.Value)
+				for _, n := range c.Body {
+					walker(n)
+				}
+			}
+		case *ast.MapLiteral:
+			for _, e := range node.Entries {
+				walker(e.Key)
+				walker(e.Value)
+			}
+		case *ast.ArrayLiteral:
+			for _, e := range node.Elements {
+				walker(e)
+			}
+		}
+	}
+	walker(root)
+	return s
+}
+
 func writeOutput(code []byte, outPath, target string) error {
 	if target == "chrome" {
 		return unpackChromeBundle(code, outPath)
@@ -167,7 +301,6 @@ func writeOutput(code []byte, outPath, target string) error {
 	return os.WriteFile(outPath, code, 0644)
 }
 
-// unpackChromeBundle extracts a Chrome extension JSON bundle into a directory.
 func unpackChromeBundle(data []byte, dir string) error {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("cannot create directory %s: %v", dir, err)
@@ -196,7 +329,6 @@ func unpackChromeBundle(data []byte, dir string) error {
 	return nil
 }
 
-// extractCode pulls the first XQL_E* error code from a message.
 func extractCode(msg string) string {
 	if strings.HasPrefix(msg, "XQL_E") {
 		if idx := strings.IndexByte(msg, ':'); idx > 0 {
@@ -209,8 +341,6 @@ func extractCode(msg string) string {
 	return "XQL_E999"
 }
 
-// wrapDiag converts an error (possibly check.WorkspaceError) into our
-// Diagnostic slice so both types stay aligned.
 func wrapDiag(err error) []Diagnostic {
 	var we check.WorkspaceError
 	if errors.As(err, &we) {

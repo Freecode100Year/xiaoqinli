@@ -20,6 +20,17 @@ type CompileRequest struct {
 	ValidateOnly bool
 }
 
+// CompileStats provides performance and size metrics for a compilation.
+type CompileStats struct {
+	DurationMs     int64 `json:"duration_ms"`
+	TotalNodes     int   `json:"total_nodes"`
+	FunctionCount  int   `json:"function_count"`
+	ClassCount     int   `json:"class_count"`
+	StructCount    int   `json:"struct_count"`
+	GeneratedLines int   `json:"generated_lines"`
+	GeneratedBytes int   `json:"generated_bytes"`
+}
+
 // CompileResult holds the outcome of a Compile call.
 type CompileResult struct {
 	Success     bool         `json:"success"`
@@ -28,15 +39,17 @@ type CompileResult struct {
 	ErrorCode   string       `json:"error_code,omitempty"`
 	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
 	Warnings    []string     `json:"warnings,omitempty"`
+	Stats       CompileStats `json:"stats,omitempty"`
 }
 
 // Diagnostic is a structured, AI-friendly error report.
 type Diagnostic struct {
-	Code         string `json:"code"`
-	Message      string `json:"message"`
-	Location     string `json:"location,omitempty"`
-	SuggestedFix string `json:"suggested_fix,omitempty"`
-	Level        string `json:"level"` // "error" | "warning" | "info"
+	Code         string             `json:"code"`
+	Message      string             `json:"message"`
+	Location     ast.LocationInfo   `json:"location,omitempty"`
+	Context      string             `json:"context,omitempty"` // snippet of code
+	SuggestedFix string             `json:"suggested_fix,omitempty"`
+	Level        string             `json:"level"` // "error" | "warning" | "info"
 }
 
 // ParseRequest describes an AST parse operation.

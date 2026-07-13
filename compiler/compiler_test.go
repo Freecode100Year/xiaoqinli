@@ -126,6 +126,9 @@ func TestCompile_Go(t *testing.T) {
 	if !contains(code, "func greet") {
 		t.Fatalf("Go output missing 'func greet': %s", code[:min(200, len(code))])
 	}
+	if cr.Stats.DurationMs == 0 && cr.Stats.GeneratedBytes == 0 {
+		t.Error("expected non-zero compilation stats")
+	}
 }
 
 func TestCompile_ValidateOnly(t *testing.T) {
@@ -166,7 +169,7 @@ func TestCompile_DefaultTarget(t *testing.T) {
 	if !pr.Success {
 		t.Fatalf("parse failed: %s", pr.Error)
 	}
-	cr := Compile(CompileRequest{AST: pr.AST}) // Target="" → default "go"
+	cr := Compile(CompileRequest{AST: pr.AST})
 	if !cr.Success {
 		t.Fatalf("default target compile failed: %s", cr.Error)
 	}
@@ -198,10 +201,7 @@ func TestCompile_WriteOutput(t *testing.T) {
 	}
 }
 
-// --- CompileFromFile ---
-
 func TestCompileFromFile_Hello(t *testing.T) {
-	// Write a temp .xql.json file.
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hello.xql.json")
 	if err := os.WriteFile(path, []byte(helloJSON), 0644); err != nil {
@@ -226,12 +226,10 @@ func TestCompileFromFile_NotFound(t *testing.T) {
 	}
 }
 
-// --- Utility functions ---
-
 func TestGetVersion(t *testing.T) {
 	v := GetVersion()
-	if v != "3.13.0" {
-		t.Fatalf("expected 3.13.0, got %s", v)
+	if v != "3.13.1" {
+		t.Fatalf("expected 3.13.1, got %s", v)
 	}
 }
 
@@ -240,15 +238,12 @@ func TestGetSupportedTargets(t *testing.T) {
 	if len(targets) < 40 {
 		t.Fatalf("expected 40+ targets, got %d", len(targets))
 	}
-	// Verify it's a copy, not a reference.
 	targets[0] = "MODIFIED"
 	fresh := GetSupportedTargets()
 	if fresh[0] == "MODIFIED" {
 		t.Fatal("GetSupportedTargets returned a reference, not a copy")
 	}
 }
-
-// --- helpers ---
 
 func contains(s, sub string) bool {
 	return len(s) >= len(sub) && searchStr(s, sub)
