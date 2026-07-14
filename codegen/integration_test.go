@@ -1,3 +1,5 @@
+//go:build ignore_e2e
+
 package codegen
 
 import (
