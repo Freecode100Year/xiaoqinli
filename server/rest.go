@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 
 	"xiaoqinli/ast"
 	"xiaoqinli/check"
@@ -29,6 +30,9 @@ func (s *RESTServer) Serve(addr string) error {
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3.2.0"})
 	})
 
+	// Prometheus metrics endpoint
+		mux.Handle("/metrics", GlobalMetrics.PrometheusHandler())
+
 	fmt.Fprintf(os.Stderr, "REST API listening on %s\n", addr)
 	return http.ListenAndServe(addr, mux)
 }
@@ -45,6 +49,13 @@ type compileResponse struct {
 }
 
 func (s *RESTServer) handleCompile(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	success := true
+	target := ""
+	defer func() {
+		GlobalMetrics.RecordCompile(target, time.Since(start).Seconds(), success)
+	}()
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -54,32 +65,38 @@ func (s *RESTServer) handleCompile(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		success = false
 		writeJSON(w, http.StatusBadRequest, compileResponse{Error: "bad request"})
 		return
 	}
 
 	var req compileRequest
 	if err := json.Unmarshal(body, &req); err != nil {
+		success = false
 		writeJSON(w, http.StatusBadRequest, compileResponse{Error: "invalid JSON request"})
 		return
 	}
-	if req.Target == "" {
-		req.Target = "go"
+	target = req.Target
+	if target == "" {
+		target = "go"
 	}
 
 	root, err := ast.Parse([]byte(req.Source))
 	if err != nil {
+		success = false
 		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
 		return
 	}
 
 	if err := check.RunAll(root); err != nil {
+		success = false
 		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
 		return
 	}
 
 	output, err := codegen.Generate(root, req.Target)
 	if err != nil {
+		success = false
 		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
 		return
 	}
@@ -88,6 +105,13 @@ func (s *RESTServer) handleCompile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *RESTServer) handleValidate(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	success := true
+	target := ""
+	defer func() {
+		GlobalMetrics.RecordCompile(target, time.Since(start).Seconds(), success)
+	}()
+
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -97,23 +121,27 @@ func (s *RESTServer) handleValidate(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
+		success = false
 		writeJSON(w, http.StatusBadRequest, compileResponse{Error: "bad request"})
 		return
 	}
 
 	var req compileRequest
 	if err := json.Unmarshal(body, &req); err != nil {
+		success = false
 		writeJSON(w, http.StatusBadRequest, compileResponse{Error: "invalid JSON request"})
 		return
 	}
 
 	root, err := ast.Parse([]byte(req.Source))
 	if err != nil {
+		success = false
 		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
 		return
 	}
 
 	if err := check.RunAll(root); err != nil {
+		success = false
 		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
 		return
 	}

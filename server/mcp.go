@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"sync"
+	"time"
 
 	"xiaoqinli/ast"
 	"xiaoqinli/check"
@@ -316,16 +317,25 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 }
 
 func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCResponse {
+	start := time.Now()
 	root, err := ast.Parse([]byte(source))
+	success := true
+	defer func() {
+		GlobalMetrics.RecordToolsCall("compile", time.Since(start).Seconds(), success)
+	}()
+
 	if err != nil {
+		success = false
 		return toolErrorResult(id, err)
 	}
 	if err := check.RunAll(root); err != nil {
+		success = false
 		return toolErrorResult(id, err)
 	}
 
 	output, err := codegen.Generate(root, target)
 	if err != nil {
+		success = false
 		return toolErrorResult(id, err)
 	}
 
@@ -341,11 +351,19 @@ func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCRe
 }
 
 func (s *MCPServer) toolValidate(id interface{}, source string) jsonRPCResponse {
+	start := time.Now()
+	success := true
+	defer func() {
+		GlobalMetrics.RecordToolsCall("validate", time.Since(start).Seconds(), success)
+	}()
+
 	root, err := ast.Parse([]byte(source))
 	if err != nil {
+		success = false
 		return toolErrorResult(id, err)
 	}
 	if err := check.RunAll(root); err != nil {
+		success = false
 		return toolErrorResult(id, err)
 	}
 	return jsonRPCResponse{
