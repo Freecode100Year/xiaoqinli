@@ -2,6 +2,7 @@ package ast
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -17,6 +18,9 @@ const (
 	// MaxChildCount is the maximum number of children a node list can contain.
 	MaxChildCount = 65536
 )
+
+// NodeHash is a SHA256 hash of a node's binary representation (for Merkle tree verification).
+type NodeHash [32]byte
 
 // NodeKind represents the type identifier for binary serialization.
 type NodeKind byte
@@ -56,13 +60,30 @@ const (
 	KindImportDecl
 )
 
-// Encode serializes an AST Node to a stable binary representation.
-func Encode(node Node) ([]byte, error) {
+// computeNodeHash computes the SHA256 hash of a node's binary representation.
+func computeNodeHash(n Node) (NodeHash, error) {
+	data, err := Encode(n)
+	if err != nil {
+		return NodeHash{}, err
+	}
+	return sha256.Sum256(data), nil
+}
+
+// EncodeWithHash serializes an AST Node to a stable binary representation with a root hash.
+func EncodeWithHash(node Node) ([]byte, NodeHash, error) {
 	var buf bytes.Buffer
 	if err := encodeNode(&buf, node); err != nil {
-		return nil, err
+		return nil, NodeHash{}, err
 	}
-	return buf.Bytes(), nil
+	data := buf.Bytes()
+	hash := sha256.Sum256(data)
+	return data, hash, nil
+}
+
+// Encode serializes an AST Node to a stable binary representation.
+func Encode(node Node) ([]byte, error) {
+	data, _, err := EncodeWithHash(node)
+	return data, err
 }
 
 // Decode deserializes an AST Node from its stable binary representation.
@@ -72,6 +93,15 @@ func Decode(data []byte) (Node, error) {
 	}
 	buf := bytes.NewReader(data)
 	return decodeNode(buf)
+}
+
+// DecodeWithHash deserializes an AST Node and verifies its root hash.
+func DecodeWithHash(data []byte, expectedHash NodeHash) (Node, error) {
+	actualHash := sha256.Sum256(data)
+	if actualHash != expectedHash {
+		return nil, fmt.Errorf("XQL_E414: root hash mismatch: expected %x, got %x", expectedHash, actualHash)
+	}
+	return Decode(data)
 }
 
 func encodeNode(w io.Writer, n Node) error {

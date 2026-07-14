@@ -20,3 +20,12 @@ func HashNode(node Node) (string, error) {
 	}
 	return HashContent(data), nil
 }
+
+// HashNodeBytes returns the raw SHA256 hash (NodeHash) of the stable binary representation of the AST node.
+func HashNodeBytes(node Node) (NodeHash, error) {
+	data, err := Encode(node)
+	if err != nil {
+		return NodeHash{}, err
+	}
+	return sha256.Sum256(data), nil
+}
