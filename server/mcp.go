@@ -16,6 +16,9 @@ import (
 	"xiaoqinli/vfs"
 )
 
+// MaxMCPMessageBytes is the maximum allowed size for a single MCP message (both stdio and HTTP).
+const MaxMCPMessageBytes = 2 << 20 // 2 MB
+
 // Session holds per-connection state for MCP sessions.
 type Session struct {
 	VFS *vfs.Workspace
@@ -75,7 +78,7 @@ type rpcError struct {
 // ServeStdio runs the MCP server in stdio mode, reading JSON-RPC from stdin.
 func (s *MCPServer) ServeStdio() error {
 	scanner := bufio.NewScanner(os.Stdin)
-	scanner.Buffer(make([]byte, 0, 4*1024*1024), 64*1024*1024)
+	scanner.Buffer(make([]byte, 0, MaxMCPMessageBytes), MaxMCPMessageBytes)
 	enc := json.NewEncoder(os.Stdout)
 
 	for scanner.Scan() {
@@ -137,7 +140,7 @@ func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer r.Body.Close()
-	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, MaxMCPMessageBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
