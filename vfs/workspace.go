@@ -4,6 +4,8 @@ package vfs
 
 import (
 	"fmt"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -39,11 +41,15 @@ func (w *Workspace) Write(name string, data []byte) {
 
 // Read returns the contents of a file, or an error if it does not exist.
 func (w *Workspace) Read(name string) ([]byte, error) {
+	clean := filepath.Clean(name)
+	if strings.Contains(clean, "..") || filepath.IsAbs(clean) {
+		return nil, fmt.Errorf("vfs: path escape attempt: %s", name)
+	}
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	f, ok := w.files[name]
+	f, ok := w.files[clean]
 	if !ok {
-		return nil, fmt.Errorf("vfs: file not found: %s", name)
+		return nil, fmt.Errorf("vfs: file not found: %s", clean)
 	}
 	out := make([]byte, len(f.Data))
 	copy(out, f.Data)

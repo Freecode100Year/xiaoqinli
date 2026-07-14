@@ -7,6 +7,17 @@ import (
 	"io"
 )
 
+const (
+	// MaxASTBytes is the maximum allowed size for an AST binary payload.
+	MaxASTBytes = 2 << 20 // 2 MB
+
+	// MaxStringLen is the maximum allowed length for a single string in the binary format.
+	MaxStringLen = 1 << 20 // 1 MB
+
+	// MaxChildCount is the maximum number of children a node list can contain.
+	MaxChildCount = 65536
+)
+
 // NodeKind represents the type identifier for binary serialization.
 type NodeKind byte
 
@@ -56,6 +67,9 @@ func Encode(node Node) ([]byte, error) {
 
 // Decode deserializes an AST Node from its stable binary representation.
 func Decode(data []byte) (Node, error) {
+	if len(data) > MaxASTBytes {
+		return nil, fmt.Errorf("XQL_E413: payload too large %d > %d", len(data), MaxASTBytes)
+	}
 	buf := bytes.NewReader(data)
 	return decodeNode(buf)
 }
@@ -563,11 +577,11 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		ws.Cond = cond
-		body, err := readNodeList(r)
+		bodyNodes, err := readNodeList(r)
 		if err != nil {
 			return nil, err
 		}
-		ws.Body = body
+		ws.Body = bodyNodes
 		return ws, nil
 
 	case KindForStmt:
@@ -577,11 +591,11 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		fs.Form = form
-		loopVar, err := readString(r)
+		varName, err := readString(r)
 		if err != nil {
 			return nil, err
 		}
-		fs.Var = loopVar
+		fs.Var = varName
 		start, err := decodeNode(r)
 		if err != nil {
 			return nil, err
@@ -597,11 +611,11 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		fs.Iterable = iterable
-		body, err := readNodeList(r)
+		bodyNodes, err := readNodeList(r)
 		if err != nil {
 			return nil, err
 		}
-		fs.Body = body
+		fs.Body = bodyNodes
 		return fs, nil
 
 	case KindBreakStmt:
@@ -731,25 +745,27 @@ func decodeNode(r io.Reader) (Node, error) {
 		return ce, nil
 
 	case KindLiteral:
-		lit := &Literal{}
-		valType, err := readString(r)
+		l := &Literal{}
+		valueType, err := readString(r)
 		if err != nil {
 			return nil, err
 		}
-		lit.ValueType = valType
-		val, err := readLiteralValue(r)
+		l.ValueType = valueType
+		value, err := readLiteralValue(r)
 		if err != nil {
 			return nil, err
 		}
-		lit.Value = val
-		return lit, nil
+		l.Value = value
+		return l, nil
 
 	case KindIdent:
+		id := &Ident{}
 		name, err := readString(r)
 		if err != nil {
 			return nil, err
 		}
-		return &Ident{Name: name}, nil
+		id.Name = name
+		return id, nil
 
 	case KindMemberExpr:
 		me := &MemberExpr{}
@@ -792,11 +808,11 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindArrayLit:
 		al := &ArrayLit{}
-		elemT, err := readTypeExpr(r)
+		elemType, err := readTypeExpr(r)
 		if err != nil {
 			return nil, err
 		}
-		al.ElemType = elemT
+		al.ElemType = elemType
 		elements, err := readNodeList(r)
 		if err != nil {
 			return nil, err
@@ -811,11 +827,11 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		ie.Target = target
-		idx, err := decodeNode(r)
+		index, err := decodeNode(r)
 		if err != nil {
 			return nil, err
 		}
-		ie.Index = idx
+		ie.Index = index
 		return ie, nil
 
 	case KindIfExpr:
@@ -825,16 +841,16 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		ie.Cond = cond
-		thenN, err := decodeNode(r)
+		thenBranch, err := decodeNode(r)
 		if err != nil {
 			return nil, err
 		}
-		ie.Then = thenN
-		elseN, err := decodeNode(r)
+		ie.Then = thenBranch
+		elseBranch, err := decodeNode(r)
 		if err != nil {
 			return nil, err
 		}
-		ie.Else = elseN
+		ie.Else = elseBranch
 		return ie, nil
 
 	case KindNewExpr:
@@ -861,34 +877,34 @@ func decodeNode(r io.Reader) (Node, error) {
 		return ae, nil
 
 	case KindLambda:
-		lam := &Lambda{}
+		l := &Lambda{}
 		var numParams uint32
 		if err := binary.Read(r, binary.BigEndian, &numParams); err != nil {
 			return nil, err
 		}
 		if numParams > 0 {
-			lam.Params = make([]Param, numParams)
+			l.Params = make([]Param, numParams)
 			for i := uint32(0); i < numParams; i++ {
 				p, err := readParam(r)
 				if err != nil {
 					return nil, err
 				}
-				lam.Params[i] = p
+				l.Params[i] = p
 			}
 		} else {
-			lam.Params = nil
+			l.Params = nil
 		}
 		retType, err := readTypeExpr(r)
 		if err != nil {
 			return nil, err
 		}
-		lam.ReturnType = retType
+		l.ReturnType = retType
 		body, err := readNodeList(r)
 		if err != nil {
 			return nil, err
 		}
-		lam.Body = body
-		return lam, nil
+		l.Body = body
+		return l, nil
 
 	case KindClassDecl:
 		cd := &ClassDecl{}
@@ -942,16 +958,16 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindMapLiteral:
 		ml := &MapLiteral{}
-		kt, err := readTypeExpr(r)
+		keyType, err := readTypeExpr(r)
 		if err != nil {
 			return nil, err
 		}
-		ml.KeyType = kt
-		vt, err := readTypeExpr(r)
+		ml.KeyType = keyType
+		valueType, err := readTypeExpr(r)
 		if err != nil {
 			return nil, err
 		}
-		ml.ValueType = vt
+		ml.ValueType = valueType
 		var numEntries uint32
 		if err := binary.Read(r, binary.BigEndian, &numEntries); err != nil {
 			return nil, err
@@ -972,11 +988,11 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindArrayLiteral:
 		al := &ArrayLiteral{}
-		elemT, err := readTypeExpr(r)
+		elemType, err := readTypeExpr(r)
 		if err != nil {
 			return nil, err
 		}
-		al.ElemType = elemT
+		al.ElemType = elemType
 		elements, err := readNodeList(r)
 		if err != nil {
 			return nil, err
@@ -1001,6 +1017,7 @@ func decodeNode(r io.Reader) (Node, error) {
 }
 
 // Helper serialization functions
+
 func writeByte(w io.Writer, b byte) error {
 	return binary.Write(w, binary.BigEndian, b)
 }
@@ -1024,6 +1041,9 @@ func readString(r io.Reader) (string, error) {
 	var length uint32
 	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
 		return "", err
+	}
+	if length > MaxStringLen {
+		return "", fmt.Errorf("XQL_E413: string length %d > %d", length, MaxStringLen)
 	}
 	data := make([]byte, length)
 	if _, err := io.ReadFull(r, data); err != nil {
@@ -1102,22 +1122,22 @@ func writeTypeExpr(w io.Writer, te TypeExpr) error {
 
 func readTypeExpr(r io.Reader) (TypeExpr, error) {
 	te := TypeExpr{}
-	kind, err := readString(r)
+	kindName, err := readString(r)
 	if err != nil {
 		return te, err
 	}
-	te.KindName = kind
+	te.KindName = kindName
 
 	hasElem, err := readBool(r)
 	if err != nil {
 		return te, err
 	}
 	if hasElem {
-		e, err := readTypeExpr(r)
+		elem, err := readTypeExpr(r)
 		if err != nil {
 			return te, err
 		}
-		te.Elem = &e
+		te.Elem = &elem
 	}
 
 	hasKeyType, err := readBool(r)
@@ -1125,11 +1145,11 @@ func readTypeExpr(r io.Reader) (TypeExpr, error) {
 		return te, err
 	}
 	if hasKeyType {
-		k, err := readTypeExpr(r)
+		keyType, err := readTypeExpr(r)
 		if err != nil {
 			return te, err
 		}
-		te.KeyType = &k
+		te.KeyType = &keyType
 	}
 
 	hasOkType, err := readBool(r)
@@ -1137,11 +1157,11 @@ func readTypeExpr(r io.Reader) (TypeExpr, error) {
 		return te, err
 	}
 	if hasOkType {
-		o, err := readTypeExpr(r)
+		okType, err := readTypeExpr(r)
 		if err != nil {
 			return te, err
 		}
-		te.OkType = &o
+		te.OkType = &okType
 	}
 
 	hasErrType, err := readBool(r)
@@ -1149,12 +1169,13 @@ func readTypeExpr(r io.Reader) (TypeExpr, error) {
 		return te, err
 	}
 	if hasErrType {
-		e, err := readTypeExpr(r)
+		errType, err := readTypeExpr(r)
 		if err != nil {
 			return te, err
 		}
-		te.ErrType = &e
+		te.ErrType = &errType
 	}
+
 	return te, nil
 }
 
@@ -1263,19 +1284,34 @@ func readStructFieldInit(r io.Reader) (StructFieldInit, error) {
 }
 
 func writeMatchArm(w io.Writer, arm MatchArm) error {
-	if err := encodeNode(w, arm.Pattern); err != nil {
-		return err
+	if arm.Pattern != nil {
+		if err := writeBool(w, true); err != nil {
+			return err
+		}
+		if err := encodeNode(w, arm.Pattern); err != nil {
+			return err
+		}
+	} else {
+		if err := writeBool(w, false); err != nil {
+			return err
+		}
 	}
 	return writeNodeList(w, arm.Body)
 }
 
 func readMatchArm(r io.Reader) (MatchArm, error) {
 	arm := MatchArm{}
-	pat, err := decodeNode(r)
+	hasPattern, err := readBool(r)
 	if err != nil {
 		return arm, err
 	}
-	arm.Pattern = pat
+	if hasPattern {
+		pattern, err := decodeNode(r)
+		if err != nil {
+			return arm, err
+		}
+		arm.Pattern = pattern
+	}
 	body, err := readNodeList(r)
 	if err != nil {
 		return arm, err
@@ -1285,19 +1321,34 @@ func readMatchArm(r io.Reader) (MatchArm, error) {
 }
 
 func writeSwitchCase(w io.Writer, sc SwitchCase) error {
-	if err := encodeNode(w, sc.Value); err != nil {
-		return err
+	if sc.Value != nil {
+		if err := writeBool(w, true); err != nil {
+			return err
+		}
+		if err := encodeNode(w, sc.Value); err != nil {
+			return err
+		}
+	} else {
+		if err := writeBool(w, false); err != nil {
+			return err
+		}
 	}
 	return writeNodeList(w, sc.Body)
 }
 
 func readSwitchCase(r io.Reader) (SwitchCase, error) {
 	sc := SwitchCase{}
-	val, err := decodeNode(r)
+	hasValue, err := readBool(r)
 	if err != nil {
 		return sc, err
 	}
-	sc.Value = val
+	if hasValue {
+		val, err := decodeNode(r)
+		if err != nil {
+			return sc, err
+		}
+		sc.Value = val
+	}
 	body, err := readNodeList(r)
 	if err != nil {
 		return sc, err
@@ -1329,6 +1380,9 @@ func readMapEntry(r io.Reader) (MapEntry, error) {
 }
 
 func writeNodeList(w io.Writer, list []Node) error {
+	if len(list) > MaxChildCount {
+		return fmt.Errorf("XQL_E413: child count %d > %d", len(list), MaxChildCount)
+	}
 	if err := binary.Write(w, binary.BigEndian, uint32(len(list))); err != nil {
 		return err
 	}
@@ -1344,6 +1398,9 @@ func readNodeList(r io.Reader) ([]Node, error) {
 	var length uint32
 	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
 		return nil, err
+	}
+	if length > MaxChildCount {
+		return nil, fmt.Errorf("XQL_E413: child count %d > %d", length, MaxChildCount)
 	}
 	if length == 0 {
 		return nil, nil
@@ -1450,6 +1507,6 @@ func readLiteralValue(r io.Reader) (interface{}, error) {
 	case 5:
 		return readBool(r)
 	default:
-		return nil, fmt.Errorf("unknown literal value type tag: %d", t)
+		return nil, fmt.Errorf("unsupported literal value type byte: %d", t)
 	}
 }

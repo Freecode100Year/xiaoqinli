@@ -14,8 +14,13 @@ import (
 	"xiaoqinli/codegen"
 )
 
-// Version is the library version (bumped from 3.5.0 for the lib export).
-const Version = "3.13.1"
+const (
+	// Version is the library version (bumped from 3.5.0 for the lib export).
+	Version = "3.13.1"
+
+	// MaxASTBytes is the maximum allowed size for an AST payload (mirrors ast.MaxASTBytes).
+	MaxASTBytes = 2 << 20 // 2 MB
+)
 
 // allTargets mirrors the list in main.go (single source of truth).
 var allTargets = []string{
@@ -52,6 +57,13 @@ func ParseAST(req ParseRequest) ParseResult {
 			Diagnostics: []Diagnostic{{
 				Code: "XQL_E001", Message: "input data is empty", Level: "error",
 			}},
+		}
+	}
+	if len(req.Data) > MaxASTBytes {
+		return ParseResult{
+			Error:       fmt.Sprintf("XQL_E413: AST payload too large %d > %d", len(req.Data), MaxASTBytes),
+			ErrorCode:   "XQL_E413",
+			Diagnostics: []Diagnostic{{Code: "XQL_E413", Message: "AST payload too large", Level: "error"}},
 		}
 	}
 	root, err := ast.Parse(req.Data)
