@@ -11,6 +11,7 @@ import (
 	"xiaoqinli/ast"
 	"xiaoqinli/check"
 	"xiaoqinli/codegen"
+	"xiaoqinli/compiler"
 )
 
 // RESTServer serves a lightweight REST API for compile and validate.
@@ -27,7 +28,7 @@ func (s *RESTServer) Serve(addr string) error {
 	mux.HandleFunc("/skills/", handleSkillsREST)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": "3.2.0"})
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": compiler.Version})
 	})
 
 	// Prometheus metrics endpoint
@@ -62,7 +63,7 @@ func (s *RESTServer) handleCompile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer r.Body.Close()
-	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, MaxMCPMessageBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		success = false
@@ -118,7 +119,7 @@ func (s *RESTServer) handleValidate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	defer r.Body.Close()
-	r.Body = http.MaxBytesReader(w, r.Body, 10*1024*1024)
+	r.Body = http.MaxBytesReader(w, r.Body, MaxMCPMessageBytes)
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		success = false

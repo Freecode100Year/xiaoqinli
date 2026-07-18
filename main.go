@@ -57,14 +57,16 @@ func main() {
 	}
 }
 
-// parseFlags extracts --key value pairs from args.
+// parseFlags extracts --key value or --key=value pairs from args.
 func parseFlags(args []string) map[string]string {
 	flags := make(map[string]string)
 	for i := 0; i < len(args); i++ {
 		if len(args[i]) > 2 && args[i][:2] == "--" {
-			key := args[i][2:]
-			if i+1 < len(args) {
-				flags[key] = args[i+1]
+			rest := args[i][2:]
+			if eqIdx := strings.IndexByte(rest, '='); eqIdx >= 0 {
+				flags[rest[:eqIdx]] = rest[eqIdx+1:]
+			} else if i+1 < len(args) {
+				flags[rest] = args[i+1]
 				i++
 			}
 		}

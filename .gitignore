@@ -3,4 +3,21 @@
 *.dll
 *.so
 *.dylib
+
+# Build artifacts
 xql
+xql.exe
+
+# CI logs (should not be tracked)
+ci_log.txt
+ci_logs/
+
+# Temporary test artifacts
+_tmptest/
+
+# Loop-runner temporary files
+00_Loop_Memory/.loop_trend.tmp
+
+# IDE / editor
+.vscode/
+.idea/

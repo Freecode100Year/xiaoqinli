@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"sync"
@@ -14,15 +15,20 @@ import (
 	"xiaoqinli/ast"
 	"xiaoqinli/check"
 	"xiaoqinli/codegen"
+	"xiaoqinli/compiler"
 	"xiaoqinli/vfs"
 )
 
 // MaxMCPMessageBytes is the maximum allowed size for a single MCP message (both stdio and HTTP).
 const MaxMCPMessageBytes = 2 << 20 // 2 MB
 
+// MaxSessions is the maximum number of concurrent MCP sessions.
+const MaxSessions = 1024
+
 // Session holds per-connection state for MCP sessions.
 type Session struct {
-	VFS *vfs.Workspace
+	VFS        *vfs.Workspace
+	lastAccess time.Time
 }
 
 // MCPServer implements the Model Context Protocol over stdio and streamable HTTP.
@@ -42,10 +48,24 @@ func (s *MCPServer) getSession(id string) *Session {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	sess, ok := s.sessions[id]
-	if !ok {
-		sess = &Session{VFS: vfs.New()}
-		s.sessions[id] = sess
+	if ok {
+		sess.lastAccess = time.Now()
+		return sess
 	}
+	// Evict oldest session if at capacity.
+	if len(s.sessions) >= MaxSessions {
+		var oldestID string
+		var oldestTime time.Time
+		for sid, se := range s.sessions {
+			if oldestID == "" || se.lastAccess.Before(oldestTime) {
+				oldestID = sid
+				oldestTime = se.lastAccess
+			}
+		}
+		delete(s.sessions, oldestID)
+	}
+	sess = &Session{VFS: vfs.New(), lastAccess: time.Now()}
+	s.sessions[id] = sess
 	return sess
 }
 
@@ -178,6 +198,8 @@ func (s *MCPServer) handleNotification(req *jsonRPCRequest) {
 	switch req.Method {
 	case "notifications/initialized", "notifications/cancelled":
 		// expected lifecycle notifications — no action needed
+	default:
+		log.Printf("MCP: unknown notification method: %s", req.Method)
 	}
 }
 
@@ -212,7 +234,7 @@ func (s *MCPServer) handleInitialize(req *jsonRPCRequest) jsonRPCResponse {
 			"protocolVersion": "2025-03-26",
 			"serverInfo": map[string]string{
 				"name":    "xiaoqinli",
-				"version": "3.2.0",
+				"version": compiler.Version,
 			},
 			"capabilities": map[string]interface{}{
 				"tools":   map[string]interface{}{},

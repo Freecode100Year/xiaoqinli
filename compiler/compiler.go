@@ -323,6 +323,10 @@ func unpackChromeBundle(data []byte, dir string) error {
 		return fmt.Errorf("invalid bundle: %v", err)
 	}
 	for name, content := range bundle {
+		clean := filepath.Clean(name)
+		if strings.Contains(clean, "..") || filepath.IsAbs(clean) {
+			return fmt.Errorf("XQL_E403: path escape in bundle: %s", name)
+		}
 		var fileData []byte
 		switch v := content.(type) {
 		case string:
@@ -334,7 +338,7 @@ func unpackChromeBundle(data []byte, dir string) error {
 			}
 			fileData = append(b, '\n')
 		}
-		p := filepath.Join(dir, name)
+		p := filepath.Join(dir, clean)
 		if err := os.WriteFile(p, fileData, 0644); err != nil {
 			return fmt.Errorf("write %s: %v", name, err)
 		}

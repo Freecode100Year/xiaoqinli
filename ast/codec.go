@@ -17,6 +17,12 @@ const (
 
 	// MaxChildCount is the maximum number of children a node list can contain.
 	MaxChildCount = 65536
+
+	// MaxDecodeDepth 是 decodeNode 递归调用的最大深度，防止栈溢出攻击。
+	MaxDecodeDepth = 256
+
+	// MaxTypeDepth 是 readTypeExpr 递归调用的最大深度，防止栈溢出攻击。
+	MaxTypeDepth = 64
 )
 
 // NodeHash is a SHA256 hash of a node's binary representation (for Merkle tree verification).
@@ -92,7 +98,8 @@ func Decode(data []byte) (Node, error) {
 		return nil, fmt.Errorf("XQL_E413: payload too large %d > %d", len(data), MaxASTBytes)
 	}
 	buf := bytes.NewReader(data)
-	return decodeNode(buf)
+	// 入口调用，初始深度为 0
+	return decodeNode(buf, 0)
 }
 
 // DecodeWithHash deserializes an AST Node and verifies its root hash.
@@ -122,6 +129,9 @@ func encodeNode(w io.Writer, n Node) error {
 		}
 		if err := writeString(w, node.Name); err != nil {
 			return err
+		}
+		if len(node.Params) > MaxChildCount {
+			return fmt.Errorf("XQL_E413: param count %d > %d", len(node.Params), MaxChildCount)
 		}
 		if err := binary.Write(w, binary.BigEndian, uint32(len(node.Params))); err != nil {
 			return err
@@ -230,6 +240,9 @@ func encodeNode(w io.Writer, n Node) error {
 		if err := writeString(w, node.Name); err != nil {
 			return err
 		}
+		if len(node.Fields) > MaxChildCount {
+			return fmt.Errorf("XQL_E413: field count %d > %d", len(node.Fields), MaxChildCount)
+		}
 		if err := binary.Write(w, binary.BigEndian, uint32(len(node.Fields))); err != nil {
 			return err
 		}
@@ -255,6 +268,9 @@ func encodeNode(w io.Writer, n Node) error {
 		}
 		if err := encodeNode(w, node.Value); err != nil {
 			return err
+		}
+		if len(node.Arms) > MaxChildCount {
+			return fmt.Errorf("XQL_E413: arm count %d > %d", len(node.Arms), MaxChildCount)
 		}
 		if err := binary.Write(w, binary.BigEndian, uint32(len(node.Arms))); err != nil {
 			return err
@@ -327,6 +343,9 @@ func encodeNode(w io.Writer, n Node) error {
 		if err := writeString(w, node.TypeName); err != nil {
 			return err
 		}
+		if len(node.Fields) > MaxChildCount {
+			return fmt.Errorf("XQL_E413: field count %d > %d", len(node.Fields), MaxChildCount)
+		}
 		if err := binary.Write(w, binary.BigEndian, uint32(len(node.Fields))); err != nil {
 			return err
 		}
@@ -386,6 +405,9 @@ func encodeNode(w io.Writer, n Node) error {
 		if err := writeByte(w, byte(KindLambda)); err != nil {
 			return err
 		}
+		if len(node.Params) > MaxChildCount {
+			return fmt.Errorf("XQL_E413: param count %d > %d", len(node.Params), MaxChildCount)
+		}
 		if err := binary.Write(w, binary.BigEndian, uint32(len(node.Params))); err != nil {
 			return err
 		}
@@ -406,6 +428,9 @@ func encodeNode(w io.Writer, n Node) error {
 		if err := writeString(w, node.Name); err != nil {
 			return err
 		}
+		if len(node.Fields) > MaxChildCount {
+			return fmt.Errorf("XQL_E413: field count %d > %d", len(node.Fields), MaxChildCount)
+		}
 		if err := binary.Write(w, binary.BigEndian, uint32(len(node.Fields))); err != nil {
 			return err
 		}
@@ -422,6 +447,9 @@ func encodeNode(w io.Writer, n Node) error {
 		}
 		if err := encodeNode(w, node.Value); err != nil {
 			return err
+		}
+		if len(node.Cases) > MaxChildCount {
+			return fmt.Errorf("XQL_E413: case count %d > %d", len(node.Cases), MaxChildCount)
 		}
 		if err := binary.Write(w, binary.BigEndian, uint32(len(node.Cases))); err != nil {
 			return err
@@ -442,6 +470,9 @@ func encodeNode(w io.Writer, n Node) error {
 		}
 		if err := writeTypeExpr(w, node.ValueType); err != nil {
 			return err
+		}
+		if len(node.Entries) > MaxChildCount {
+			return fmt.Errorf("XQL_E413: entry count %d > %d", len(node.Entries), MaxChildCount)
 		}
 		if err := binary.Write(w, binary.BigEndian, uint32(len(node.Entries))); err != nil {
 			return err
@@ -476,7 +507,11 @@ func encodeNode(w io.Writer, n Node) error {
 	}
 }
 
-func decodeNode(r io.Reader) (Node, error) {
+func decodeNode(r io.Reader, depth int) (Node, error) {
+	// 递归深度检查，防止恶意嵌套导致栈溢出
+	if depth > MaxDecodeDepth {
+		return nil, fmt.Errorf("XQL_E413: decode recursion depth %d > %d", depth, MaxDecodeDepth)
+	}
 	kindByte, err := readByte(r)
 	if err != nil {
 		if err == io.EOF {
@@ -490,7 +525,7 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	switch NodeKind(kindByte) {
 	case KindProgram:
-		decls, err := readNodeList(r)
+		decls, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -506,6 +541,9 @@ func decodeNode(r io.Reader) (Node, error) {
 		var numParams uint32
 		if err := binary.Read(r, binary.BigEndian, &numParams); err != nil {
 			return nil, err
+		}
+		if numParams > MaxChildCount {
+			return nil, fmt.Errorf("XQL_E413: param count %d > %d", numParams, MaxChildCount)
 		}
 		if numParams > 0 {
 			fd.Params = make([]Param, numParams)
@@ -534,7 +572,7 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		fd.Grant = grants
-		body, err := readNodeList(r)
+		body, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -542,7 +580,7 @@ func decodeNode(r io.Reader) (Node, error) {
 		return fd, nil
 
 	case KindReturnStmt:
-		val, err := decodeNode(r)
+		val, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -560,7 +598,7 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		vd.Type = t
-		val, err := decodeNode(r)
+		val, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -569,12 +607,12 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindAssignStmt:
 		as := &AssignStmt{}
-		target, err := decodeNode(r)
+		target, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		as.Target = target
-		val, err := decodeNode(r)
+		val, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -583,17 +621,17 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindIfStmt:
 		is := &IfStmt{}
-		cond, err := decodeNode(r)
+		cond, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		is.Cond = cond
-		thenNodes, err := readNodeList(r)
+		thenNodes, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
 		is.Then = thenNodes
-		elseNodes, err := readNodeList(r)
+		elseNodes, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -602,12 +640,12 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindWhileStmt:
 		ws := &WhileStmt{}
-		cond, err := decodeNode(r)
+		cond, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		ws.Cond = cond
-		bodyNodes, err := readNodeList(r)
+		bodyNodes, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -626,22 +664,22 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		fs.Var = varName
-		start, err := decodeNode(r)
+		start, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		fs.Start = start
-		end, err := decodeNode(r)
+		end, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		fs.End = end
-		iterable, err := decodeNode(r)
+		iterable, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		fs.Iterable = iterable
-		bodyNodes, err := readNodeList(r)
+		bodyNodes, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -656,7 +694,7 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindExprStmt:
 		es := &ExprStmt{}
-		expr, err := decodeNode(r)
+		expr, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -674,10 +712,13 @@ func decodeNode(r io.Reader) (Node, error) {
 		if err := binary.Read(r, binary.BigEndian, &numFields); err != nil {
 			return nil, err
 		}
+		if numFields > MaxChildCount {
+			return nil, fmt.Errorf("XQL_E413: field count %d > %d", numFields, MaxChildCount)
+		}
 		if numFields > 0 {
 			sd.Fields = make([]StructField, numFields)
 			for i := uint32(0); i < numFields; i++ {
-				f, err := readStructField(r)
+				f, err := readStructField(r, depth)
 				if err != nil {
 					return nil, err
 				}
@@ -704,7 +745,7 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindMatchExpr:
 		me := &MatchExpr{}
-		val, err := decodeNode(r)
+		val, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -713,10 +754,13 @@ func decodeNode(r io.Reader) (Node, error) {
 		if err := binary.Read(r, binary.BigEndian, &numArms); err != nil {
 			return nil, err
 		}
+		if numArms > MaxChildCount {
+			return nil, fmt.Errorf("XQL_E413: arm count %d > %d", numArms, MaxChildCount)
+		}
 		if numArms > 0 {
 			me.Arms = make([]MatchArm, numArms)
 			for i := uint32(0); i < numArms; i++ {
-				arm, err := readMatchArm(r)
+				arm, err := readMatchArm(r, depth)
 				if err != nil {
 					return nil, err
 				}
@@ -734,12 +778,12 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		be.Op = op
-		left, err := decodeNode(r)
+		left, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		be.Left = left
-		right, err := decodeNode(r)
+		right, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -753,7 +797,7 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		ue.Op = op
-		operand, err := decodeNode(r)
+		operand, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -767,7 +811,7 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		ce.Callee = callee
-		args, err := readNodeList(r)
+		args, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -804,7 +848,7 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		me.Field = field
-		obj, err := decodeNode(r)
+		obj, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -822,10 +866,13 @@ func decodeNode(r io.Reader) (Node, error) {
 		if err := binary.Read(r, binary.BigEndian, &numFields); err != nil {
 			return nil, err
 		}
+		if numFields > MaxChildCount {
+			return nil, fmt.Errorf("XQL_E413: field count %d > %d", numFields, MaxChildCount)
+		}
 		if numFields > 0 {
 			sl.Fields = make([]StructFieldInit, numFields)
 			for i := uint32(0); i < numFields; i++ {
-				fi, err := readStructFieldInit(r)
+				fi, err := readStructFieldInit(r, depth)
 				if err != nil {
 					return nil, err
 				}
@@ -843,7 +890,7 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		al.ElemType = elemType
-		elements, err := readNodeList(r)
+		elements, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -852,12 +899,12 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindIndexExpr:
 		ie := &IndexExpr{}
-		target, err := decodeNode(r)
+		target, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		ie.Target = target
-		index, err := decodeNode(r)
+		index, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -866,17 +913,17 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindIfExpr:
 		ie := &IfExpr{}
-		cond, err := decodeNode(r)
+		cond, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		ie.Cond = cond
-		thenBranch, err := decodeNode(r)
+		thenBranch, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
 		ie.Then = thenBranch
-		elseBranch, err := decodeNode(r)
+		elseBranch, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -890,7 +937,7 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		ne.Callee = callee
-		args, err := readNodeList(r)
+		args, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -899,7 +946,7 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindAwaitExpr:
 		ae := &AwaitExpr{}
-		expr, err := decodeNode(r)
+		expr, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -911,6 +958,9 @@ func decodeNode(r io.Reader) (Node, error) {
 		var numParams uint32
 		if err := binary.Read(r, binary.BigEndian, &numParams); err != nil {
 			return nil, err
+		}
+		if numParams > MaxChildCount {
+			return nil, fmt.Errorf("XQL_E413: param count %d > %d", numParams, MaxChildCount)
 		}
 		if numParams > 0 {
 			l.Params = make([]Param, numParams)
@@ -929,7 +979,7 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		l.ReturnType = retType
-		body, err := readNodeList(r)
+		body, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -947,10 +997,13 @@ func decodeNode(r io.Reader) (Node, error) {
 		if err := binary.Read(r, binary.BigEndian, &numFields); err != nil {
 			return nil, err
 		}
+		if numFields > MaxChildCount {
+			return nil, fmt.Errorf("XQL_E413: field count %d > %d", numFields, MaxChildCount)
+		}
 		if numFields > 0 {
 			cd.Fields = make([]ClassField, numFields)
 			for i := uint32(0); i < numFields; i++ {
-				f, err := readClassField(r)
+				f, err := readClassField(r, depth)
 				if err != nil {
 					return nil, err
 				}
@@ -963,7 +1016,7 @@ func decodeNode(r io.Reader) (Node, error) {
 
 	case KindSwitchStmt:
 		ss := &SwitchStmt{}
-		val, err := decodeNode(r)
+		val, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -972,10 +1025,13 @@ func decodeNode(r io.Reader) (Node, error) {
 		if err := binary.Read(r, binary.BigEndian, &numCases); err != nil {
 			return nil, err
 		}
+		if numCases > MaxChildCount {
+			return nil, fmt.Errorf("XQL_E413: case count %d > %d", numCases, MaxChildCount)
+		}
 		if numCases > 0 {
 			ss.Cases = make([]SwitchCase, numCases)
 			for i := uint32(0); i < numCases; i++ {
-				c, err := readSwitchCase(r)
+				c, err := readSwitchCase(r, depth)
 				if err != nil {
 					return nil, err
 				}
@@ -1002,10 +1058,13 @@ func decodeNode(r io.Reader) (Node, error) {
 		if err := binary.Read(r, binary.BigEndian, &numEntries); err != nil {
 			return nil, err
 		}
+		if numEntries > MaxChildCount {
+			return nil, fmt.Errorf("XQL_E413: entry count %d > %d", numEntries, MaxChildCount)
+		}
 		if numEntries > 0 {
 			ml.Entries = make([]MapEntry, numEntries)
 			for i := uint32(0); i < numEntries; i++ {
-				e, err := readMapEntry(r)
+				e, err := readMapEntry(r, depth)
 				if err != nil {
 					return nil, err
 				}
@@ -1023,7 +1082,7 @@ func decodeNode(r io.Reader) (Node, error) {
 			return nil, err
 		}
 		al.ElemType = elemType
-		elements, err := readNodeList(r)
+		elements, err := readNodeList(r, depth)
 		if err != nil {
 			return nil, err
 		}
@@ -1241,7 +1300,7 @@ func writeStructField(w io.Writer, sf StructField) error {
 	return writeString(w, sf.Visibility)
 }
 
-func readStructField(r io.Reader) (StructField, error) {
+func readStructField(r io.Reader, depth int) (StructField, error) {
 	sf := StructField{}
 	name, err := readString(r)
 	if err != nil {
@@ -1271,7 +1330,7 @@ func writeClassField(w io.Writer, cf ClassField) error {
 	return writeString(w, cf.Visibility)
 }
 
-func readClassField(r io.Reader) (ClassField, error) {
+func readClassField(r io.Reader, depth int) (ClassField, error) {
 	cf := ClassField{}
 	name, err := readString(r)
 	if err != nil {
@@ -1298,14 +1357,14 @@ func writeStructFieldInit(w io.Writer, sfi StructFieldInit) error {
 	return encodeNode(w, sfi.Value)
 }
 
-func readStructFieldInit(r io.Reader) (StructFieldInit, error) {
+func readStructFieldInit(r io.Reader, depth int) (StructFieldInit, error) {
 	sfi := StructFieldInit{}
 	name, err := readString(r)
 	if err != nil {
 		return sfi, err
 	}
 	sfi.Name = name
-	val, err := decodeNode(r)
+	val, err := decodeNode(r, depth+1)
 	if err != nil {
 		return sfi, err
 	}
@@ -1329,20 +1388,20 @@ func writeMatchArm(w io.Writer, arm MatchArm) error {
 	return writeNodeList(w, arm.Body)
 }
 
-func readMatchArm(r io.Reader) (MatchArm, error) {
+func readMatchArm(r io.Reader, depth int) (MatchArm, error) {
 	arm := MatchArm{}
 	hasPattern, err := readBool(r)
 	if err != nil {
 		return arm, err
 	}
 	if hasPattern {
-		pattern, err := decodeNode(r)
+		pattern, err := decodeNode(r, depth+1)
 		if err != nil {
 			return arm, err
 		}
 		arm.Pattern = pattern
 	}
-	body, err := readNodeList(r)
+	body, err := readNodeList(r, depth)
 	if err != nil {
 		return arm, err
 	}
@@ -1366,20 +1425,20 @@ func writeSwitchCase(w io.Writer, sc SwitchCase) error {
 	return writeNodeList(w, sc.Body)
 }
 
-func readSwitchCase(r io.Reader) (SwitchCase, error) {
+func readSwitchCase(r io.Reader, depth int) (SwitchCase, error) {
 	sc := SwitchCase{}
 	hasValue, err := readBool(r)
 	if err != nil {
 		return sc, err
 	}
 	if hasValue {
-		val, err := decodeNode(r)
+		val, err := decodeNode(r, depth+1)
 		if err != nil {
 			return sc, err
 		}
 		sc.Value = val
 	}
-	body, err := readNodeList(r)
+	body, err := readNodeList(r, depth)
 	if err != nil {
 		return sc, err
 	}
@@ -1394,14 +1453,14 @@ func writeMapEntry(w io.Writer, me MapEntry) error {
 	return encodeNode(w, me.Value)
 }
 
-func readMapEntry(r io.Reader) (MapEntry, error) {
+func readMapEntry(r io.Reader, depth int) (MapEntry, error) {
 	me := MapEntry{}
-	k, err := decodeNode(r)
+	k, err := decodeNode(r, depth+1)
 	if err != nil {
 		return me, err
 	}
 	me.Key = k
-	v, err := decodeNode(r)
+	v, err := decodeNode(r, depth+1)
 	if err != nil {
 		return me, err
 	}
@@ -1424,7 +1483,7 @@ func writeNodeList(w io.Writer, list []Node) error {
 	return nil
 }
 
-func readNodeList(r io.Reader) ([]Node, error) {
+func readNodeList(r io.Reader, depth int) ([]Node, error) {
 	var length uint32
 	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
 		return nil, err
@@ -1437,7 +1496,7 @@ func readNodeList(r io.Reader) ([]Node, error) {
 	}
 	list := make([]Node, length)
 	for i := uint32(0); i < length; i++ {
-		n, err := decodeNode(r)
+		n, err := decodeNode(r, depth+1)
 		if err != nil {
 			return nil, err
 		}
@@ -1462,6 +1521,9 @@ func readStringList(r io.Reader) ([]string, error) {
 	var length uint32
 	if err := binary.Read(r, binary.BigEndian, &length); err != nil {
 		return nil, err
+	}
+	if length > MaxChildCount {
+		return nil, fmt.Errorf("XQL_E413: string list length %d > %d", length, MaxChildCount)
 	}
 	if length == 0 {
 		return nil, nil
