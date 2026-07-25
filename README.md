@@ -1,8 +1,19 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.17.0
+# Xiaoqinli (xql) 极简安全转译器 v3.18.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-25 - v3.18.0 GitHub 社区白名单与 Awesome 列表 PR 规范发布)
+
+### 🌐 开源社区白名单对接 (Community Whitelist Alignment)
+- **发布官方 PR 模板指南 (`docs/COMMUNITY_WHITELIST.md`)**：收录面向三大顶级开源白名单的 Pull Request 申请与 Markdown Snippet 标准填报格式：
+  1. **Awesome-MCP-Servers / Official MCP Registry**（面向 Model Context Protocol 社区）
+  2. **Awesome-Go**（面向 Go 语言全球顶级开源白名单）
+  3. **Awesome-AI-Agents**（面向 AI Agent 基础设施生态）
+- **推荐 GitHub Topics 优化**：确定 `transpiler`, `ast`, `mcp`, `mcp-server`, `compiler`, `golang`, `ai-agent` 组合标签。
 
 ---
 
