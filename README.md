@@ -1,8 +1,21 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.16.0
+# Xiaoqinli (xql) 极简安全转译器 v3.17.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-25 - v3.17.0 全 AI Agent 生态框架对齐与技能适配升级)
+
+### 🤖 多 Agent 框架对齐协议 (Multi-Agent Alignment Protocol)
+- **支持全平台 Agent 消费对齐**：全面适配 Google Antigravity Agent, Claude Code, Cursor, Windsurf, OpenAI Swarm/Codex, Aider, Cline 等主流 Agent 框架。
+- **4 大通用 Agent 宪法固化**：
+  1. **真相来源统一**：硬核编译器内核闭环全量类型、Effect 审计与能力安全 (`@grant`) 校验，拒绝运行期 LLM 动态猜测。
+  2. **AST-First 物理规训**：Agent 永远直写 `.xql.json` 结构化 AST，物理消灭格式错乱与词法解析错误。
+  3. **结构化 Diagnostics 纠错**：遇到错误时，Agent 自动根据 `ErrorCode` (如 `XQL_E2xx`, `XQL_E3xx`) 及 `SuggestedFix` 进行单轮精准修复，拒绝盲目重试。
+  4. **Tier 级后端治理分级**：明确 Tier A (100% 物理保底)、Tier B (主流扩展)、Tier C (稳态 Freeze) 分级判定。
+- **Skills 技能适配升级 (`skills/xiaoqinli/SKILL.md`)**：更新 Agent 引导文档版本至 v3.17.0，扩展 42+ 目标平台映射表。
 
 ---
 

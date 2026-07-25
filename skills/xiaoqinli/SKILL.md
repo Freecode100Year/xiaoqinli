@@ -1,19 +1,36 @@
 ---
 name: xiaoqinli
-description: "Architecture, design, and developer guide for the Xiaoqinli (xql) AST-First transpiler v2.0."
-version: 2.2.0
+description: "Universal AI Agent Architecture, Schema, and Integration Guide for Xiaoqinli (xql) AST-First Transpiler v3.17.0."
+version: 3.17.0
 author: Freecode100Year
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [xql, xiaoqinli, compiler, architecture, transpiler, go]
+    tags: [xql, xiaoqinli, compiler, architecture, transpiler, go, mcp, agents]
 ---
 
-# Xiaoqinli (xql) 极简架构 v2.0
+# Xiaoqinli (xql) 极简安全转译器 v3.17.0 — AI Agent 全框架对齐宪法
 
-> **定位**：AST-First 安全转译器（Transpiler）· 单 Go 二进制 · 无运行时 · 极简 / 安全 / 高性能
-> **版本**：v2.0 (减法版)
-> **变更说明**：相对 v1.4 大幅瘦身。砍掉双语言栈、VM、字节码、自愈引擎，认知原语移出核心。
+> **定位**：AST-First 安全转译器（Transpiler）· 单 Go 二进制 · 零依赖 · 无运行时 · 极简 / 安全 / 高性能
+> **版本**：v3.17.0 (AI Agent 全生态强对齐版)
+> **支持 Agent**：Google Antigravity, Claude Code, Cursor, Windsurf, OpenAI Swarm/Codex, Aider, Cline 等
+
+---
+
+## 🤖 全 AI Agent 框架强对齐协议 (Multi-Agent Alignment Protocol)
+
+所有对接 `xiaoqinli` 的 AI Agent 系统必须遵循以下核心规训：
+
+1. **编译器内核为唯一真相来源（Compiler Core Single Source of Truth）**：
+   - 所有的类型检查、副作用 Effect 审计与 `@grant` 权限校验由原生 Go 编译器闭环，禁止 Agent 在运行期使用 LLM 调用或盲目猜度。
+2. **AST-First 强约束**：
+   - AI Agent 必须直接输出 `.xql.json` 格式的结构化 JSON AST，从物理根源上消灭排版错乱与词法解析错误。
+3. **结构化 Diagnostics 诊断与零盲目重试**：
+   - 当收到转译或校验失败的响应时，Agent 必须读取 `diagnostics` 中的 `code` (如 `XQL_E2xx`/`XQL_E3xx`) 和 `suggested_fix` 进行单轮精确纠错，杜绝滚雪球式盲目重试。
+4. **目标后端 Tier 级治理分工**：
+   - **Tier A (核心主力)**：`Go` | `Rust` | `TypeScript` | `Python` | `C++` | `Java` | `C#` | `Zig` (保证 100% 物理跑通)
+   - **Tier B (主流扩展)**：`Swift` | `Kotlin` | `Dart` | `PHP` | `Ruby` | `Lua` | `Shell/Bash` | `PowerShell`
+   - **Tier C (长尾小众)**：`Ada` | `Bat` | `Tcl` | `Fortran` | `Pascal` 等 (稳态 Freeze)
 
 ---
 
@@ -71,7 +88,7 @@ Xiaoqinli 是一个极简、安全、高性能的 **AST-First 转译器**。
    * *全部通过才进入下一层*
 3. **层 2：代码生成**
    * AST 直接遍历 → 目标语言源码字符串
-4. **输出**：15 种目标语言源码（`main.go` / `main.rs` / `main.ts` / `main.kt` / `main.swift` / `main.py` / `Main.java` / `Program.cs` / `main.dart` / `main.lua` / `main.rb` / `main.php` / `main.zig` / `main.nim` / `main.jl`）
+4. **输出**：42+ 种目标语言/平台源码（Go / Rust / TS / Python / C++ / Java / C# / Zig / Kotlin / Swift / Dart / Lua / Ruby / PHP / Nim / Julia / Scala / Haskell / Bash / PowerShell / Chrome Extension 等）
 
 > **对比 v1.4**：删除了 IR DAG、字节码、VM 三层。中间不落任何中间表示，AST 检查通过后直接 codegen，走最快路径。
 
