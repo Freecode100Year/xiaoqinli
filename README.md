@@ -1,8 +1,19 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.15.0
+# Xiaoqinli (xql) 极简安全转译器 v3.15.1
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-24 - v3.15.1 架构与服务端逻辑解耦修正)
+
+### 🐛 Bug 修复与架构解耦
+- **修复服务端双轨逻辑漏洞 (server/mcp.go & server/rest.go)**：
+  - 修正了 `MCPServer` (`toolCompile`/`toolValidate`) 和 `RESTServer` (`handleCompile`/`handleValidate`) 直接 bypass `compiler` 库公共 API 手工拼接底层 `ast/check/codegen` 的架构脱节缺陷。
+  - 统一重构收拢使用标准的 `compiler.ParseAST`、`compiler.Compile` 与 `compiler.Validate`，保证了命令行 CLI、REST API、MCP Stdio/HTTP 三者在编译管线与 `Diagnostics` 结构化诊断输出上的 100% 行为绝对一致。
+- **补齐 `server` 包单元测试套件 (`server/server_test.go`)**：
+  - 新增针对 REST `/health`、`/metrics`、`/compile`、`/validate` 及 MCP `initialize`、`tools/list`、`tools/call` 的完整测试覆盖，消除服务层测试盲区。
 
 ---
 

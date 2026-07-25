@@ -8,9 +8,6 @@ import (
 	"os"
 	"time"
 
-	"xiaoqinli/ast"
-	"xiaoqinli/check"
-	"xiaoqinli/codegen"
 	"xiaoqinli/compiler"
 )
 
@@ -32,7 +29,7 @@ func (s *RESTServer) Serve(addr string) error {
 	})
 
 	// Prometheus metrics endpoint
-		mux.Handle("/metrics", GlobalMetrics.PrometheusHandler())
+	mux.Handle("/metrics", GlobalMetrics.PrometheusHandler())
 
 	fmt.Fprintf(os.Stderr, "REST API listening on %s\n", addr)
 	return http.ListenAndServe(addr, mux)
@@ -82,27 +79,25 @@ func (s *RESTServer) handleCompile(w http.ResponseWriter, r *http.Request) {
 		target = "go"
 	}
 
-	root, err := ast.Parse([]byte(req.Source))
-	if err != nil {
+	pRes := compiler.ParseAST(compiler.ParseRequest{Data: []byte(req.Source)})
+	if !pRes.Success {
 		success = false
-		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
+		writeJSON(w, http.StatusOK, compileResponse{Error: pRes.Error})
 		return
 	}
 
-	if err := check.RunAll(root); err != nil {
+	res := compiler.Compile(compiler.CompileRequest{
+		AST:    pRes.AST,
+		Target: target,
+	})
+
+	if !res.Success {
 		success = false
-		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
+		writeJSON(w, http.StatusOK, compileResponse{Error: res.Error})
 		return
 	}
 
-	output, err := codegen.Generate(root, req.Target)
-	if err != nil {
-		success = false
-		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
-		return
-	}
-
-	writeJSON(w, http.StatusOK, compileResponse{Ok: true, Output: string(output)})
+	writeJSON(w, http.StatusOK, compileResponse{Ok: true, Output: string(res.Code)})
 }
 
 func (s *RESTServer) handleValidate(w http.ResponseWriter, r *http.Request) {
@@ -134,16 +129,20 @@ func (s *RESTServer) handleValidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	root, err := ast.Parse([]byte(req.Source))
-	if err != nil {
+	pRes := compiler.ParseAST(compiler.ParseRequest{Data: []byte(req.Source)})
+	if !pRes.Success {
 		success = false
-		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
+		writeJSON(w, http.StatusOK, compileResponse{Error: pRes.Error})
 		return
 	}
 
-	if err := check.RunAll(root); err != nil {
+	res := compiler.Validate(compiler.ValidateRequest{
+		AST: pRes.AST,
+	})
+
+	if !res.Success {
 		success = false
-		writeJSON(w, http.StatusOK, compileResponse{Error: err.Error()})
+		writeJSON(w, http.StatusOK, compileResponse{Error: res.Error})
 		return
 	}
 

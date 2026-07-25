@@ -12,9 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"xiaoqinli/ast"
-	"xiaoqinli/check"
-	"xiaoqinli/codegen"
 	"xiaoqinli/compiler"
 	"xiaoqinli/vfs"
 )
@@ -340,25 +337,24 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 
 func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCResponse {
 	start := time.Now()
-	root, err := ast.Parse([]byte(source))
 	success := true
 	defer func() {
 		GlobalMetrics.RecordToolsCall("compile", time.Since(start).Seconds(), success)
 	}()
 
-	if err != nil {
+	pRes := compiler.ParseAST(compiler.ParseRequest{Data: []byte(source)})
+	if !pRes.Success {
 		success = false
-		return toolErrorResult(id, err)
-	}
-	if err := check.RunAll(root); err != nil {
-		success = false
-		return toolErrorResult(id, err)
+		return toolErrorResult(id, pRes.Error, pRes.Diagnostics)
 	}
 
-	output, err := codegen.Generate(root, target)
-	if err != nil {
+	res := compiler.Compile(compiler.CompileRequest{
+		AST:    pRes.AST,
+		Target: target,
+	})
+	if !res.Success {
 		success = false
-		return toolErrorResult(id, err)
+		return toolErrorResult(id, res.Error, res.Diagnostics)
 	}
 
 	return jsonRPCResponse{
@@ -366,7 +362,7 @@ func (s *MCPServer) toolCompile(id interface{}, source, target string) jsonRPCRe
 		ID:      id,
 		Result: map[string]interface{}{
 			"content": []map[string]string{
-				{"type": "text", "text": string(output)},
+				{"type": "text", "text": string(res.Code)},
 			},
 		},
 	}
@@ -379,14 +375,18 @@ func (s *MCPServer) toolValidate(id interface{}, source string) jsonRPCResponse 
 		GlobalMetrics.RecordToolsCall("validate", time.Since(start).Seconds(), success)
 	}()
 
-	root, err := ast.Parse([]byte(source))
-	if err != nil {
+	pRes := compiler.ParseAST(compiler.ParseRequest{Data: []byte(source)})
+	if !pRes.Success {
 		success = false
-		return toolErrorResult(id, err)
+		return toolErrorResult(id, pRes.Error, pRes.Diagnostics)
 	}
-	if err := check.RunAll(root); err != nil {
+
+	res := compiler.Validate(compiler.ValidateRequest{
+		AST: pRes.AST,
+	})
+	if !res.Success {
 		success = false
-		return toolErrorResult(id, err)
+		return toolErrorResult(id, res.Error, res.Diagnostics)
 	}
 	return jsonRPCResponse{
 		JSONRPC: "2.0",
@@ -448,7 +448,7 @@ func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
 	for i, t := range targets {
 		lines[i] = t["flag"] + " (" + t["name"] + ", " + t["ext"] + ")"
 	}
-	text := fmt.Sprintf("Supported targets (%d languages):\n", len(targets))
+	text := "Supported target languages:\n"
 	for _, l := range lines {
 		text += "  " + l + "\n"
 	}
@@ -463,18 +463,13 @@ func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
 	}
 }
 
-func toolErrorResult(id interface{}, err error) jsonRPCResponse {
-	var diagnostics []check.Diagnostic
-	if we, ok := err.(check.WorkspaceError); ok {
-		diagnostics = we.Diagnostics
-	}
-
+func toolErrorResult(id interface{}, errMsg string, diagnostics []compiler.Diagnostic) jsonRPCResponse {
 	res := map[string]interface{}{
 		"isError": true,
 		"content": []map[string]interface{}{
 			{
 				"type": "text",
-				"text": err.Error(),
+				"text": errMsg,
 			},
 		},
 	}
