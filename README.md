@@ -1,8 +1,29 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.14.0
+# Xiaoqinli (xql) 极简安全转译器 v3.15.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-24 - v3.15.0 核心架构确立与目标后端 Tier 分级收缩策略)
+
+### 🚀 核心架构准则与分工确立
+- **编译器内核（Compiler Core）死锁为唯一真相来源**：
+  - 坚持“零依赖、单 Go 二进制、编译期硬核校验”。所有类型检查、Effect 审计、Capability 约束与 Codegen 逻辑均由 Go 原生编译器闭环，禁止引入任何 Runtime LLM Calls。
+- **MCP / AI Skill 适配层定位（Adapter Shell）**：
+  - MCP Server 与 Skill 指南定位为降低 AI 接入门槛的适配外壳，负责指导 AI Agent 输出符合规范的 `.xql.json` AST 并解构 Diagnostics 错误码。
+
+### 🛡️ 后端 Tier 级分层治理模型
+- **Tier A（核心主力 - 100% 物理测试与编译双保）**：
+  - **涵盖语言**：`Go` | `Rust` | `TypeScript` | `Python` | `C++` | `Java` | `C#` | `Zig`
+  - **治理标准**：所有 AST/IR 新特性第一时间全量覆盖，CI 强制保证物理编译与自动化运行通过。
+- **Tier B（主流扩展 - AST 语义生成与类型对齐）**：
+  - **涵盖语言**：`Swift` | `Kotlin` | `Dart` | `PHP` | `Ruby` | `Lua` | `Shell/Bash` | `PowerShell`
+  - **治理标准**：保持主流语法与语义 100% 正确生成，主跑 AST 单元转译断言。
+- **Tier C（长尾/小众 - 标记 Freeze 稳态维护）**：
+  - **涵盖语言**：`Ada` | `Bat` | `Tcl` | `Fortran` | `Pascal` | `MQL4/5` 等
+  - **治理标准**：冻结复杂新 IR 节点的全量强制同步约束，保持已有功能稳态运行，杜绝拖慢主编译器架构演进。
 
 ---
 
