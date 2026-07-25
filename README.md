@@ -1,8 +1,27 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.13.0
+# Xiaoqinli (xql) 极简安全转译器 v3.14.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新与 Bug 修复 (2026-07-24 - v3.14.0 P0/P1/P2 安全加固与 Observability 监控升级)
+
+### 🐛 Bug 修复与 P0 安全加固
+- **P0 深度栈溢出拦截 (ast/codec.go)**：
+  - 修复 `codec.go` 中 37 处由于 depth 参数重构导致的递归函数签名不匹配与潜在漏洞。
+  - 为 `readNodeList`, `readStructField`, `readClassField`, `readStructFieldInit`, `readMatchArm`, `readSwitchCase`, `readMapEntry` 等递归入口全面添加 `depth int` 参数。
+  - 确保所有 `decodeNode(r, depth+1)` 调用点精准传递递增深度，彻底杜绝恶意的递归 JSON/二进制 AST 载荷引发的栈溢出崩溃。
+
+### 🆕 新增功能
+- **P2 Prometheus 监控指标导出 (server/metrics.go & REST API)**：
+  - 基于 `prometheus/client_golang` 实现标准 Prometheus 指标收集器与 `/metrics` HTTP 暴露端点。
+  - 支持 `xqlb_decode_total`, `xqlb_compile_duration_seconds`, `mcp_tools_call_duration_seconds` 等关键指标耗时直方图与成功率统计。
+- **P1 MCP 统一消息边界限制**：
+  - 设置全局 `MaxMCPMessageBytes` (2 MB) 限制，对 Stdio 与 HTTP MCP 传输层设置统一物理边界防卫。
+- **P1-3 GitHub CI 自动 VulnCheck**：
+  - 增加基于 `govulncheck ./...` 的 CVE 依赖脆弱性自动检测 GitHub CI 工作流。
 
 ---
 
