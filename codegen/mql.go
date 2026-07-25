@@ -191,7 +191,11 @@ type mqlGen struct {
 
 func (g *mqlGen) write(s string)   { g.buf.WriteString(s) }
 func (g *mqlGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *mqlGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *mqlGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 // typeStr returns the MQL base type string for a TypeExpr.
 // For Array types it returns the element type; the caller handles [] syntax.

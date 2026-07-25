@@ -1293,5 +1293,3 @@ func TestDiagnosticSuggestedFix(t *testing.T) {
 		t.Error("expected capability lack diagnostic to be found")
 	}
 }
-
-

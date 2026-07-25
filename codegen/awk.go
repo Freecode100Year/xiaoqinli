@@ -91,7 +91,11 @@ type awkGen struct {
 
 func (g *awkGen) write(s string)   { g.buf.WriteString(s) }
 func (g *awkGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *awkGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *awkGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func (g *awkGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {

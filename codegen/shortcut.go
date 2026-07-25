@@ -79,16 +79,16 @@ func GenerateShortcut(root ast.Node) ([]byte, error) {
 }
 
 type scGen struct {
-	actions    []map[string]interface{}
-	funcs      map[string]*ast.FunctionDecl
-	groupSeq   int
-	tmpSeq     int
-	callDepth  int
+	actions   []map[string]interface{}
+	funcs     map[string]*ast.FunctionDecl
+	groupSeq  int
+	tmpSeq    int
+	callDepth int
 }
 
 func (g *scGen) addAction(id string, params map[string]interface{}) {
 	g.actions = append(g.actions, map[string]interface{}{
-		"WFWorkflowActionIdentifier":  id,
+		"WFWorkflowActionIdentifier": id,
 		"WFWorkflowActionParameters": params,
 	})
 }
@@ -766,4 +766,3 @@ func (g *scGen) buildOperand(n ast.Node) interface{} {
 	}
 	return scTextToken("0")
 }
-

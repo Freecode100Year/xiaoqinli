@@ -72,7 +72,11 @@ type phpGen struct {
 
 func (g *phpGen) write(s string)   { g.buf.WriteString(s) }
 func (g *phpGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *phpGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *phpGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func typeToPHP(t ast.TypeExpr) string {
 	switch t.KindName {

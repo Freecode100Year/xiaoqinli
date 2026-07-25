@@ -16,7 +16,7 @@ import (
 
 const (
 	// Version is the current version of the xiaoqinli compiler package.
-	Version = "3.15.2"
+	Version = "3.15.3"
 
 	// MaxASTBytes is the maximum allowed size for an AST payload (mirrors ast.MaxASTBytes).
 	MaxASTBytes = 2 << 20 // 2 MB
@@ -204,12 +204,12 @@ func computeStats(root ast.Node, code []byte, duration time.Duration) CompileSta
 				walker(stmt)
 			}
 		case *ast.StructDecl:
-				s.StructCount++
-				for _, f := range node.Fields {
-					// Field is not a Node, but we can count them if we want.
-					// For now, just count the decl.
-					_ = f
-				}
+			s.StructCount++
+			for _, f := range node.Fields {
+				// Field is not a Node, but we can count them if we want.
+				// For now, just count the decl.
+				_ = f
+			}
 		case *ast.ClassDecl:
 			s.ClassCount++
 		case *ast.ReturnStmt:

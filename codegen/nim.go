@@ -101,7 +101,11 @@ type nimGen struct {
 
 func (g *nimGen) write(s string)   { g.buf.WriteString(s) }
 func (g *nimGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *nimGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("  ") } }
+func (g *nimGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("  ")
+	}
+}
 
 func typeToNim(t ast.TypeExpr) string {
 	switch t.KindName {

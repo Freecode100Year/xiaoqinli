@@ -96,7 +96,11 @@ type zigGen struct {
 
 func (g *zigGen) write(s string)   { g.buf.WriteString(s) }
 func (g *zigGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *zigGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *zigGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func typeToZig(t ast.TypeExpr) string {
 	switch t.KindName {
@@ -560,7 +564,6 @@ func (g *zigGen) exprIsString(n ast.Node) bool {
 		return false
 	}
 }
-
 
 // zigFmtSpec returns "{s}" for string-typed expressions, "{}" for others.
 func (g *zigGen) zigFmtSpec(n ast.Node) string {

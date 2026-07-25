@@ -69,7 +69,11 @@ type fsGen struct {
 
 func (g *fsGen) write(s string)   { g.buf.WriteString(s) }
 func (g *fsGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *fsGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *fsGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func (g *fsGen) typeStr(t ast.TypeExpr) string {
 	switch t.KindName {

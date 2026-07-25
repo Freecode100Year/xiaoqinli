@@ -38,7 +38,11 @@ type fortranGen struct {
 
 func (g *fortranGen) write(s string)   { g.buf.WriteString(s) }
 func (g *fortranGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *fortranGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *fortranGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func typeToFortran(t ast.TypeExpr) string {
 	switch t.KindName {

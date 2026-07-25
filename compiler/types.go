@@ -44,12 +44,12 @@ type CompileResult struct {
 
 // Diagnostic is a structured, AI-friendly error report.
 type Diagnostic struct {
-	Code         string             `json:"code"`
-	Message      string             `json:"message"`
-	Location     ast.LocationInfo   `json:"location,omitempty"`
-	Context      string             `json:"context,omitempty"` // snippet of code
-	SuggestedFix string             `json:"suggested_fix,omitempty"`
-	Level        string             `json:"level"` // "error" | "warning" | "info"
+	Code         string           `json:"code"`
+	Message      string           `json:"message"`
+	Location     ast.LocationInfo `json:"location,omitempty"`
+	Context      string           `json:"context,omitempty"` // snippet of code
+	SuggestedFix string           `json:"suggested_fix,omitempty"`
+	Level        string           `json:"level"` // "error" | "warning" | "info"
 }
 
 // ParseRequest describes an AST parse operation.

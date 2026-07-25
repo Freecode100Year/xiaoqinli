@@ -1,12 +1,12 @@
 package codegen
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-	"fmt"
 
 	"xiaoqinli/ast"
 )
@@ -115,7 +115,7 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 			checkCmd: "javac",
 			runCmd:   "javac Main.java Service.java Models.java ; java Main",
 			files: map[string]string{
-				"main.xql":   "Main.java",
+				"main.xql":    "Main.java",
 				"service.xql": "Service.java",
 				"models.xql":  "Models.java",
 			},
@@ -126,7 +126,7 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 			checkCmd: "dotnet",
 			runCmd:   "dotnet new console --force ; Remove-Item -ErrorAction SilentlyContinue Program.cs ; dotnet run",
 			files: map[string]string{
-				"main.xql":   "main.cs",
+				"main.xql":    "main.cs",
 				"service.xql": "service.cs",
 				"models.xql":  "models.cs",
 			},
@@ -137,7 +137,7 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 			checkCmd: "kotlinc",
 			runCmd:   "kotlinc main.kt service.kt models.kt -include-runtime -d main.jar ; java -jar main.jar",
 			files: map[string]string{
-				"main.xql":   "main.kt",
+				"main.xql":    "main.kt",
 				"service.xql": "service.kt",
 				"models.xql":  "models.kt",
 			},
@@ -159,7 +159,7 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 			checkCmd: "dart",
 			runCmd:   "dart run main.dart service.dart models.dart",
 			files: map[string]string{
-				"main.xql":   "main.dart",
+				"main.xql":    "main.dart",
 				"service.xql": "service.dart",
 				"models.xql":  "models.dart",
 			},

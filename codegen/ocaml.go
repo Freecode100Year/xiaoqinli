@@ -69,7 +69,11 @@ type ocamlGen struct {
 
 func (g *ocamlGen) write(s string)   { g.buf.WriteString(s) }
 func (g *ocamlGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *ocamlGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *ocamlGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func typeToOCaml(t ast.TypeExpr) string {
 	switch t.KindName {

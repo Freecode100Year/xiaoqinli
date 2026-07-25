@@ -62,8 +62,6 @@ func GenerateDart(root ast.Node) ([]byte, error) {
 `)
 	}
 
-
-
 	// Emit enum declarations first.
 	first := true
 	for _, d := range prog.Decls {
@@ -124,7 +122,11 @@ type dartGen struct {
 
 func (g *dartGen) write(s string)   { g.buf.WriteString(s) }
 func (g *dartGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *dartGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *dartGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func typeToDart(t ast.TypeExpr) string {
 	switch t.KindName {

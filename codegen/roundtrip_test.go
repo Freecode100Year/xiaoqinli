@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
 )
 
 // TestRoundTrip generates source code from the hello program, compiles/runs it
@@ -18,7 +17,7 @@ func TestRoundTrip(t *testing.T) {
 	cases := []struct {
 		target   string
 		ext      string
-		compiler string       // exec.LookPath key
+		compiler string // exec.LookPath key
 		run      func(t *testing.T, path string) string
 	}{
 		{

@@ -21,8 +21,8 @@ type LocationInfo struct {
 // TypeExpr represents a type reference in the AST.
 type TypeExpr struct {
 	KindName string    `json:"kind"`
-	Elem     *TypeExpr `json:"elem,omitempty"`     // Array<T>, Option<T>
-	KeyType  *TypeExpr `json:"keyType,omitempty"`   // Map<K,V> key type
+	Elem     *TypeExpr `json:"elem,omitempty"`    // Array<T>, Option<T>
+	KeyType  *TypeExpr `json:"keyType,omitempty"` // Map<K,V> key type
 	OkType   *TypeExpr `json:"okType,omitempty"`
 	ErrType  *TypeExpr `json:"errType,omitempty"`
 }
@@ -162,7 +162,7 @@ func (*EnumDecl) Kind() string { return "EnumDecl" }
 
 // MatchArm represents one arm of a match expression.
 type MatchArm struct {
-	Pattern Node   // Literal or Ident (name "_" = wildcard)
+	Pattern Node // Literal or Ident (name "_" = wildcard)
 	Body    []Node
 }
 
@@ -295,7 +295,7 @@ func (*ClassDecl) Kind() string { return "ClassDecl" }
 
 // SwitchCase represents a case in a switch statement.
 type SwitchCase struct {
-	Value Node   // nil for default case
+	Value Node // nil for default case
 	Body  []Node
 }
 

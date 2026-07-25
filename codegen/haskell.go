@@ -87,7 +87,11 @@ type hsGen struct {
 
 func (g *hsGen) write(s string)   { g.buf.WriteString(s) }
 func (g *hsGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *hsGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *hsGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func typeToHaskell(t ast.TypeExpr) string {
 	switch t.KindName {

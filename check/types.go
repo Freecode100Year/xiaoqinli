@@ -42,10 +42,10 @@ type TypeChecker struct {
 	currentFunc   *ast.FunctionDecl
 
 	// Multi-file Workspace support
-	currentFile   string
-	workspace     *vfs.Workspace
-	imports       map[string]*TypeChecker
-	Diagnostics   []Diagnostic
+	currentFile string
+	workspace   *vfs.Workspace
+	imports     map[string]*TypeChecker
+	Diagnostics []Diagnostic
 }
 
 // NewTypeChecker creates a new TypeChecker.

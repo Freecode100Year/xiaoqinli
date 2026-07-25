@@ -133,7 +133,11 @@ type tsGen struct {
 
 func (g *tsGen) write(s string)   { g.buf.WriteString(s) }
 func (g *tsGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *tsGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *tsGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func (g *tsGen) typeToTS(t ast.TypeExpr) string {
 	if t.KindName == "" {
@@ -971,4 +975,3 @@ func (g *tsGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
 	g.write("]")
 	return nil
 }
-

@@ -1,8 +1,17 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.15.2
+# Xiaoqinli (xql) 极简安全转译器 v3.15.3
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-24 - v3.15.3 例行代码维护与格式化校验)
+
+### 🔧 例行代码维护 (Code Maintenance)
+- **代码规范与格式化 (Formatting)**：通过 `gofmt -s -w .` 对项目全量 Go 代码文件进行格式简化与标准校验。
+- **依赖审计 (Dependency Cleanup)**：运行 `go mod tidy` 整理校验模块依赖。
+- **静态分析与测试保障 (Static Analysis)**：通过 `go vet ./...` 及 48+ 测试套件 (`go test ./...`) 100% 验证。
 
 ---
 

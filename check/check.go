@@ -15,10 +15,10 @@ import (
 //
 // Any check failure returns an error; all checks must pass before codegen.
 type Diagnostic struct {
-	Code         string       `json:"code"`
-	Message      string       `json:"message"`
+	Code         string           `json:"code"`
+	Message      string           `json:"message"`
 	Location     ast.LocationInfo `json:"location,omitempty"`
-	SuggestedFix string       `json:"suggested_fix,omitempty"`
+	SuggestedFix string           `json:"suggested_fix,omitempty"`
 }
 
 type WorkspaceError struct {

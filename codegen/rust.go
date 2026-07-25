@@ -59,13 +59,17 @@ type rsGen struct {
 	scope       map[string]string // variable/param name → type kind
 	funcReturns map[string]string // function name → return type kind
 	currentFunc *ast.FunctionDecl
-	imports     map[string]bool   // import alias set
+	imports     map[string]bool // import alias set
 	structTable map[string]*ast.StructDecl
 }
 
 func (g *rsGen) write(s string)   { g.buf.WriteString(s) }
 func (g *rsGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *rsGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *rsGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func typeToRust(t ast.TypeExpr) string {
 	return typeToRustInner(t, false)
@@ -592,7 +596,7 @@ func (g *rsGen) emitStructLit(sl *ast.StructLit) error {
 			g.write(", ")
 		}
 		g.write(f.Name + ": ")
-		
+
 		isStringLit := false
 		if lit, ok := f.Value.(*ast.Literal); ok && lit.ValueType == "String" {
 			isStringLit = true

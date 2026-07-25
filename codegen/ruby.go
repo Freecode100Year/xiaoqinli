@@ -81,7 +81,11 @@ type rbGen struct {
 
 func (g *rbGen) write(s string)   { g.buf.WriteString(s) }
 func (g *rbGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *rbGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("  ") } }
+func (g *rbGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("  ")
+	}
+}
 
 func (g *rbGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {

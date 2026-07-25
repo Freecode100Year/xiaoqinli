@@ -39,7 +39,11 @@ type pascalGen struct {
 
 func (g *pascalGen) write(s string)   { g.buf.WriteString(s) }
 func (g *pascalGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *pascalGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *pascalGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func typeToPascal(t ast.TypeExpr) string {
 	switch t.KindName {

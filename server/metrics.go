@@ -14,8 +14,8 @@ type MetricsCollector struct {
 	decodeFailTotal *prometheus.CounterVec
 
 	// MCP tools call metrics
-	toolsCallTotal   *prometheus.CounterVec
-	toolsCallFail    *prometheus.CounterVec
+	toolsCallTotal    *prometheus.CounterVec
+	toolsCallFail     *prometheus.CounterVec
 	toolsCallDuration *prometheus.HistogramVec
 
 	// Compile metrics

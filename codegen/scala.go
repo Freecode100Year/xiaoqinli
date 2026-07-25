@@ -69,7 +69,11 @@ type scalaGen struct {
 
 func (g *scalaGen) write(s string)   { g.buf.WriteString(s) }
 func (g *scalaGen) writeln(s string) { g.buf.WriteString(s); g.buf.WriteByte('\n') }
-func (g *scalaGen) writeIndent()     { for i := 0; i < g.indent; i++ { g.buf.WriteString("    ") } }
+func (g *scalaGen) writeIndent() {
+	for i := 0; i < g.indent; i++ {
+		g.buf.WriteString("    ")
+	}
+}
 
 func typeToScala(t ast.TypeExpr) string {
 	switch t.KindName {
