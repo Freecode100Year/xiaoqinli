@@ -1,8 +1,17 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.15.1
+# Xiaoqinli (xql) 极简安全转译器 v3.15.2
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-24 - v3.15.2 无效死代码彻底清理)
+
+### 🧹 垃圾清理与包瘦身
+- **服务端死代码物理移除 (`server/mcp.go`)**：
+  - 彻底清理了早期尝试保存会话状态留下的废弃死代码：`Session` 结构体、`MaxSessions` 常量约束、未被调用的 `getSession` 函数及关联多余 import (`sync` / `vfs`)。
+  - 确保 `MCPServer` 为完全无状态（Stateless）、轻量化的高性能 JSON-RPC 处理器。
 
 ---
 

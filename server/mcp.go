@@ -9,61 +9,20 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"sync"
 	"time"
 
 	"xiaoqinli/compiler"
-	"xiaoqinli/vfs"
 )
 
 // MaxMCPMessageBytes is the maximum allowed size for a single MCP message (both stdio and HTTP).
 const MaxMCPMessageBytes = 2 << 20 // 2 MB
 
-// MaxSessions is the maximum number of concurrent MCP sessions.
-const MaxSessions = 1024
-
-// Session holds per-connection state for MCP sessions.
-type Session struct {
-	VFS        *vfs.Workspace
-	lastAccess time.Time
-}
-
 // MCPServer implements the Model Context Protocol over stdio and streamable HTTP.
-type MCPServer struct {
-	mu       sync.Mutex
-	sessions map[string]*Session
-}
+type MCPServer struct{}
 
 // NewMCPServer creates a new MCPServer.
 func NewMCPServer() *MCPServer {
-	return &MCPServer{
-		sessions: make(map[string]*Session),
-	}
-}
-
-func (s *MCPServer) getSession(id string) *Session {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	sess, ok := s.sessions[id]
-	if ok {
-		sess.lastAccess = time.Now()
-		return sess
-	}
-	// Evict oldest session if at capacity.
-	if len(s.sessions) >= MaxSessions {
-		var oldestID string
-		var oldestTime time.Time
-		for sid, se := range s.sessions {
-			if oldestID == "" || se.lastAccess.Before(oldestTime) {
-				oldestID = sid
-				oldestTime = se.lastAccess
-			}
-		}
-		delete(s.sessions, oldestID)
-	}
-	sess = &Session{VFS: vfs.New(), lastAccess: time.Now()}
-	s.sessions[id] = sess
-	return sess
+	return &MCPServer{}
 }
 
 // ---------------------------------------------------------------------------
