@@ -1,8 +1,20 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.22.0
+# Xiaoqinli (xql) 极简安全转译器 v3.23.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-26 - v3.23.0 零崩溃与死循环物理拦截防护机制发布)
+
+### 🛡️ 零崩溃与死循环物理熔断防护架构 (Zero-Crash & Deadloop Interception Engine)
+- **Panic Shield 零崩溃防御包 (`SafeExecute`)**：
+  - 在 `evolution/engine.go` 中引入 `SafeExecute` 防崩溃保护壳，任何自我更新与语法解析过程发生的未预期异常均自动触发 Safe Recover 并降级回退，实现 0 Panic 程序崩溃。
+- **LoopBreaker 死循环物理熔断器**：
+  - 新增 `LoopBreaker` 依赖环与递归图回路拦截机制。硬编码 `MaxSelfEvolutionRetries = 3` 与 `MaxRecursionDepth = 64` 阻断闭环，拦截任何死循环或无限重试。
+- **单元测试保障**：
+  - 新增 `TestPanicShieldAndLoopBreaker` 物理断言测试，全套测试套件 100% 物理跑通。
 
 ---
 

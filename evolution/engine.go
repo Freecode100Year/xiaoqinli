@@ -12,6 +12,52 @@ import (
 	"xiaoqinli/codegen"
 )
 
+// MaxSelfEvolutionRetries limits auto-fix / self-update attempts to prevent infinite deadloops.
+const MaxSelfEvolutionRetries = 3
+
+// MaxRecursionDepth bounds self-evolution & AST resolution tree depth.
+const MaxRecursionDepth = 64
+
+// SafeExecute runs a self-evolution function with panic recovery to guarantee zero crashes.
+func SafeExecute(fn func() error) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("XQL_E500: self-evolution panic recovered safely: %v", r)
+		}
+	}()
+	return fn()
+}
+
+// LoopBreaker tracks visited keys to prevent graph cycles & infinite execution loops.
+type LoopBreaker struct {
+	visited map[string]int
+	mu      sync.Mutex
+}
+
+// NewLoopBreaker creates a new LoopBreaker instance.
+func NewLoopBreaker() *LoopBreaker {
+	return &LoopBreaker{visited: make(map[string]int)}
+}
+
+// Track checks if key exceeds MaxSelfEvolutionRetries, preventing infinite loops.
+func (lb *LoopBreaker) Track(key string) error {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+
+	lb.visited[key]++
+	if lb.visited[key] > MaxSelfEvolutionRetries {
+		return fmt.Errorf("XQL_E501: deadloop intercepted! key '%s' exceeded max retries (%d)", key, MaxSelfEvolutionRetries)
+	}
+	return nil
+}
+
+// Reset clears loop breaker state.
+func (lb *LoopBreaker) Reset() {
+	lb.mu.Lock()
+	defer lb.mu.Unlock()
+	lb.visited = make(map[string]int)
+}
+
 // ---------------------------------------------------------------------------
 // 1. Diagnostic Memory (纠错经验记忆引擎)
 // ---------------------------------------------------------------------------

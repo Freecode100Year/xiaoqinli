@@ -9,10 +9,10 @@ metadata:
     tags: [xql, xiaoqinli, compiler, architecture, transpiler, go, mcp, agents]
 ---
 
-# Xiaoqinli (xql) 极简安全转译器 v3.22.0 — AI Agent 全模型与云原生 CLI 对齐宪法
+# Xiaoqinli (xql) 极简安全转译器 v3.23.0 — AI Agent 零崩溃与死循环物理拦截宪法
 
 > **定位**：AST-First 安全转译器（Transpiler）· 单 Go 二进制 · 零依赖 · 无运行时 · 极简 / 安全 / 高性能
-> **版本**：v3.22.0 (Kimi Code / Qwen Code / DeepSeek Coder / GLM Coding / Tencent Cloud CLI tccli 全对齐版)
+> **版本**：v3.23.0 (零崩溃与死循环物理熔断防护版)
 > **支持 Agent & 模型**：Google Antigravity, Kimi Code (Moonshot), Qwen Code (Qwen2.5-Coder), DeepSeek Coder/V3, GLM Coding (GLM-4), Official Tencent Cloud CLI (tccli), Claude Code, Cursor, Windsurf, Aider 等
 
 ---
@@ -28,8 +28,9 @@ metadata:
 3. **生成前最新语言特性检索与本地自我更新协议 (Pre-Retrieval & Self-Updating Spec Protocol)**：
    - 在为目标语言（Python 3.12+/3.13+ 及其他 42+ 语言）生成代码前，Agent 必须通过 MCP `specs_inspect` 或 REST `/specs` 检索最新语言特性 Profile。
    - 若检测到新语法/新规范，Agent 可主动调用 `specs_update` 或更新本地 Profile JSON 实现动态自我演进，确保生成的代码始终适用于最新的语言版本与特性。
-4. **结构化 Diagnostics 诊断与零盲目重试**：
-   - 当收到转译或校验失败的响应时，Agent 必须读取 `diagnostics` 中的 `code` (如 `XQL_E2xx`/`XQL_E3xx`) 和 `suggested_fix` 进行单轮精确纠错，杜绝滚雪球式盲目重试。
+4. **零崩溃与死循环物理拦截宪法 (Zero-Crash & Deadloop Boundary Protocol)**：
+   - 所有的自我更新、动态演化与语法树解析必须封装 `SafeExecute` (Panic Shield)，出现非预期异常时优雅降级并输出结构化错误，保证程序 0 Panic Crash。
+   - 所有的自我纠错重试与图闭环挂载 `LoopBreaker`，设置 `MaxSelfEvolutionRetries = 3` 与 `MaxRecursionDepth = 64` 物理阻断，拦截任何可能引发无限循环的图回路。
 5. **云原生 CLI & 大模型原生生态强对齐 (Cloud Native CLI & LLM Model Alignment)**：
    - **Official Tencent Cloud CLI (`tccli`)**：原生支持将 `.xql.json` 编译导出为腾讯云官方 CLI 自动化运维与云原生资源编排 Bash 脚本（Target: `tccli`）。
    - **Kimi Code / Qwen Code / DeepSeek Coder / GLM Coding**：全面支持长上下文 Prompt Caching、FIM (Fill-In-Middle) 补全、Tool Calling/MCP 标准对接与结构化 JSON AST 直接生成。

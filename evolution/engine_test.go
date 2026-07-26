@@ -1,6 +1,7 @@
 package evolution
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -108,5 +109,30 @@ func TestFullSelfEvolutionEngine(t *testing.T) {
 	allSkills := ListDynamicSkills()
 	if len(allSkills) == 0 {
 		t.Errorf("expected non-empty ListDynamicSkills")
+	}
+}
+
+func TestPanicShieldAndLoopBreaker(t *testing.T) {
+	// 1. Test Panic Recovery (Zero Crash Guarantee)
+	err := SafeExecute(func() error {
+		var nilPtr *int
+		*nilPtr = 42 // Trigger panic
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "self-evolution panic recovered safely") {
+		t.Fatalf("expected panic recovery error, got %v", err)
+	}
+
+	// 2. Test Deadloop Interception
+	lb := NewLoopBreaker()
+	for i := 0; i < MaxSelfEvolutionRetries; i++ {
+		if err := lb.Track("deadloop_key"); err != nil {
+			t.Fatalf("unexpected loop breaker error at iteration %d: %v", i, err)
+		}
+	}
+	// The 4th attempt must be intercepted!
+	errLoop := lb.Track("deadloop_key")
+	if errLoop == nil || !strings.Contains(errLoop.Error(), "deadloop intercepted") {
+		t.Fatalf("expected deadloop error, got %v", errLoop)
 	}
 }
