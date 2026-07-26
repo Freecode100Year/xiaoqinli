@@ -12,11 +12,12 @@ import (
 	"xiaoqinli/ast"
 	"xiaoqinli/check"
 	"xiaoqinli/codegen"
+	"xiaoqinli/evolution"
 )
 
 const (
 	// Version is the current version of the xiaoqinli compiler package.
-	Version = "3.18.0"
+	Version = "3.22.0"
 
 	// MaxASTBytes is the maximum allowed size for an AST payload (mirrors ast.MaxASTBytes).
 	MaxASTBytes = 2 << 20 // 2 MB
@@ -36,6 +37,7 @@ var allTargets = []string{
 	"bat",
 	"shortcut",
 	"chrome",
+	"tccli",
 }
 
 // GetVersion returns the compiler library version.
@@ -378,4 +380,69 @@ func wrapDiag(err error) []Diagnostic {
 		Message: err.Error(),
 		Level:   "error",
 	}}
+}
+
+// InspectSpec retrieves the latest language specification profile for target language.
+func InspectSpec(target string) (*codegen.LanguageProfile, error) {
+	return codegen.InspectLanguageProfile(target)
+}
+
+// UpdateSpec updates or registers a target language specification profile locally.
+func UpdateSpec(profile codegen.LanguageProfile) (*codegen.LanguageProfile, error) {
+	return codegen.UpdateLanguageProfile(profile)
+}
+
+// GetAllSpecs returns all 42+ registered target language profiles.
+func GetAllSpecs() map[string]*codegen.LanguageProfile {
+	return codegen.ListAllLanguageProfiles()
+}
+
+// Diagnostic Memory Wrappers
+func RecordDiagnosticFix(code, errCtx, astPattern, fix string) *evolution.DiagnosticFixRecord {
+	return evolution.RecordDiagnosticFix(code, errCtx, astPattern, fix)
+}
+
+func InspectDiagnosticFixes(code string) []*evolution.DiagnosticFixRecord {
+	return evolution.InspectDiagnosticFixes(code)
+}
+
+// TreeSitter Mapping Wrappers
+func UpdateTreeSitterMapping(m evolution.TreeSitterMapping) *evolution.TreeSitterMapping {
+	return evolution.UpdateTreeSitterMapping(m)
+}
+
+func InspectTreeSitterMapping(target string) (*evolution.TreeSitterMapping, error) {
+	return evolution.InspectTreeSitterMapping(target)
+}
+
+// Security Policy Wrappers
+func InspectSecurityPolicy() evolution.SecurityPolicyConfig {
+	return evolution.InspectSecurityPolicy()
+}
+
+func UpdateSecurityPolicy(policy evolution.SecurityPolicyConfig) evolution.SecurityPolicyConfig {
+	return evolution.UpdateSecurityPolicy(policy)
+}
+
+// Stdlib Matrix Wrappers
+func InspectStdlibMatrix(target string) (*evolution.StdlibAPIMatrix, error) {
+	return evolution.InspectStdlibMatrix(target)
+}
+
+func UpdateStdlibMatrix(m evolution.StdlibAPIMatrix) *evolution.StdlibAPIMatrix {
+	return evolution.UpdateStdlibMatrix(m)
+}
+
+// Codegen Strategy Wrappers
+func InspectCodegenStrategy(target string) *evolution.CodegenStrategyConfig {
+	return evolution.InspectCodegenStrategy(target)
+}
+
+func UpdateCodegenStrategy(s evolution.CodegenStrategyConfig) *evolution.CodegenStrategyConfig {
+	return evolution.UpdateCodegenStrategy(s)
+}
+
+// Universal Skill Evolution Wrappers
+func DiagnoseAndFillSkillGap(taskContext, missingCapability string) *evolution.DynamicSkill {
+	return evolution.DiagnoseAndFillSkillGap(taskContext, missingCapability)
 }

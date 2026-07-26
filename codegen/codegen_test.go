@@ -2311,3 +2311,63 @@ func TestGenerateImportDecl(t *testing.T) {
 		t.Errorf("expected utils::netCall() in Rust, got: %s", rsCode)
 	}
 }
+
+func TestLanguageProfileSelfUpdate(t *testing.T) {
+	// 1. Inspect default Python spec profile
+	pyProf, err := InspectLanguageProfile("py")
+	if err != nil {
+		t.Fatalf("InspectLanguageProfile py error: %v", err)
+	}
+	if pyProf.LatestVersion != "3.12+" {
+		t.Errorf("expected Python latest_version 3.12+, got %s", pyProf.LatestVersion)
+	}
+
+	// 2. Self-update Python spec profile with Python 3.13 features
+	updatedProf, err := UpdateLanguageProfile(LanguageProfile{
+		Target:        "py",
+		Language:      "Python",
+		LatestVersion: "3.13+",
+		ModernFeatures: []string{
+			"PEP 604 union types (T | None)",
+			"dataclasses",
+			"PEP 703 Free-threaded Python (no-GIL)",
+			"JIT compiler support",
+		},
+	})
+	if err != nil {
+		t.Fatalf("UpdateLanguageProfile py error: %v", err)
+	}
+	if updatedProf.LatestVersion != "3.13+" {
+		t.Errorf("expected updated version 3.13+, got %s", updatedProf.LatestVersion)
+	}
+
+	// 3. Inspect updated Python spec
+	reInspected, err := InspectLanguageProfile("py")
+	if err != nil {
+		t.Fatalf("Re-inspect py error: %v", err)
+	}
+	if reInspected.LatestVersion != "3.13+" {
+		t.Errorf("expected re-inspected version 3.13+, got %s", reInspected.LatestVersion)
+	}
+
+	// 4. Ensure all 42+ targets are available in ListAllLanguageProfiles
+	all := ListAllLanguageProfiles()
+	if len(all) < 42 {
+		t.Errorf("expected at least 42 target profiles, got %d", len(all))
+	}
+}
+
+func TestGenerateTCCLI(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	out, err := Generate(root, "tccli")
+	if err != nil {
+		t.Fatalf("Generate tccli error: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "#!/bin/bash") {
+		t.Errorf("expected bash shebang in tccli generated script")
+	}
+	if !strings.Contains(code, "tccli") {
+		t.Errorf("expected tccli command check in script")
+	}
+}

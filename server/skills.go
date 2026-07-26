@@ -6,35 +6,48 @@ import (
 	"net/http"
 	"strings"
 
+	"xiaoqinli/evolution"
 	"xiaoqinli/skills"
 )
 
-// SkillEntry describes one embedded skill document.
+// SkillEntry describes one embedded or dynamically evolved skill document.
 type SkillEntry struct {
 	Name    string `json:"name"`
 	Content string `json:"content,omitempty"`
 }
 
-// ListSkills returns metadata for all embedded skill documents.
+// ListSkills returns metadata for all embedded and dynamic self-evolved skill documents.
 func ListSkills() []SkillEntry {
 	entries, err := fs.ReadDir(skills.FS, ".")
-	if err != nil {
-		return nil
-	}
-	out := make([]SkillEntry, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
+	out := make([]SkillEntry, 0)
+	if err == nil {
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				continue
+			}
+			name := strings.TrimSuffix(e.Name(), ".md")
+			out = append(out, SkillEntry{Name: name})
 		}
-		name := strings.TrimSuffix(e.Name(), ".md")
-		out = append(out, SkillEntry{Name: name})
 	}
+
+	// Merge dynamic self-evolved skills
+	dyn := evolution.ListDynamicSkills()
+	for _, ds := range dyn {
+		out = append(out, SkillEntry{Name: ds.Name})
+	}
+
 	return out
 }
 
-// GetSkill returns the content of a skill by name.
+// GetSkill returns the content of a skill by name (checking dynamic evolved skills first).
 func GetSkill(name string) (string, bool) {
-	data, err := fs.ReadFile(skills.FS, name+".md")
+	norm := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".md")
+
+	if ds, ok := evolution.GetDynamicSkill(norm); ok {
+		return ds.Content, true
+	}
+
+	data, err := fs.ReadFile(skills.FS, norm+".md")
 	if err != nil {
 		return "", false
 	}

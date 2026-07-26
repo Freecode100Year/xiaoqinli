@@ -1,0 +1,112 @@
+package evolution
+
+import (
+	"testing"
+)
+
+func TestFullSelfEvolutionEngine(t *testing.T) {
+	// 1. Test Diagnostic Memory
+	rec := RecordDiagnosticFix("XQL_E201", "Type mismatch in function return", "ReturnStmt.value", "Cast float to int explicitly")
+	if rec.SuccessCount != 1 {
+		t.Errorf("expected SuccessCount 1, got %d", rec.SuccessCount)
+	}
+
+	fixes := InspectDiagnosticFixes("XQL_E201")
+	if len(fixes) != 1 {
+		t.Fatalf("expected 1 fix record, got %d", len(fixes))
+	}
+	if fixes[0].SuggestedFix != "Cast float to int explicitly" {
+		t.Errorf("unexpected suggested fix: %s", fixes[0].SuggestedFix)
+	}
+
+	// 2. Test Tree-sitter WASM Mapping
+	tsMap := UpdateTreeSitterMapping(TreeSitterMapping{
+		Language: "Mojo",
+		Target:   "mojo",
+		NodeMappings: map[string]string{
+			"function_definition": "FunctionDecl",
+		},
+		KeywordMapping: map[string]string{
+			"fn": "function",
+		},
+	})
+	if tsMap.Target != "mojo" {
+		t.Errorf("expected target mojo, got %s", tsMap.Target)
+	}
+
+	inspectedMap, err := InspectTreeSitterMapping("mojo")
+	if err != nil {
+		t.Fatalf("InspectTreeSitterMapping error: %v", err)
+	}
+	if inspectedMap.Language != "Mojo" {
+		t.Errorf("expected Mojo, got %s", inspectedMap.Language)
+	}
+
+	// 3. Test Security Policy
+	pol := UpdateSecurityPolicy(SecurityPolicyConfig{
+		Environment:     "wasm_sandbox",
+		AllowedGrants:   []string{"io"},
+		ForbiddenGrants: []string{"net", "fs"},
+		MaxEffectLevel:  "pure",
+	})
+	if pol.MaxEffectLevel != "pure" {
+		t.Errorf("expected MaxEffectLevel pure, got %s", pol.MaxEffectLevel)
+	}
+	curPol := InspectSecurityPolicy()
+	if curPol.Environment != "wasm_sandbox" {
+		t.Errorf("expected environment wasm_sandbox, got %s", curPol.Environment)
+	}
+
+	// 4. Test Stdlib Matrix
+	mat := UpdateStdlibMatrix(StdlibAPIMatrix{
+		Target: "py",
+		DeprecatedAPIs: map[string]string{
+			"asyncio.get_event_loop": "Use asyncio.new_event_loop() in 3.12+",
+		},
+		RecommendedAPIs: map[string]string{
+			"union_type": "PEP 604 T | None",
+		},
+	})
+	if mat.Target != "py" {
+		t.Errorf("expected target py, got %s", mat.Target)
+	}
+	inspectedMat, err := InspectStdlibMatrix("py")
+	if err != nil {
+		t.Fatalf("InspectStdlibMatrix error: %v", err)
+	}
+	if _, ok := inspectedMat.DeprecatedAPIs["asyncio.get_event_loop"]; !ok {
+		t.Errorf("expected deprecated API entry for asyncio.get_event_loop")
+	}
+
+	// 5. Test Codegen Strategy
+	strat := UpdateCodegenStrategy(CodegenStrategyConfig{
+		Target:              "py",
+		PreferComprehension: true,
+		InlineThreshold:     50,
+		OptimizationFlags:   map[string]string{"opt_level": "3"},
+		BenchmarkScore:      98.5,
+	})
+	if strat.BenchmarkScore != 98.5 {
+		t.Errorf("expected benchmark score 98.5, got %f", strat.BenchmarkScore)
+	}
+	inspectedStrat := InspectCodegenStrategy("py")
+	if inspectedStrat.InlineThreshold != 50 {
+		t.Errorf("expected inline threshold 50, got %d", inspectedStrat.InlineThreshold)
+	}
+
+	// 6. Test Universal Skill & Gap-Filling Engine
+	dynSkill := DiagnoseAndFillSkillGap("quantum_context", "quantum_circuit_codegen")
+	if dynSkill.Name != "quantum_circuit_codegen" {
+		t.Errorf("expected skill name quantum_circuit_codegen, got %s", dynSkill.Name)
+	}
+
+	sk, found := GetDynamicSkill("quantum_circuit_codegen")
+	if !found || sk.GapCategory != "capability_gap" {
+		t.Errorf("expected found dynamic skill with gap_category capability_gap")
+	}
+
+	allSkills := ListDynamicSkills()
+	if len(allSkills) == 0 {
+		t.Errorf("expected non-empty ListDynamicSkills")
+	}
+}

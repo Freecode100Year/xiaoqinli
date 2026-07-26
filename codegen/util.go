@@ -101,6 +101,8 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateShortcut(root)
 	case "chrome":
 		return GenerateChrome(root)
+	case "tccli", "tencentcloud":
+		return GenerateTCCLI(root)
 	default:
 		return nil, fmt.Errorf("unsupported target: %s", target)
 	}

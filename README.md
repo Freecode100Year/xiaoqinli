@@ -1,8 +1,63 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.18.0
+# Xiaoqinli (xql) 极简安全转译器 v3.22.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-26 - v3.22.0 Kimi Code / Qwen Code / DeepSeek Coder / GLM Coding 及 Official Tencent Cloud CLI tccli 全面适配发布)
+
+### ☁️ 云原生 CLI & 主流 AI 模型全生态原生强对齐 (Cloud Native CLI & LLM Alignment Engine)
+- **Official Tencent Cloud CLI (`tccli`) 原生后端支持**：
+  - 新增 `codegen/tccli.go` 生成器 Backend（Target: `tccli`）。支持直接将结构化 `.xql.json` AST 转译编译为腾讯云官方 CLI 自动化运维与云原生资源编排 Bash 脚本。
+- **Kimi Code / Qwen Code / DeepSeek Coder / GLM Coding 强对齐**：
+  - 在 `codegen/profile.go` 中新增 **DeepSeek Coder/V3**、**Qwen Code (Qwen2.5-Coder)**、**Kimi Code (Moonshot)**、**GLM Coding (GLM-4)** 四大模型的专用 Profile 规则。
+  - 全面支持 FIM (Fill-In-Middle) 补全、Prompt Caching 长上下文缓存、MCP Tool Calling 协议与结构化 AST 原生生成。
+- **单元测试保障**：
+  - 新增 `TestGenerateTCCLI` 单元测试，全套测试套件 100% 物理跑通。
+
+---
+
+## 📢 最新更新 (2026-07-26 - v3.21.0 通用 Skill 架构与自体进化短板自动补齐引擎发布)
+
+### 🔮 通用 Skill 与短板自愈引擎 (Universal Meta-Skill & Gap-Filling Engine)
+- **通用 Skill 标准化 (Universal Meta-Skill Alignment)**：
+  - 将 `xiaoqinli` 全盘封装为全 Agent 生态通用的“元技能 (Meta-Skill)”，全面适配 Antigravity CLI, Claude Code, Cursor, Windsurf 等全框架。
+- **能力短板自动诊断与自愈补齐 (Self-Diagnostic & Skill Gap-Filling)**：
+  - 新增 `evolution.DiagnoseAndFillSkillGap` 与 MCP `skills_diagnose_and_fill` 工具。当 Agent 在复杂任务中检测到能力盲区（Capability Gap）时，自动合成并动态注册补齐 Skill 模块落盘至本地 Skill 库。
+- **静态嵌入与动态自愈 Skill 融合 (Static & Dynamic Skills Merging)**：
+  - 在 `server/skills.go` (`ListSkills` / `GetSkill`) 中完美融合 `go:embed` 静态 Skill 与在线自适应补齐的 `DynamicSkill`。
+
+---
+
+## 📢 最新更新 (2026-07-26 - v3.20.0 全维度自体迭代引擎 Full Self-Evolution Engine 发布)
+
+### 🧬 全维度自体迭代与动态检索架构 (5-Vector Self-Evolution Engine)
+- **1. Diagnostics 编译纠错经验记忆 (Diagnostic Fix Memory)**：
+  - 新增 `evolution/engine.go` 的 `RecordDiagnosticFix` 与 `InspectDiagnosticFixes`。Agent 编译纠错成功后自动学习并将修复模式落盘至 `diagnostic_memory.json`，实现零重复报错打靶。
+- **2. Tree-sitter WASM 节点自适应映射 (Tree-sitter WASM Mapping)**：
+  - 新增 `UpdateTreeSitterMapping`，支持在新兴/小众语言（如 Mojo, Gleam）接入时动态解析 AST 节点映射关系并自动生成 Profile。
+- **3. Capability 安全权限演进策略 (Dynamic Security Policy Bounds)**：
+  - 新增 `UpdateSecurityPolicy` 与 MCP `security_policy_inspect` 工具，支持沙箱环境与 `@grant` 能力约束的动态对齐。
+- **4. 标准库 API 变动与代际演进矩阵 (Stdlib API Change Matrix)**：
+  - 动态维护各语言 API 替换/废弃映射，防止 Codegen 生成 Deprecated 接口调用。
+- **5. Codegen 策略优化与性能调优 (Codegen Optimization Loop)**：
+  - 动态保存并检索优化标志（如列表推导式偏好、内联阈值），引导代码生成产出最优目标源码。
+- **全套 MCP / REST 工具扩展与单元测试保障**：
+  - 新增 `evolution/engine_test.go` 与 `TestCompilerEvolutionBridge`，全套测试套件 100% 物理测试通过。
+
+---
+
+## 📢 最新更新 (2026-07-26 - v3.19.0 AI Agent 42+ 目标语言生成前最新特性检索与本地自我更新机制)
+
+### 🚀 生成前最新语言特性检索与 42+ 语言本地自我更新引擎 (Language Specs Pre-Retrieval & Self-Updating Engine)
+- **生成前最新语言特性检索协议 (Spec Pre-Retrieval)**：
+  - 在 AI Agent 使用 `xiaoqinli` 转译生成 Python (3.12+/3.13+) 及 42+ 目标语言前，全面支持调用 MCP `specs_inspect` 工具及 REST `/specs` 接口检索目标语言最新语法规范与版本 Profile（包含 Python PEP 604 联合类型 `T | None`、dataclasses、Go 1.23+ 泛型与 range-over-func iterator、TypeScript 5.5+、Rust 2024 Edition、Zig 0.13+ 等）。
+- **42+ 语言本地 Profile 自我更新机制 (Local Self-Updating)**：
+  - 引入 `codegen/profile.go` 与 `compiler.UpdateSpec`，支持 AI Agent 通过 MCP `specs_update` 与 REST `/specs` 动态进行本地自我更新。具备持久化 JSON (`SaveProfilesToFile` / `LoadProfilesFromFile`) 能力，实现语言特性的自愈与自治演进。
+- **全系统测试与版本升级**：
+  - 将 `compiler.Version` 与全套 Agent 适配宪法升级至 `v3.19.0`，新增 `TestLanguageProfileSelfUpdate` 单元测试，全套测试套件 100% 物理跑通。
 
 ---
 

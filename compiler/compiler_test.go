@@ -228,8 +228,36 @@ func TestCompileFromFile_NotFound(t *testing.T) {
 
 func TestGetVersion(t *testing.T) {
 	v := GetVersion()
-	if v != "3.18.0" {
-		t.Fatalf("expected 3.18.0, got %s", v)
+	if v != "3.22.0" {
+		t.Fatalf("expected 3.22.0, got %s", v)
+	}
+}
+
+func TestDynamicSkillGapFilling(t *testing.T) {
+	sk := DiagnoseAndFillSkillGap("unit_test_context", "gpu_acceleration")
+	if sk == nil || sk.Name != "gpu_acceleration" {
+		t.Fatalf("expected skill gpu_acceleration, got %v", sk)
+	}
+}
+
+func TestCompilerEvolutionBridge(t *testing.T) {
+	// Diagnostic memory
+	RecordDiagnosticFix("XQL_E301", "Ungranted capability", "FunctionDecl", "Add @grant([io]) to declaration")
+	fixes := InspectDiagnosticFixes("XQL_E301")
+	if len(fixes) == 0 || fixes[0].SuggestedFix == "" {
+		t.Errorf("expected diagnostic fix record via compiler bridge")
+	}
+
+	// Security policy
+	pol := InspectSecurityPolicy()
+	if pol.MaxEffectLevel == "" {
+		t.Errorf("expected security policy max effect level")
+	}
+
+	// Codegen strategy
+	strat := InspectCodegenStrategy("py")
+	if strat.Target != "py" {
+		t.Errorf("expected strategy target py")
 	}
 }
 

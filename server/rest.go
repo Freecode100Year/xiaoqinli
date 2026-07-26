@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"xiaoqinli/codegen"
 	"xiaoqinli/compiler"
 )
 
@@ -22,6 +23,8 @@ func (s *RESTServer) Serve(addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/compile", s.handleCompile)
 	mux.HandleFunc("/validate", s.handleValidate)
+	mux.HandleFunc("/specs", s.handleSpecs)
+	mux.HandleFunc("/evolution/diagnostics", s.handleEvolutionDiagnostics)
 	mux.HandleFunc("/skills/", handleSkillsREST)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -153,4 +156,91 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+func (s *RESTServer) handleSpecs(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		target := r.URL.Query().Get("target")
+		if target != "" {
+			spec, err := compiler.InspectSpec(target)
+			if err != nil {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+				return
+			}
+			writeJSON(w, http.StatusOK, spec)
+			return
+		}
+		writeJSON(w, http.StatusOK, compiler.GetAllSpecs())
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		defer r.Body.Close()
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad request"})
+			return
+		}
+		var prof struct {
+			Target         string            `json:"target"`
+			Language       string            `json:"language"`
+			LatestVersion  string            `json:"latest_version"`
+			ModernFeatures []string          `json:"modern_features"`
+			CodegenOptions map[string]string `json:"codegen_options"`
+		}
+		if err := json.Unmarshal(body, &prof); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json payload"})
+			return
+		}
+
+		updated, err := compiler.UpdateSpec(codegen.LanguageProfile{
+			Target:         prof.Target,
+			Language:       prof.Language,
+			LatestVersion:  prof.LatestVersion,
+			ModernFeatures: prof.ModernFeatures,
+			CodegenOptions: prof.CodegenOptions,
+		})
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+			return
+		}
+		writeJSON(w, http.StatusOK, updated)
+		return
+	}
+
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (s *RESTServer) handleEvolutionDiagnostics(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		code := r.URL.Query().Get("code")
+		fixes := compiler.InspectDiagnosticFixes(code)
+		writeJSON(w, http.StatusOK, fixes)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		defer r.Body.Close()
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad request"})
+			return
+		}
+		var input struct {
+			Code         string `json:"code"`
+			ErrorContext string `json:"error_context"`
+			ASTPattern   string `json:"ast_pattern"`
+			SuggestedFix string `json:"suggested_fix"`
+		}
+		if err := json.Unmarshal(body, &input); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid payload"})
+			return
+		}
+
+		rec := compiler.RecordDiagnosticFix(input.Code, input.ErrorContext, input.ASTPattern, input.SuggestedFix)
+		writeJSON(w, http.StatusOK, rec)
+		return
+	}
+
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }

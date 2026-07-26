@@ -11,7 +11,9 @@ import (
 	"os"
 	"time"
 
+	"xiaoqinli/codegen"
 	"xiaoqinli/compiler"
+	"xiaoqinli/evolution"
 )
 
 // MaxMCPMessageBytes is the maximum allowed size for a single MCP message (both stdio and HTTP).
@@ -242,6 +244,97 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 				"properties": map[string]interface{}{},
 			},
 		},
+		{
+			"name":        "specs_inspect",
+			"description": "Retrieve modern language specification profile & latest version features for any target language (e.g. py, go, ts, rust) before code generation.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"target": map[string]string{
+						"type":        "string",
+						"description": "Target language identifier (py, go, ts, rust, etc.)",
+					},
+				},
+				"required": []string{"target"},
+			},
+		},
+		{
+			"name":        "specs_update",
+			"description": "Self-update or register a target language modern specification profile locally.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"target": map[string]string{
+						"type":        "string",
+						"description": "Target language identifier (e.g. py, go, ts)",
+					},
+					"latest_version": map[string]string{
+						"type":        "string",
+						"description": "Latest language version (e.g. 3.12+)",
+					},
+					"modern_features": map[string]interface{}{
+						"type":        "array",
+						"items":       map[string]string{"type": "string"},
+						"description": "List of latest language features & syntax rules",
+					},
+				},
+				"required": []string{"target"},
+			},
+		},
+		{
+			"name":        "diagnostic_memory_inspect",
+			"description": "Retrieve learned compiler diagnostic fix patterns and proven suggested fixes for an error code (e.g. XQL_E201, XQL_E301).",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"code": map[string]string{
+						"type":        "string",
+						"description": "Compiler error code (e.g. XQL_E201)",
+					},
+				},
+				"required": []string{"code"},
+			},
+		},
+		{
+			"name":        "diagnostic_memory_record",
+			"description": "Record a proven diagnostic fix pattern into local memory for self-evolution error resolution.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"code":          map[string]string{"type": "string"},
+					"error_context": map[string]string{"type": "string"},
+					"ast_pattern":   map[string]string{"type": "string"},
+					"suggested_fix": map[string]string{"type": "string"},
+				},
+				"required": []string{"code", "suggested_fix"},
+			},
+		},
+		{
+			"name":        "security_policy_inspect",
+			"description": "Inspect dynamic environment capability grant rules and sandbox bounds.",
+			"inputSchema": map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		},
+		{
+			"name":        "skills_diagnose_and_fill",
+			"description": "Self-diagnose detected capability gap during task execution and auto-generate dynamic skill module to fill shortboard.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"task_context": map[string]string{
+						"type":        "string",
+						"description": "Description of current task context or failing scenario",
+					},
+					"missing_capability": map[string]string{
+						"type":        "string",
+						"description": "Name or key of detected missing capability/shortboard",
+					},
+				},
+				"required": []string{"missing_capability"},
+			},
+		},
 	}
 	return jsonRPCResponse{
 		JSONRPC: "2.0",
@@ -285,6 +378,18 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 		return s.toolValidate(req.ID, args.Source)
 	case "targets":
 		return s.toolTargets(req.ID)
+	case "specs_inspect":
+		return s.toolSpecsInspect(req.ID, args.Target)
+	case "specs_update":
+		return s.toolSpecsUpdate(req.ID, params.Arguments)
+	case "diagnostic_memory_inspect":
+		return s.toolDiagnosticMemoryInspect(req.ID, params.Arguments)
+	case "diagnostic_memory_record":
+		return s.toolDiagnosticMemoryRecord(req.ID, params.Arguments)
+	case "security_policy_inspect":
+		return s.toolSecurityPolicyInspect(req.ID)
+	case "skills_diagnose_and_fill":
+		return s.toolSkillsDiagnoseAndFill(req.ID, params.Arguments)
 	default:
 		return jsonRPCResponse{
 			JSONRPC: "2.0",
@@ -417,6 +522,157 @@ func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
 		Result: map[string]interface{}{
 			"content": []map[string]string{
 				{"type": "text", "text": text},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolSpecsInspect(id interface{}, target string) jsonRPCResponse {
+	spec, err := compiler.InspectSpec(target)
+	if err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: err.Error()},
+		}
+	}
+	b, _ := json.MarshalIndent(spec, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": string(b)},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolSpecsUpdate(id interface{}, rawArgs json.RawMessage) jsonRPCResponse {
+	var input struct {
+		Target         string            `json:"target"`
+		LatestVersion  string            `json:"latest_version"`
+		ModernFeatures []string          `json:"modern_features"`
+		CodegenOptions map[string]string `json:"codegen_options"`
+	}
+	if err := json.Unmarshal(rawArgs, &input); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: "invalid specs_update parameters"},
+		}
+	}
+
+	prof := codegen.LanguageProfile{
+		Target:         input.Target,
+		LatestVersion:  input.LatestVersion,
+		ModernFeatures: input.ModernFeatures,
+		CodegenOptions: input.CodegenOptions,
+	}
+
+	updated, err := compiler.UpdateSpec(prof)
+	if err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: err.Error()},
+		}
+	}
+
+	b, _ := json.MarshalIndent(updated, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": fmt.Sprintf("Successfully updated spec profile:\n%s", string(b))},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolDiagnosticMemoryInspect(id interface{}, rawArgs json.RawMessage) jsonRPCResponse {
+	var input struct {
+		Code string `json:"code"`
+	}
+	_ = json.Unmarshal(rawArgs, &input)
+
+	fixes := compiler.InspectDiagnosticFixes(input.Code)
+	b, _ := json.MarshalIndent(fixes, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": string(b)},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolDiagnosticMemoryRecord(id interface{}, rawArgs json.RawMessage) jsonRPCResponse {
+	var input struct {
+		Code         string `json:"code"`
+		ErrorContext string `json:"error_context"`
+		ASTPattern   string `json:"ast_pattern"`
+		SuggestedFix string `json:"suggested_fix"`
+	}
+	if err := json.Unmarshal(rawArgs, &input); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: "invalid diagnostic_memory_record args"},
+		}
+	}
+
+	rec := compiler.RecordDiagnosticFix(input.Code, input.ErrorContext, input.ASTPattern, input.SuggestedFix)
+	b, _ := json.MarshalIndent(rec, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": fmt.Sprintf("Recorded diagnostic fix:\n%s", string(b))},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolSecurityPolicyInspect(id interface{}) jsonRPCResponse {
+	pol := compiler.InspectSecurityPolicy()
+	b, _ := json.MarshalIndent(pol, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": string(b)},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolSkillsDiagnoseAndFill(id interface{}, rawArgs json.RawMessage) jsonRPCResponse {
+	var input struct {
+		TaskContext       string `json:"task_context"`
+		MissingCapability string `json:"missing_capability"`
+	}
+	if err := json.Unmarshal(rawArgs, &input); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: "invalid skills_diagnose_and_fill parameters"},
+		}
+	}
+
+	sk := evolution.DiagnoseAndFillSkillGap(input.TaskContext, input.MissingCapability)
+	b, _ := json.MarshalIndent(sk, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": fmt.Sprintf("Successfully diagnosed and registered self-evolved skill module:\n%s", string(b))},
 			},
 		},
 	}

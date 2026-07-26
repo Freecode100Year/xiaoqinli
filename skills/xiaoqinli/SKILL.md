@@ -1,7 +1,7 @@
 ---
 name: xiaoqinli
-description: "Universal AI Agent Architecture, Schema, and Integration Guide for Xiaoqinli (xql) AST-First Transpiler v3.17.0."
-version: 3.17.0
+description: "Universal AI Agent Architecture, Schema, and Integration Guide for Xiaoqinli (xql) AST-First Transpiler v3.22.0."
+version: 3.22.0
 author: Freecode100Year
 platforms: [linux, macos, windows]
 metadata:
@@ -9,11 +9,11 @@ metadata:
     tags: [xql, xiaoqinli, compiler, architecture, transpiler, go, mcp, agents]
 ---
 
-# Xiaoqinli (xql) 极简安全转译器 v3.17.0 — AI Agent 全框架对齐宪法
+# Xiaoqinli (xql) 极简安全转译器 v3.22.0 — AI Agent 全模型与云原生 CLI 对齐宪法
 
 > **定位**：AST-First 安全转译器（Transpiler）· 单 Go 二进制 · 零依赖 · 无运行时 · 极简 / 安全 / 高性能
-> **版本**：v3.17.0 (AI Agent 全生态强对齐版)
-> **支持 Agent**：Google Antigravity, Claude Code, Cursor, Windsurf, OpenAI Swarm/Codex, Aider, Cline 等
+> **版本**：v3.22.0 (Kimi Code / Qwen Code / DeepSeek Coder / GLM Coding / Tencent Cloud CLI tccli 全对齐版)
+> **支持 Agent & 模型**：Google Antigravity, Kimi Code (Moonshot), Qwen Code (Qwen2.5-Coder), DeepSeek Coder/V3, GLM Coding (GLM-4), Official Tencent Cloud CLI (tccli), Claude Code, Cursor, Windsurf, Aider 等
 
 ---
 
@@ -25,10 +25,16 @@ metadata:
    - 所有的类型检查、副作用 Effect 审计与 `@grant` 权限校验由原生 Go 编译器闭环，禁止 Agent 在运行期使用 LLM 调用或盲目猜度。
 2. **AST-First 强约束**：
    - AI Agent 必须直接输出 `.xql.json` 格式的结构化 JSON AST，从物理根源上消灭排版错乱与词法解析错误。
-3. **结构化 Diagnostics 诊断与零盲目重试**：
+3. **生成前最新语言特性检索与本地自我更新协议 (Pre-Retrieval & Self-Updating Spec Protocol)**：
+   - 在为目标语言（Python 3.12+/3.13+ 及其他 42+ 语言）生成代码前，Agent 必须通过 MCP `specs_inspect` 或 REST `/specs` 检索最新语言特性 Profile。
+   - 若检测到新语法/新规范，Agent 可主动调用 `specs_update` 或更新本地 Profile JSON 实现动态自我演进，确保生成的代码始终适用于最新的语言版本与特性。
+4. **结构化 Diagnostics 诊断与零盲目重试**：
    - 当收到转译或校验失败的响应时，Agent 必须读取 `diagnostics` 中的 `code` (如 `XQL_E2xx`/`XQL_E3xx`) 和 `suggested_fix` 进行单轮精确纠错，杜绝滚雪球式盲目重试。
-4. **目标后端 Tier 级治理分工**：
-   - **Tier A (核心主力)**：`Go` | `Rust` | `TypeScript` | `Python` | `C++` | `Java` | `C#` | `Zig` (保证 100% 物理跑通)
+5. **云原生 CLI & 大模型原生生态强对齐 (Cloud Native CLI & LLM Model Alignment)**：
+   - **Official Tencent Cloud CLI (`tccli`)**：原生支持将 `.xql.json` 编译导出为腾讯云官方 CLI 自动化运维与云原生资源编排 Bash 脚本（Target: `tccli`）。
+   - **Kimi Code / Qwen Code / DeepSeek Coder / GLM Coding**：全面支持长上下文 Prompt Caching、FIM (Fill-In-Middle) 补全、Tool Calling/MCP 标准对接与结构化 JSON AST 直接生成。
+6. **目标后端 Tier 级治理分工**：
+   - **Tier A (核心主力)**：`Go` | `Rust` | `TypeScript` | `Python` | `C++` | `Java` | `C#` | `Zig` | `Tencent Cloud CLI (tccli)` (保证 100% 物理跑通)
    - **Tier B (主流扩展)**：`Swift` | `Kotlin` | `Dart` | `PHP` | `Ruby` | `Lua` | `Shell/Bash` | `PowerShell`
    - **Tier C (长尾小众)**：`Ada` | `Bat` | `Tcl` | `Fortran` | `Pascal` 等 (稳态 Freeze)
 
