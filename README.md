@@ -1,8 +1,19 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.23.0
+# Xiaoqinli (xql) 极简安全转译器 v3.24.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-26 - v3.24.0 自我更新进化后强制 Debug 与自检闭环协议发布)
+
+### 🔄 自我更新进化后强制 Debug 物理自检协议 (Post-Evolution Mandatory Auto-Debug Protocol)
+- **自我进化后的物理闭环自检**：
+  - 固化全框架强对齐宪法条文：任何时候触发自我更新迭代后，系统/Agent 必须**自动启动 Debug 物理自检**管线。
+  - 自动跑通 `gofmt -s -w .` 静态格式化、`go test ./...` 100% 物理测试集合、重新编译生成并覆盖宿主机二进制 `C:\Users\sj929\go\bin\xql.exe`、更新置顶自述文件并推送到 GitHub 远程仓库！
+- **固化版本与宪法保障**：
+  - 将版本号与 Skill 宪法提升至 `v3.24.0`，全套测试套件 100% 物理跑通。
 
 ---
 

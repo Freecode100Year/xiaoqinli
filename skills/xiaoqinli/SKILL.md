@@ -1,7 +1,7 @@
 ---
 name: xiaoqinli
-description: "Universal AI Agent Architecture, Schema, and Integration Guide for Xiaoqinli (xql) AST-First Transpiler v3.22.0."
-version: 3.22.0
+description: "Universal AI Agent Architecture, Schema, and Integration Guide for Xiaoqinli (xql) AST-First Transpiler v3.24.0."
+version: 3.24.0
 author: Freecode100Year
 platforms: [linux, macos, windows]
 metadata:
@@ -9,10 +9,10 @@ metadata:
     tags: [xql, xiaoqinli, compiler, architecture, transpiler, go, mcp, agents]
 ---
 
-# Xiaoqinli (xql) 极简安全转译器 v3.23.0 — AI Agent 零崩溃与死循环物理拦截宪法
+# Xiaoqinli (xql) 极简安全转译器 v3.24.0 — 自我更新进化后强制 Debug 与自检宪法
 
 > **定位**：AST-First 安全转译器（Transpiler）· 单 Go 二进制 · 零依赖 · 无运行时 · 极简 / 安全 / 高性能
-> **版本**：v3.23.0 (零崩溃与死循环物理熔断防护版)
+> **版本**：v3.24.0 (自我更新进化后强制 Debug 物理防灾版)
 > **支持 Agent & 模型**：Google Antigravity, Kimi Code (Moonshot), Qwen Code (Qwen2.5-Coder), DeepSeek Coder/V3, GLM Coding (GLM-4), Official Tencent Cloud CLI (tccli), Claude Code, Cursor, Windsurf, Aider 等
 
 ---
@@ -31,10 +31,12 @@ metadata:
 4. **零崩溃与死循环物理拦截宪法 (Zero-Crash & Deadloop Boundary Protocol)**：
    - 所有的自我更新、动态演化与语法树解析必须封装 `SafeExecute` (Panic Shield)，出现非预期异常时优雅降级并输出结构化错误，保证程序 0 Panic Crash。
    - 所有的自我纠错重试与图闭环挂载 `LoopBreaker`，设置 `MaxSelfEvolutionRetries = 3` 与 `MaxRecursionDepth = 64` 物理阻断，拦截任何可能引发无限循环的图回路。
-5. **云原生 CLI & 大模型原生生态强对齐 (Cloud Native CLI & LLM Model Alignment)**：
+5. **自我更新进化后强制 Debug 校验协议 (Post-Evolution Mandatory Auto-Debug Protocol)**：
+   - **任何时候触发自我更新迭代后**，系统/Agent 必须自动启动 Debug 自检流程：执行 `gofmt` 格式化、`go test ./...` 100% 物理测试通过、重新编译 `xql.exe` 并覆盖宿主机全局路径 `C:\Users\sj929\go\bin\xql.exe`、更新 `README.md` 并提交 GitHub！
+6. **云原生 CLI & 大模型原生生态强对齐 (Cloud Native CLI & LLM Model Alignment)**：
    - **Official Tencent Cloud CLI (`tccli`)**：原生支持将 `.xql.json` 编译导出为腾讯云官方 CLI 自动化运维与云原生资源编排 Bash 脚本（Target: `tccli`）。
    - **Kimi Code / Qwen Code / DeepSeek Coder / GLM Coding**：全面支持长上下文 Prompt Caching、FIM (Fill-In-Middle) 补全、Tool Calling/MCP 标准对接与结构化 JSON AST 直接生成。
-6. **目标后端 Tier 级治理分工**：
+7. **目标后端 Tier 级治理分工**：
    - **Tier A (核心主力)**：`Go` | `Rust` | `TypeScript` | `Python` | `C++` | `Java` | `C#` | `Zig` | `Tencent Cloud CLI (tccli)` (保证 100% 物理跑通)
    - **Tier B (主流扩展)**：`Swift` | `Kotlin` | `Dart` | `PHP` | `Ruby` | `Lua` | `Shell/Bash` | `PowerShell`
    - **Tier C (长尾小众)**：`Ada` | `Bat` | `Tcl` | `Fortran` | `Pascal` 等 (稳态 Freeze)
