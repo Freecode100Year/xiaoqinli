@@ -1,3 +1,5 @@
+//go:build metrics
+
 package server
 
 import (
@@ -9,84 +11,52 @@ import (
 
 // MetricsCollector holds all Prometheus metrics for the server.
 type MetricsCollector struct {
-	// Decode metrics
-	decodeTotal     *prometheus.CounterVec
-	decodeFailTotal *prometheus.CounterVec
-
-	// MCP tools call metrics
+	decodeTotal       *prometheus.CounterVec
+	decodeFailTotal   *prometheus.CounterVec
 	toolsCallTotal    *prometheus.CounterVec
 	toolsCallFail     *prometheus.CounterVec
 	toolsCallDuration *prometheus.HistogramVec
-
-	// Compile metrics
-	compileTotal    *prometheus.CounterVec
-	compileFail     *prometheus.CounterVec
-	compileDuration *prometheus.HistogramVec
-
-	registry *prometheus.Registry
+	compileTotal      *prometheus.CounterVec
+	compileFail       *prometheus.CounterVec
+	compileDuration   *prometheus.HistogramVec
+	registry          *prometheus.Registry
 }
 
-// NewMetricsCollector creates a new metrics collector with Prometheus standard library.
+// NewMetricsCollector creates a new metrics collector with Prometheus.
 func NewMetricsCollector() *MetricsCollector {
 	registry := prometheus.NewRegistry()
+	m := &MetricsCollector{registry: registry}
 
-	m := &MetricsCollector{
-		registry: registry,
-	}
-
-	// Decode metrics
 	m.decodeTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "xqlb_decode_total",
-			Help: "Total number of XQLB decode operations",
-		},
+		prometheus.CounterOpts{Name: "xqlb_decode_total", Help: "Total XQLB decodes"},
 		[]string{"result"},
 	)
 	m.decodeFailTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "xqlb_decode_fail_total",
-			Help: "Total number of failed XQLB decode operations",
-		},
+		prometheus.CounterOpts{Name: "xqlb_decode_fail_total", Help: "Total failed XQLB decodes"},
 		[]string{},
 	)
-
-	// MCP tools call metrics
 	m.toolsCallTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "mcp_tools_call_total",
-			Help: "Total number of MCP tools calls",
-		},
+		prometheus.CounterOpts{Name: "mcp_tools_call_total", Help: "Total MCP calls"},
 		[]string{"tool", "result"},
 	)
 	m.toolsCallFail = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "mcp_tools_call_fail_total",
-			Help: "Total number of failed MCP tools calls",
-		},
+		prometheus.CounterOpts{Name: "mcp_tools_call_fail_total", Help: "Total failed MCP calls"},
 		[]string{"tool"},
 	)
 	m.toolsCallDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "mcp_tools_call_duration_seconds",
-			Help:    "Histogram of MCP tools call durations",
+			Help:    "Histogram of MCP call durations",
 			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0},
 		},
 		[]string{"tool"},
 	)
-
-	// Compile metrics
 	m.compileTotal = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "xqlb_compile_total",
-			Help: "Total number of compile operations",
-		},
+		prometheus.CounterOpts{Name: "xqlb_compile_total", Help: "Total compile ops"},
 		[]string{"target", "result"},
 	)
 	m.compileFail = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "xqlb_compile_fail_total",
-			Help: "Total number of failed compile operations",
-		},
+		prometheus.CounterOpts{Name: "xqlb_compile_fail_total", Help: "Total failed compiles"},
 		[]string{"target"},
 	)
 	m.compileDuration = prometheus.NewHistogramVec(
@@ -98,57 +68,45 @@ func NewMetricsCollector() *MetricsCollector {
 		[]string{"target"},
 	)
 
-	// Register all metrics with the custom registry
 	registry.MustRegister(
-		m.decodeTotal,
-		m.decodeFailTotal,
-		m.toolsCallTotal,
-		m.toolsCallFail,
-		m.toolsCallDuration,
-		m.compileTotal,
-		m.compileFail,
-		m.compileDuration,
+		m.decodeTotal, m.decodeFailTotal,
+		m.toolsCallTotal, m.toolsCallFail, m.toolsCallDuration,
+		m.compileTotal, m.compileFail, m.compileDuration,
 	)
 
 	return m
 }
 
-// RecordDecodeSuccess increments successful decode counter.
 func (m *MetricsCollector) RecordDecodeSuccess() {
 	m.decodeTotal.WithLabelValues("success").Inc()
 }
 
-// RecordDecodeFail increments failed decode counter.
 func (m *MetricsCollector) RecordDecodeFail() {
 	m.decodeFailTotal.WithLabelValues().Inc()
 }
 
-// RecordToolsCall records MCP tools call duration and success/failure.
 func (m *MetricsCollector) RecordToolsCall(tool string, duration float64, success bool) {
-	result := "success"
+	res := "success"
 	if !success {
-		result = "failure"
+		res = "failure"
 		m.toolsCallFail.WithLabelValues(tool).Inc()
 	}
-	m.toolsCallTotal.WithLabelValues(tool, result).Inc()
+	m.toolsCallTotal.WithLabelValues(tool, res).Inc()
 	m.toolsCallDuration.WithLabelValues(tool).Observe(duration)
 }
 
-// RecordCompile records compile duration and success/failure.
 func (m *MetricsCollector) RecordCompile(target string, duration float64, success bool) {
-	result := "success"
+	res := "success"
 	if !success {
-		result = "failure"
+		res = "failure"
 		m.compileFail.WithLabelValues(target).Inc()
 	}
-	m.compileTotal.WithLabelValues(target, result).Inc()
+	m.compileTotal.WithLabelValues(target, res).Inc()
 	m.compileDuration.WithLabelValues(target).Observe(duration)
 }
 
-// PrometheusHandler returns an HTTP handler that exposes metrics in Prometheus format.
 func (m *MetricsCollector) PrometheusHandler() http.Handler {
 	return promhttp.HandlerFor(m.registry, promhttp.HandlerOpts{})
 }
 
-// Global metrics instance
 var GlobalMetrics = NewMetricsCollector()

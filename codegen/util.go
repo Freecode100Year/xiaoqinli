@@ -322,7 +322,7 @@ func containsStringExpr(n ast.Node) bool {
 }
 
 func validateNodesForTarget(root ast.Node, target string) error {
-	if target == "go" || target == "rust" || target == "ts" || target == "js" || target == "javascript" || target == "py" || target == "java" || target == "csharp" || target == "kotlin" || target == "swift" || target == "dart" || target == "zig" {
+	if target == "go" || target == "rust" || target == "ts" || target == "js" || target == "javascript" || target == "py" || target == "java" || target == "csharp" || target == "kotlin" || target == "swift" || target == "dart" || target == "zig" || target == "nim" || target == "julia" || target == "php" || target == "ruby" || target == "lua" {
 		return nil
 	}
 	var err error

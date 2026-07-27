@@ -98,6 +98,8 @@ func typeToJulia(t ast.TypeExpr) string {
 
 func (g *jlGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {
+	case *ast.ImportDecl:
+		return g.emitImportDecl(node)
 	case *ast.FunctionDecl:
 		return g.emitFunctionDecl(node)
 	case *ast.ReturnStmt:
@@ -131,6 +133,16 @@ func (g *jlGen) emitNode(n ast.Node) error {
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *jlGen) emitImportDecl(id *ast.ImportDecl) error {
+	g.writeIndent()
+	path := id.Path
+	if strings.HasSuffix(path, ".xql") {
+		path = path[:len(path)-4] + ".jl"
+	}
+	g.writeln(fmt.Sprintf("include(%q)", path))
+	return nil
 }
 
 func (g *jlGen) emitEnumDecl(ed *ast.EnumDecl) error {
@@ -390,7 +402,9 @@ func (g *jlGen) emitExpr(n ast.Node) error {
 	case *ast.StructLit:
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
-		return g.emitArrayLit(node)
+		return g.emitArrayLit(typeToJulia(node.ElemType), node.Elements)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLit(typeToJulia(node.ElemType), node.Elements)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -449,9 +463,9 @@ func (g *jlGen) emitLambda(lam *ast.Lambda) error {
 	return nil
 }
 
-func (g *jlGen) emitArrayLit(al *ast.ArrayLit) error {
-	g.write(typeToJulia(al.ElemType) + "[")
-	for i, elem := range al.Elements {
+func (g *jlGen) emitArrayLit(elemTypeStr string, elements []ast.Node) error {
+	g.write(elemTypeStr + "[")
+	for i, elem := range elements {
 		if i > 0 {
 			g.write(", ")
 		}

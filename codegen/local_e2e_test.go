@@ -176,6 +176,61 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 				"result.zig":  "result.zig",
 			},
 		},
+		{
+			name:     "Nim",
+			target:   "nim",
+			checkCmd: "nim",
+			runCmd:   "nim c -r main.nim",
+			files: map[string]string{
+				"main.xql":    "main.nim",
+				"service.xql": "service.nim",
+				"models.xql":  "models.nim",
+			},
+		},
+		{
+			name:     "Julia",
+			target:   "julia",
+			checkCmd: "julia",
+			runCmd:   "julia main.jl",
+			files: map[string]string{
+				"main.xql":    "main.jl",
+				"service.xql": "service.jl",
+				"models.xql":  "models.jl",
+			},
+		},
+		{
+			name:     "PHP",
+			target:   "php",
+			checkCmd: "php",
+			runCmd:   "php main.php",
+			files: map[string]string{
+				"main.xql":    "main.php",
+				"service.xql": "service.php",
+				"models.xql":  "models.php",
+			},
+		},
+		{
+			name:     "Ruby",
+			target:   "ruby",
+			checkCmd: "ruby",
+			runCmd:   "ruby main.rb",
+			files: map[string]string{
+				"main.xql":    "main.rb",
+				"service.xql": "service.rb",
+				"models.xql":  "models.rb",
+			},
+		},
+		{
+			name:     "Lua",
+			target:   "lua",
+			checkCmd: "lua",
+			runCmd:   "lua main.lua",
+			files: map[string]string{
+				"main.xql":    "main.lua",
+				"service.xql": "service.lua",
+				"models.xql":  "models.lua",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -217,6 +272,16 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 					out, err = GenerateDart(node)
 				case "zig":
 					out, err = GenerateZig(node)
+				case "nim":
+					out, err = GenerateNim(node)
+				case "julia":
+					out, err = GenerateJulia(node)
+				case "php":
+					out, err = GeneratePHP(node)
+				case "ruby":
+					out, err = GenerateRuby(node)
+				case "lua":
+					out, err = GenerateLua(node)
 				}
 
 				if err != nil {

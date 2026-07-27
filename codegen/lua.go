@@ -82,6 +82,8 @@ func (g *luaGen) writeIndent() {
 
 func (g *luaGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {
+	case *ast.ImportDecl:
+		return g.emitImportDecl(node)
 	case *ast.FunctionDecl:
 		return g.emitFunctionDecl(node)
 	case *ast.ReturnStmt:
@@ -113,6 +115,16 @@ func (g *luaGen) emitNode(n ast.Node) error {
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *luaGen) emitImportDecl(id *ast.ImportDecl) error {
+	g.writeIndent()
+	path := id.Path
+	if strings.HasSuffix(path, ".xql") {
+		path = path[:len(path)-4]
+	}
+	g.writeln(fmt.Sprintf("require(%q)", path))
+	return nil
 }
 
 func (g *luaGen) emitEnumDecl(ed *ast.EnumDecl) error {
@@ -360,7 +372,9 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 	case *ast.StructLit:
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
-		return g.emitArrayLit(node)
+		return g.emitArrayLit(node.Elements)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLit(node.Elements)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -410,9 +424,9 @@ func (g *luaGen) emitLambda(lam *ast.Lambda) error {
 	return nil
 }
 
-func (g *luaGen) emitArrayLit(al *ast.ArrayLit) error {
+func (g *luaGen) emitArrayLit(elements []ast.Node) error {
 	g.write("{")
-	for i, elem := range al.Elements {
+	for i, elem := range elements {
 		if i > 0 {
 			g.write(", ")
 		}

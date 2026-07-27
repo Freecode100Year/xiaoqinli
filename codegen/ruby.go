@@ -89,6 +89,8 @@ func (g *rbGen) writeIndent() {
 
 func (g *rbGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {
+	case *ast.ImportDecl:
+		return g.emitImportDecl(node)
 	case *ast.FunctionDecl:
 		return g.emitFunctionDecl(node)
 	case *ast.ReturnStmt:
@@ -122,6 +124,16 @@ func (g *rbGen) emitNode(n ast.Node) error {
 	default:
 		return fmt.Errorf("XQL_E401: unsupported node %s", n.Kind())
 	}
+}
+
+func (g *rbGen) emitImportDecl(id *ast.ImportDecl) error {
+	g.writeIndent()
+	path := id.Path
+	if strings.HasSuffix(path, ".xql") {
+		path = path[:len(path)-4] + ".rb"
+	}
+	g.writeln(fmt.Sprintf("require_relative %q", path))
+	return nil
 }
 
 func (g *rbGen) emitEnumDecl(ed *ast.EnumDecl) error {
@@ -373,7 +385,9 @@ func (g *rbGen) emitExpr(n ast.Node) error {
 	case *ast.StructLit:
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
-		return g.emitArrayLit(node)
+		return g.emitArrayLit(node.Elements)
+	case *ast.ArrayLiteral:
+		return g.emitArrayLit(node.Elements)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -443,9 +457,9 @@ func (g *rbGen) emitLambda(lam *ast.Lambda) error {
 	return nil
 }
 
-func (g *rbGen) emitArrayLit(al *ast.ArrayLit) error {
+func (g *rbGen) emitArrayLit(elements []ast.Node) error {
 	g.write("[")
-	for i, elem := range al.Elements {
+	for i, elem := range elements {
 		if i > 0 {
 			g.write(", ")
 		}
