@@ -1,7 +1,7 @@
 ---
 name: xiaoqinli
-description: "Universal AI Agent Architecture, Schema, and Integration Guide for Xiaoqinli (xql) AST-First Transpiler v3.24.0."
-version: 3.24.0
+description: "Universal AI Agent Architecture, Schema, and Integration Guide for Xiaoqinli (xql) AST-First Transpiler v3.25.0."
+version: 3.25.0
 author: Freecode100Year
 platforms: [linux, macos, windows]
 metadata:
@@ -9,10 +9,11 @@ metadata:
     tags: [xql, xiaoqinli, compiler, architecture, transpiler, go, mcp, agents]
 ---
 
-# Xiaoqinli (xql) 极简安全转译器 v3.24.0 — 自我更新进化后强制 Debug 与自检宪法
+# Xiaoqinli (xql) 极简安全转译器 v3.25.0 — 嵌入式 Skills 递归发现与物理解析修正版
 
 > **定位**：AST-First 安全转译器（Transpiler）· 单 Go 二进制 · 零依赖 · 无运行时 · 极简 / 安全 / 高性能
-> **版本**：v3.24.0 (自我更新进化后强制 Debug 物理防灾版)
+> **版本**：v3.25.0 (嵌入式 Skills 递归发现与物理解析修正版)
+
 > **支持 Agent & 模型**：Google Antigravity, Kimi Code (Moonshot), Qwen Code (Qwen2.5-Coder), DeepSeek Coder/V3, GLM Coding (GLM-4), Official Tencent Cloud CLI (tccli), Claude Code, Cursor, Windsurf, Aider 等
 
 ---

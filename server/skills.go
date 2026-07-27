@@ -18,40 +18,62 @@ type SkillEntry struct {
 
 // ListSkills returns metadata for all embedded and dynamic self-evolved skill documents.
 func ListSkills() []SkillEntry {
-	entries, err := fs.ReadDir(skills.FS, ".")
+	seen := make(map[string]bool)
 	out := make([]SkillEntry, 0)
-	if err == nil {
-		for _, e := range entries {
-			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-				continue
-			}
-			name := strings.TrimSuffix(e.Name(), ".md")
+
+	_ = fs.WalkDir(skills.FS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
+		name := extractSkillName(path, d.Name())
+		if name != "" && name != "." && !seen[name] {
+			seen[name] = true
 			out = append(out, SkillEntry{Name: name})
 		}
-	}
+		return nil
+	})
 
-	// Merge dynamic self-evolved skills
-	dyn := evolution.ListDynamicSkills()
-	for _, ds := range dyn {
-		out = append(out, SkillEntry{Name: ds.Name})
+	for _, ds := range evolution.ListDynamicSkills() {
+		if !seen[ds.Name] {
+			seen[ds.Name] = true
+			out = append(out, SkillEntry{Name: ds.Name})
+		}
 	}
-
 	return out
+}
+
+func extractSkillName(path, filename string) string {
+	lowerPath := strings.ToLower(path)
+	if strings.HasSuffix(lowerPath, "/skill.md") || strings.HasSuffix(lowerPath, "\\skill.md") {
+		dir := strings.TrimSuffix(path, "/"+filename)
+		dir = strings.TrimSuffix(dir, "\\"+filename)
+		return dir
+	}
+	return strings.TrimSuffix(filename, ".md")
 }
 
 // GetSkill returns the content of a skill by name (checking dynamic evolved skills first).
 func GetSkill(name string) (string, bool) {
 	norm := strings.TrimSuffix(strings.ToLower(strings.TrimSpace(name)), ".md")
-
 	if ds, ok := evolution.GetDynamicSkill(norm); ok {
 		return ds.Content, true
 	}
+	return readEmbeddedSkill(norm)
+}
 
-	data, err := fs.ReadFile(skills.FS, norm+".md")
-	if err != nil {
-		return "", false
+func readEmbeddedSkill(norm string) (string, bool) {
+	candidates := []string{
+		norm + ".md",
+		norm + "/SKILL.md",
+		norm + "/skill.md",
+		norm,
 	}
-	return string(data), true
+	for _, cand := range candidates {
+		if data, err := fs.ReadFile(skills.FS, cand); err == nil {
+			return string(data), true
+		}
+	}
+	return "", false
 }
 
 // ---------------------------------------------------------------------------

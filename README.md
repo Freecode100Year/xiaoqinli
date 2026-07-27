@@ -1,10 +1,24 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.24.0
+# Xiaoqinli (xql) 极简安全转译器 v3.25.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
 
 ---
+
+## 📢 最新更新 (2026-07-26 - v3.25.0 嵌入式 Skills 递归发现与 xiaoqinli/SKILL.md 404 Bug 修复)
+
+### 🐛 嵌套技能嵌入与 404 物理解析修补 (Nested Skills & SKILL.md Resolution Fix)
+- **修复 nested skills 无法嵌入 Bug**：
+  - 修补 `skills/embed.go` 中的 `go:embed` 匹配模式为 `*.md */*.md`，彻底修复子目录 `xiaoqinli/SKILL.md` 在编译时被遗漏的隐患。
+- **重构 `ListSkills` 与 `GetSkill` 递归解析**：
+  - 将 `server/skills.go` 从单层 `fs.ReadDir` 升级为 `fs.WalkDir` 递归发现，可精准提取 `xiaoqinli/SKILL.md` 的技能 ID 为 `xiaoqinli`。
+  - 完美保障 MCP `prompts/get` / `prompts/list` 与 REST `/skills/xiaoqinli` 端点正常调起，无缝支持 hermes-agent 及 Antigravity 等 Agent 框架的可选技能加载。
+- **单元测试保障**：
+  - 新增 `TestSkillsResolution` 物理断言测试，验证 `xiaoqinli` 技能的列表检索与全量内容读取，全套测试套件 100% 物理跑通。
+
+---
+
 
 ## 📢 最新更新 (2026-07-26 - v3.24.0 自我更新进化后强制 Debug 与自检闭环协议发布)
 

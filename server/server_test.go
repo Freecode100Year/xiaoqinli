@@ -128,3 +128,38 @@ func TestMCPServer_LifecycleAndTools(t *testing.T) {
 		t.Fatalf("tools/call targets failed: %v", callResp.Error)
 	}
 }
+
+func TestSkillsResolution(t *testing.T) {
+	skills := ListSkills()
+	found := false
+	for _, sk := range skills {
+		if sk.Name == "xiaoqinli" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected skill 'xiaoqinli' to be listed, but got %v", skills)
+	}
+
+	content, ok := GetSkill("xiaoqinli")
+	if !ok || content == "" {
+		t.Fatalf("expected GetSkill('xiaoqinli') to succeed, got ok=%v", ok)
+	}
+
+	// Test MCP prompts/get for xiaoqinli
+	mcp := NewMCPServer()
+	getArgs, _ := json.Marshal(map[string]interface{}{
+		"name": "xiaoqinli",
+	})
+	req := &jsonRPCRequest{
+		JSONRPC: "2.0",
+		ID:      4,
+		Method:  "prompts/get",
+		Params:  getArgs,
+	}
+	resp := mcp.handleRequest(req)
+	if resp.Error != nil {
+		t.Fatalf("prompts/get xiaoqinli failed: %v", resp.Error)
+	}
+}
