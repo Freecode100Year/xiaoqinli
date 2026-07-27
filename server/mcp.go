@@ -14,6 +14,7 @@ import (
 	"xiaoqinli/codegen"
 	"xiaoqinli/compiler"
 	"xiaoqinli/evolution"
+	"xiaoqinli/remedy"
 )
 
 // MaxMCPMessageBytes is the maximum allowed size for a single MCP message (both stdio and HTTP).
@@ -353,6 +354,16 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 			JSONRPC: "2.0",
 			ID:      req.ID,
 			Error:   &rpcError{Code: -32602, Message: "invalid params"},
+		}
+	}
+
+	if params.Name == "compile" || params.Name == "validate" {
+		if ok, err := remedy.ProbeValidateDeferredSchema(params.Arguments, []string{"source"}); !ok || err != nil {
+			return jsonRPCResponse{
+				JSONRPC: "2.0",
+				ID:      req.ID,
+				Error:   &rpcError{Code: -32602, Message: "probe validation failed: " + err.Error()},
+			}
 		}
 	}
 

@@ -1,8 +1,26 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.25.0
+# Xiaoqinli (xql) 极简安全转译器 v3.26.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-27 - v3.26.0 全栈 Bug 防御机制与 Remedy 模块重构发布)
+
+### 🛡️ 全栈安全脱敏、Session 剪裁保护与探针校验包 (Remedy & Defense Shield)
+- **工具历史 URL 凭据脱敏 (`StripURLUserinfo`)**：
+  - 新增 `remedy.StripURLUserinfo` 净化机制，在 Tool History、MCP 交互及委托日志记录中自动脱敏 URL 用户凭据（转换为 `REDACTED`），防止敏感信息暴露。
+- **Session 剪裁保护 (`PreserveRecentlyActiveSessions`)**：
+  - 在 Session 裁剪与清理过程中，新增时间窗活性保护，明确定向保留最近活跃的 Session。
+- **Skill 注册表锁定 (`UpdateSkillWithLockedRegistry`)**：
+  - 锁定 Skill 对象的 `SourceRegistry` 元数据，确保在 Skill 升级迭代时不会误修改其原始 Registry 溯源。
+- **Deferred Schema 探针预校验 (`ProbeValidateDeferredSchema`)**：
+  - 在 MCP 工具调用中引入参数 Probe Validation 校验探针，针对盲调用及延迟 Schema 参数实现严谨的 Key/Type 入参拦截。
+- **慢速恢复网关边界控制 (`BoundedStartupRestoreGate`)**：
+  - 为慢速启动和系统恢复提供 Context 超时控制，消除可能导致的挂起与死锁。
+- **单元测试保障**：
+  - 新增 `remedy/remedy_test.go` 单元测试套件，`go test ./...` 100% 测试全量通过，二进制 `xql.exe` 已同步更新至 `C:\Users\sj929\go\bin\xql.exe`。
 
 ---
 
