@@ -105,9 +105,7 @@ func cmdValidate(args []string) {
 
 func cmdCompile(args []string) {
 	flags := parseFlags(args)
-	filePath := flags["file"]
-	target := flags["target"]
-	outPath := flags["out"]
+	filePath, target, outPath := flags["file"], flags["target"], flags["out"]
 
 	if filePath == "" {
 		fmt.Fprintln(os.Stderr, "error: --file is required")
@@ -117,20 +115,24 @@ func cmdCompile(args []string) {
 		target = "go"
 	}
 
-	// Use the compiler library for the full pipeline.
 	result := compiler.CompileFromFile(filePath, target, outPath)
-
 	if !result.Success {
-		fmt.Fprintf(os.Stderr, "%s\n", result.Error)
-		// Output structured diagnostics for AI/IDE consumers.
-		if len(result.Diagnostics) > 0 {
-			diagJSON, _ := json.MarshalIndent(result.Diagnostics, "", "  ")
-			fmt.Fprintf(os.Stderr, "Diagnostics: %s\n", string(diagJSON))
-		}
+		handleCompileError(result)
 		os.Exit(2)
 	}
 
-	// Output result.
+	outputCompileResult(outPath, target, result.Code)
+}
+
+func handleCompileError(result compiler.CompileResult) {
+	fmt.Fprintf(os.Stderr, "%s\n", result.Error)
+	if len(result.Diagnostics) > 0 {
+		diagJSON, _ := json.MarshalIndent(result.Diagnostics, "", "  ")
+		fmt.Fprintf(os.Stderr, "Diagnostics: %s\n", string(diagJSON))
+	}
+}
+
+func outputCompileResult(outPath, target string, code []byte) {
 	if outPath != "" {
 		if target == "chrome" {
 			fmt.Fprintf(os.Stderr, "ok: Chrome extension unpacked to %s/\n", outPath)
@@ -139,7 +141,7 @@ func cmdCompile(args []string) {
 			fmt.Fprintf(os.Stderr, "ok: compiled to %s\n", outPath)
 		}
 	} else {
-		fmt.Print(string(result.Code))
+		fmt.Print(string(code))
 	}
 }
 
