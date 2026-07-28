@@ -228,8 +228,8 @@ func TestCompileFromFile_NotFound(t *testing.T) {
 
 func TestGetVersion(t *testing.T) {
 	v := GetVersion()
-	if v != "3.24.0" {
-		t.Fatalf("expected 3.24.0, got %s", v)
+	if v != Version {
+		t.Fatalf("expected %s, got %s", Version, v)
 	}
 }
 

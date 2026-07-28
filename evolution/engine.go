@@ -18,6 +18,10 @@ const MaxSelfEvolutionRetries = 3
 // MaxRecursionDepth bounds self-evolution & AST resolution tree depth.
 const MaxRecursionDepth = 64
 
+func init() {
+	_ = LoadEvolutionState("")
+}
+
 // SafeExecute runs a self-evolution function with panic recovery to guarantee zero crashes.
 func SafeExecute(fn func() error) (err error) {
 	defer func() {
@@ -58,6 +62,21 @@ func (lb *LoopBreaker) Reset() {
 	lb.visited = make(map[string]int)
 }
 
+// ResetMemoryForTesting resets evolution memory maps for unit testing.
+func ResetMemoryForTesting() {
+	diagMutex.Lock()
+	diagFixes = map[string][]*DiagnosticFixRecord{}
+	diagMutex.Unlock()
+
+	tsMutex.Lock()
+	tsMappings = map[string]*TreeSitterMapping{}
+	tsMutex.Unlock()
+
+	skillMutex.Lock()
+	dynamicSkills = map[string]*DynamicSkill{}
+	skillMutex.Unlock()
+}
+
 // ---------------------------------------------------------------------------
 // 1. Diagnostic Memory (纠错经验记忆引擎)
 // ---------------------------------------------------------------------------
@@ -80,7 +99,6 @@ var (
 // RecordDiagnosticFix saves or updates a proven diagnostic fix in local memory.
 func RecordDiagnosticFix(code, errCtx, astPattern, fix string) *DiagnosticFixRecord {
 	diagMutex.Lock()
-	defer diagMutex.Unlock()
 
 	code = strings.ToUpper(strings.TrimSpace(code))
 	now := time.Now().Format("2006-01-02 15:04:05")
@@ -90,6 +108,8 @@ func RecordDiagnosticFix(code, errCtx, astPattern, fix string) *DiagnosticFixRec
 		if r.SuggestedFix == fix {
 			r.SuccessCount++
 			r.LastUsed = now
+			diagMutex.Unlock()
+			_ = SaveEvolutionState("")
 			return r
 		}
 	}
@@ -103,6 +123,9 @@ func RecordDiagnosticFix(code, errCtx, astPattern, fix string) *DiagnosticFixRec
 		LastUsed:     now,
 	}
 	diagFixes[code] = append(diagFixes[code], newRec)
+	diagMutex.Unlock()
+
+	_ = SaveEvolutionState("")
 	return newRec
 }
 
@@ -142,12 +165,12 @@ var (
 // UpdateTreeSitterMapping registers or updates a Tree-sitter WASM grammar mapping locally.
 func UpdateTreeSitterMapping(m TreeSitterMapping) *TreeSitterMapping {
 	tsMutex.Lock()
-	defer tsMutex.Unlock()
 
 	target := strings.ToLower(strings.TrimSpace(m.Target))
 	m.Target = target
 	m.LastUpdated = time.Now().Format("2006-01-02 15:04:05")
 	tsMappings[target] = &m
+	tsMutex.Unlock()
 
 	// Also ensure target is in codegen profile
 	_, _ = codegen.UpdateLanguageProfile(codegen.LanguageProfile{
@@ -157,6 +180,7 @@ func UpdateTreeSitterMapping(m TreeSitterMapping) *TreeSitterMapping {
 		ModernFeatures: []string{"Tree-sitter WASM grammar mapping", "Dynamic AST synthesis"},
 	})
 
+	_ = SaveEvolutionState("")
 	return &m
 }
 
@@ -208,9 +232,11 @@ func InspectSecurityPolicy() SecurityPolicyConfig {
 // UpdateSecurityPolicy updates dynamic security policy bounds.
 func UpdateSecurityPolicy(policy SecurityPolicyConfig) SecurityPolicyConfig {
 	secMutex.Lock()
-	defer secMutex.Unlock()
 	policy.LastUpdated = time.Now().Format("2006-01-02 15:04:05")
 	currentPolicy = &policy
+	secMutex.Unlock()
+
+	_ = SaveEvolutionState("")
 	return *currentPolicy
 }
 
@@ -316,6 +342,9 @@ func InspectCodegenStrategy(target string) *CodegenStrategyConfig {
 
 // SaveEvolutionState persists all evolution states to disk.
 func SaveEvolutionState(dirPath string) error {
+	if dirPath == "" {
+		dirPath = filepath.Join(".xql", "evolution")
+	}
 	_ = os.MkdirAll(dirPath, 0755)
 
 	diagMutex.RLock()
@@ -332,6 +361,48 @@ func SaveEvolutionState(dirPath string) error {
 	sData, _ := json.MarshalIndent(currentPolicy, "", "  ")
 	secMutex.RUnlock()
 	_ = os.WriteFile(filepath.Join(dirPath, "security_policy.json"), sData, 0644)
+
+	skillMutex.RLock()
+	skData, _ := json.MarshalIndent(dynamicSkills, "", "  ")
+	skillMutex.RUnlock()
+	_ = os.WriteFile(filepath.Join(dirPath, "skills.json"), skData, 0644)
+
+	return nil
+}
+
+// LoadEvolutionState loads persisted evolution states from disk.
+func LoadEvolutionState(dirPath string) error {
+	if dirPath == "" {
+		dirPath = filepath.Join(".xql", "evolution")
+	}
+
+	// 1. Diagnostic memory
+	if data, err := os.ReadFile(filepath.Join(dirPath, "diagnostic_memory.json")); err == nil {
+		diagMutex.Lock()
+		_ = json.Unmarshal(data, &diagFixes)
+		diagMutex.Unlock()
+	}
+
+	// 2. Tree-sitter mappings
+	if data, err := os.ReadFile(filepath.Join(dirPath, "treesitter_mappings.json")); err == nil {
+		tsMutex.Lock()
+		_ = json.Unmarshal(data, &tsMappings)
+		tsMutex.Unlock()
+	}
+
+	// 3. Security policy
+	if data, err := os.ReadFile(filepath.Join(dirPath, "security_policy.json")); err == nil {
+		secMutex.Lock()
+		_ = json.Unmarshal(data, currentPolicy)
+		secMutex.Unlock()
+	}
+
+	// 4. Dynamic skills
+	if data, err := os.ReadFile(filepath.Join(dirPath, "skills.json")); err == nil {
+		skillMutex.Lock()
+		_ = json.Unmarshal(data, &dynamicSkills)
+		skillMutex.Unlock()
+	}
 
 	return nil
 }
@@ -357,12 +428,14 @@ var (
 // RegisterDynamicSkill registers or updates a dynamic self-evolved skill.
 func RegisterDynamicSkill(skill DynamicSkill) *DynamicSkill {
 	skillMutex.Lock()
-	defer skillMutex.Unlock()
 
 	name := strings.ToLower(strings.TrimSpace(skill.Name))
 	skill.Name = name
 	skill.LastUpdated = time.Now().Format("2006-01-02 15:04:05")
 	dynamicSkills[name] = &skill
+	skillMutex.Unlock()
+
+	_ = SaveEvolutionState("")
 	return &skill
 }
 

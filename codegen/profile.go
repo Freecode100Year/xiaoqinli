@@ -27,6 +27,7 @@ var (
 
 func init() {
 	resetDefaultProfiles()
+	_ = LoadProfilesFromFile(filepath.Join(".xql", "profiles.json"))
 }
 
 func resetDefaultProfiles() {
@@ -241,6 +242,7 @@ func UpdateLanguageProfile(profile LanguageProfile) (*LanguageProfile, error) {
 	}
 
 	profiles[norm] = &profile
+	_ = saveProfilesToFileLocked(filepath.Join(".xql", "profiles.json"))
 	return &profile, nil
 }
 
@@ -266,9 +268,12 @@ func LoadProfilesFromFile(filePath string) error {
 // SaveProfilesToFile persists current 42+ language profiles to a local JSON file.
 func SaveProfilesToFile(filePath string) error {
 	profileMutex.RLock()
-	data, err := json.MarshalIndent(profiles, "", "  ")
-	profileMutex.RUnlock()
+	defer profileMutex.RUnlock()
+	return saveProfilesToFileLocked(filePath)
+}
 
+func saveProfilesToFileLocked(filePath string) error {
+	data, err := json.MarshalIndent(profiles, "", "  ")
 	if err != nil {
 		return err
 	}

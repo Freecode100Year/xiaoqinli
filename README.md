@@ -1,8 +1,27 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.26.0
+# Xiaoqinli (xql) 极简安全转译器 v3.27.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-27 - v3.27.0 AI Agent 检索引擎与自进化持久化完整发布)
+
+### 🔍 AI Agent 检索引擎、数据源收敛与自进化持久化闭环
+- **单一数据源与 Version 对齐**：
+  - 收敛 `compiler.allTargetInfos`（包含 Flag, Ext, Name）为 43+ 目标语言唯一元数据源，消除了 MCP `toolTargets` 手写硬编码副本导致的 `tccli` 遗漏问题；同步 `compiler.Version` 至 `3.27.0`。
+- **跨会话自进化持久化链路 (Write-Through & Persistence)**：
+  - 补全 `evolution.LoadEvolutionState` 与启动自动载入逻辑；并在 `specs_update`、`diagnostic_memory_record`、`security_policy` 和 `skills` 更新时触发 Write-Through 自动写透落盘至本地 `.xql/` 目录。
+  - 配置 `.gitignore` 保护 `.xql/` 本地私有自进化状态，避免团队协作 Git 冲突。
+- **AI Agent 高性能检索引擎 (`evolution.SearchEngine`)**：
+  - 新增 AI Agent 专用检索与知识匹配引擎，可针对 Skills、Diagnostic Memory、Security Policy 和 Language Specs 进行快速关键词与分类查询。
+- **MCP 与 REST 通道全量对接**：
+  - 新增 MCP Tools `agent_search_query` 和 `agent_search_autoupdate`，支持 LLM 直接执行知识检索与更新。
+  - 新增 REST 接口 `/api/v1/search` 与 `/api/v1/search/autoupdate`，方便外部 Agent/脚本集成。
+- **全量测试与本地同步覆盖**：
+  - 新增 `evolution/search_test.go` 单元测试，`go test ./...` 100% 跑通。
+  - `xql.exe` 已自动编译更新并覆盖至全局路径 `C:\Users\sj929\go\bin\xql.exe`。
 
 ---
 

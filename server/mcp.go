@@ -336,6 +336,32 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 				"required": []string{"missing_capability"},
 			},
 		},
+		{
+			"name":        "agent_search_query",
+			"description": "Query AI Agent Search Engine for knowledge, skills, diagnostic memory, policies, and language specs.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"query": map[string]string{
+						"type":        "string",
+						"description": "Search keyword or query term",
+					},
+					"category": map[string]string{
+						"type":        "string",
+						"description": "Optional category filter: skill | diagnostic | policy | spec",
+					},
+				},
+				"required": []string{"query"},
+			},
+		},
+		{
+			"name":        "agent_search_autoupdate",
+			"description": "Trigger automatic re-indexing and update of AI Agent Search Engine.",
+			"inputSchema": map[string]interface{}{
+				"type":       "object",
+				"properties": map[string]interface{}{},
+			},
+		},
 	}
 	return jsonRPCResponse{
 		JSONRPC: "2.0",
@@ -401,6 +427,10 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 		return s.toolSecurityPolicyInspect(req.ID)
 	case "skills_diagnose_and_fill":
 		return s.toolSkillsDiagnoseAndFill(req.ID, params.Arguments)
+	case "agent_search_query":
+		return s.toolAgentSearchQuery(req.ID, params.Arguments)
+	case "agent_search_autoupdate":
+		return s.toolAgentSearchAutoUpdate(req.ID)
 	default:
 		return jsonRPCResponse{
 			JSONRPC: "2.0",
@@ -475,53 +505,10 @@ func (s *MCPServer) toolValidate(id interface{}, source string) jsonRPCResponse 
 }
 
 func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
-	targets := []map[string]string{
-		{"flag": "go", "ext": ".go", "name": "Go"},
-		{"flag": "rust", "ext": ".rs", "name": "Rust"},
-		{"flag": "ts", "ext": ".ts", "name": "TypeScript"},
-		{"flag": "py", "ext": ".py", "name": "Python"},
-		{"flag": "cpp", "ext": ".cpp", "name": "C++"},
-		{"flag": "c", "ext": ".c", "name": "C"},
-		{"flag": "java", "ext": ".java", "name": "Java"},
-		{"flag": "csharp", "ext": ".cs", "name": "C#"},
-		{"flag": "kotlin", "ext": ".kt", "name": "Kotlin"},
-		{"flag": "swift", "ext": ".swift", "name": "Swift"},
-		{"flag": "scala", "ext": ".scala", "name": "Scala"},
-		{"flag": "haskell", "ext": ".hs", "name": "Haskell"},
-		{"flag": "dart", "ext": ".dart", "name": "Dart"},
-		{"flag": "lua", "ext": ".lua", "name": "Lua"},
-		{"flag": "ruby", "ext": ".rb", "name": "Ruby"},
-		{"flag": "php", "ext": ".php", "name": "PHP"},
-		{"flag": "zig", "ext": ".zig", "name": "Zig"},
-		{"flag": "nim", "ext": ".nim", "name": "Nim"},
-		{"flag": "julia", "ext": ".jl", "name": "Julia"},
-		{"flag": "mql4", "ext": ".mq4", "name": "MQL4"},
-		{"flag": "mql5", "ext": ".mq5", "name": "MQL5"},
-		{"flag": "ada", "ext": ".adb", "name": "Ada"},
-		{"flag": "awk", "ext": ".awk", "name": "AWK"},
-		{"flag": "bash", "ext": ".sh", "name": "Bash"},
-		{"flag": "crystal", "ext": ".cr", "name": "Crystal"},
-		{"flag": "d", "ext": ".d", "name": "D"},
-		{"flag": "fortran", "ext": ".f90", "name": "Fortran"},
-		{"flag": "objc", "ext": ".m", "name": "Objective-C"},
-		{"flag": "pascal", "ext": ".pas", "name": "Pascal"},
-		{"flag": "perl", "ext": ".pl", "name": "Perl"},
-		{"flag": "powershell", "ext": ".ps1", "name": "PowerShell"},
-		{"flag": "tcl", "ext": ".tcl", "name": "Tcl"},
-		{"flag": "v", "ext": ".v", "name": "V"},
-		{"flag": "ocaml", "ext": ".ml", "name": "OCaml"},
-		{"flag": "fsharp", "ext": ".fs", "name": "F#"},
-		{"flag": "elixir", "ext": ".ex", "name": "Elixir"},
-		{"flag": "clojure", "ext": ".clj", "name": "Clojure"},
-		{"flag": "vala", "ext": ".vala", "name": "Vala"},
-		{"flag": "groovy", "ext": ".groovy", "name": "Groovy"},
-		{"flag": "bat", "ext": ".bat", "name": "Batch"},
-		{"flag": "shortcut", "ext": ".shortcut", "name": "Apple Shortcuts"},
-		{"flag": "chrome", "ext": ".crx.json", "name": "Chrome Extension"},
-	}
-	lines := make([]string, len(targets))
-	for i, t := range targets {
-		lines[i] = t["flag"] + " (" + t["name"] + ", " + t["ext"] + ")"
+	targetInfos := compiler.GetSupportedTargetInfos()
+	lines := make([]string, len(targetInfos))
+	for i, t := range targetInfos {
+		lines[i] = t.Flag + " (" + t.Name + ", " + t.Ext + ")"
 	}
 	text := "Supported target languages:\n"
 	for _, l := range lines {
@@ -684,6 +671,47 @@ func (s *MCPServer) toolSkillsDiagnoseAndFill(id interface{}, rawArgs json.RawMe
 		Result: map[string]interface{}{
 			"content": []map[string]string{
 				{"type": "text", "text": fmt.Sprintf("Successfully diagnosed and registered self-evolved skill module:\n%s", string(b))},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolAgentSearchQuery(id interface{}, rawArgs json.RawMessage) jsonRPCResponse {
+	var input struct {
+		Query    string `json:"query"`
+		Category string `json:"category"`
+	}
+	if err := json.Unmarshal(rawArgs, &input); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: "invalid agent_search_query parameters"},
+		}
+	}
+
+	se := evolution.GetSearchEngine()
+	results := se.Query(input.Query, input.Category)
+	b, _ := json.MarshalIndent(results, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": string(b)},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolAgentSearchAutoUpdate(id interface{}) jsonRPCResponse {
+	se := evolution.GetSearchEngine()
+	count := se.AutoUpdateIndex()
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": fmt.Sprintf("AI Agent Search Engine auto-updated successfully. Total indexed entries: %d", count)},
 			},
 		},
 	}

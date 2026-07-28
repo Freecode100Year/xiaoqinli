@@ -6,6 +6,8 @@ import (
 )
 
 func TestFullSelfEvolutionEngine(t *testing.T) {
+	ResetMemoryForTesting()
+
 	// 1. Test Diagnostic Memory
 	rec := RecordDiagnosticFix("XQL_E201", "Type mismatch in function return", "ReturnStmt.value", "Cast float to int explicitly")
 	if rec.SuccessCount != 1 {

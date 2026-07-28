@@ -1,7 +1,7 @@
 # 📜 Loop Engineering Contract
 
-- **Current Goal**: 补齐 Nim, Julia, PHP, Ruby, Lua 后端的 AST 节点(ArrayLiteral, ImportDecl)与 Dogfood Codegen 生成。
-- **Verification Command**: go test -v ./codegen -run TestLocalE2EWorkspaceDogfood
+- **Current Goal**: 阶段八：Agent 互操作性收敛与自进化持久化闭环 (1) 消灭 toolTargets 与 compiler.allTargetInfos 数据源漂移，收敛 43+ 语言与 tccli 统一定义；(2) 打通 .xql/ 本地 Write-Through 持久化闭环与启动载入，防止 Agent 自进化知识随着 MCP 子进程重启丢失；(3) 接入 AI Agent 检索引擎与全量 REST/MCP 映射。
+- **Verification Command**: go test ./...
 - **Status**: Complete
 - **Gatekeeper Status**: Test: Passed | Audit: Audited
 

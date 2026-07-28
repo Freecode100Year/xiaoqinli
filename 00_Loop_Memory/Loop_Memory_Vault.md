@@ -11,3 +11,4 @@
 ### Iteration History
 <!-- 执行 Agent 每轮追加: -->
 <!-- - **Iter N**: <改了什么> -> *Result: <测试结果>* -->
+- **Iter Stage 8**: 1) 收敛 `compiler.allTargetInfos` 与 `TargetInfo` 为 43+ 目标语言唯一数据源；2) 重构 `server/mcp.go` 中的 `toolTargets()`，删除死锁与漂移硬编码；3) 补全 `LoadLocalState` / `SaveLocalState` 及 `evolution.LoadEvolutionState` 与 Write-Through 持久化落盘到 `.xql/`；4) 配置 `.gitignore` 排除 `.xql/`；5) 修复 `sync.RWMutex` 重入死锁 bug。 -> *Result: go test ./... 100% 物理测试 PASS，xql.exe 成功同步全局二进制* [STATUS: READY FOR AUDIT]

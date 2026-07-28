@@ -21,3 +21,6 @@ _tmptest/
 # IDE / editor
 .vscode/
 .idea/
+
+# Local self-evolution state & cache
+.xql/

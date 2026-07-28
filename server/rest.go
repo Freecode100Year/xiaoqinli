@@ -10,6 +10,7 @@ import (
 
 	"xiaoqinli/codegen"
 	"xiaoqinli/compiler"
+	"xiaoqinli/evolution"
 )
 
 // RESTServer serves a lightweight REST API for compile and validate.
@@ -25,6 +26,8 @@ func (s *RESTServer) Serve(addr string) error {
 	mux.HandleFunc("/validate", s.handleValidate)
 	mux.HandleFunc("/specs", s.handleSpecs)
 	mux.HandleFunc("/evolution/diagnostics", s.handleEvolutionDiagnostics)
+	mux.HandleFunc("/api/v1/search", s.handleSearch)
+	mux.HandleFunc("/api/v1/search/autoupdate", s.handleSearchAutoUpdate)
 	mux.HandleFunc("/skills/", handleSkillsREST)
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -243,4 +246,31 @@ func (s *RESTServer) handleEvolutionDiagnostics(w http.ResponseWriter, r *http.R
 	}
 
 	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+}
+
+func (s *RESTServer) handleSearch(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	kw := r.URL.Query().Get("query")
+	cat := r.URL.Query().Get("category")
+
+	se := evolution.GetSearchEngine()
+	results := se.Query(kw, cat)
+	writeJSON(w, http.StatusOK, results)
+}
+
+func (s *RESTServer) handleSearchAutoUpdate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	se := evolution.GetSearchEngine()
+	count := se.AutoUpdateIndex()
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ok":            true,
+		"indexed_count": count,
+		"message":       "AI Agent Search Engine auto-updated successfully",
+	})
 }

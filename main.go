@@ -29,6 +29,8 @@ Exit codes: 0=success 1=validation failed 2=compilation error 3=argument error`,
 }
 
 func main() {
+	_ = compiler.LoadLocalState(compiler.DefaultStateDir)
+
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, getUsage())
 		os.Exit(3)

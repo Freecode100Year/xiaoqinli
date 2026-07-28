@@ -17,36 +17,82 @@ import (
 
 const (
 	// Version is the current version of the xiaoqinli compiler package.
-	Version = "3.24.0"
+	Version = "3.27.0"
 
 	// MaxASTBytes is the maximum allowed size for an AST payload (mirrors ast.MaxASTBytes).
 	MaxASTBytes = 2 << 20 // 2 MB
 )
 
-// allTargets mirrors the list in main.go (single source of truth).
-var allTargets = []string{
-	"go", "rust", "ts", "kotlin", "swift", "py",
-	"java", "csharp", "dart", "lua", "ruby", "php",
-	"zig", "nim", "julia", "cpp", "c", "scala", "haskell",
-	"mql4", "mql5",
-	"ocaml", "fsharp", "elixir", "clojure",
-	"ada", "awk", "bash", "crystal", "d", "fortran",
-	"objc", "pascal", "perl", "powershell", "tcl", "v",
-	"vala",
-	"groovy",
-	"bat",
-	"shortcut",
-	"chrome",
-	"tccli",
+// TargetInfo defines metadata for a supported target language.
+type TargetInfo struct {
+	Flag string `json:"flag"`
+	Ext  string `json:"ext"`
+	Name string `json:"name"`
+}
+
+// allTargetInfos is the single source of truth for all supported target backends.
+var allTargetInfos = []TargetInfo{
+	{Flag: "go", Ext: ".go", Name: "Go"},
+	{Flag: "rust", Ext: ".rs", Name: "Rust"},
+	{Flag: "ts", Ext: ".ts", Name: "TypeScript"},
+	{Flag: "py", Ext: ".py", Name: "Python"},
+	{Flag: "cpp", Ext: ".cpp", Name: "C++"},
+	{Flag: "c", Ext: ".c", Name: "C"},
+	{Flag: "java", Ext: ".java", Name: "Java"},
+	{Flag: "csharp", Ext: ".cs", Name: "C#"},
+	{Flag: "kotlin", Ext: ".kt", Name: "Kotlin"},
+	{Flag: "swift", Ext: ".swift", Name: "Swift"},
+	{Flag: "scala", Ext: ".scala", Name: "Scala"},
+	{Flag: "haskell", Ext: ".hs", Name: "Haskell"},
+	{Flag: "dart", Ext: ".dart", Name: "Dart"},
+	{Flag: "lua", Ext: ".lua", Name: "Lua"},
+	{Flag: "ruby", Ext: ".rb", Name: "Ruby"},
+	{Flag: "php", Ext: ".php", Name: "PHP"},
+	{Flag: "zig", Ext: ".zig", Name: "Zig"},
+	{Flag: "nim", Ext: ".nim", Name: "Nim"},
+	{Flag: "julia", Ext: ".jl", Name: "Julia"},
+	{Flag: "mql4", Ext: ".mq4", Name: "MQL4"},
+	{Flag: "mql5", Ext: ".mq5", Name: "MQL5"},
+	{Flag: "ada", Ext: ".adb", Name: "Ada"},
+	{Flag: "awk", Ext: ".awk", Name: "AWK"},
+	{Flag: "bash", Ext: ".sh", Name: "Bash"},
+	{Flag: "crystal", Ext: ".cr", Name: "Crystal"},
+	{Flag: "d", Ext: ".d", Name: "D"},
+	{Flag: "fortran", Ext: ".f90", Name: "Fortran"},
+	{Flag: "objc", Ext: ".m", Name: "Objective-C"},
+	{Flag: "pascal", Ext: ".pas", Name: "Pascal"},
+	{Flag: "perl", Ext: ".pl", Name: "Perl"},
+	{Flag: "powershell", Ext: ".ps1", Name: "PowerShell"},
+	{Flag: "tcl", Ext: ".tcl", Name: "Tcl"},
+	{Flag: "v", Ext: ".v", Name: "V"},
+	{Flag: "ocaml", Ext: ".ml", Name: "OCaml"},
+	{Flag: "fsharp", Ext: ".fs", Name: "F#"},
+	{Flag: "elixir", Ext: ".ex", Name: "Elixir"},
+	{Flag: "clojure", Ext: ".clj", Name: "Clojure"},
+	{Flag: "vala", Ext: ".vala", Name: "Vala"},
+	{Flag: "groovy", Ext: ".groovy", Name: "Groovy"},
+	{Flag: "bat", Ext: ".bat", Name: "Batch"},
+	{Flag: "shortcut", Ext: ".shortcut", Name: "Apple Shortcuts"},
+	{Flag: "chrome", Ext: ".crx.json", Name: "Chrome Extension"},
+	{Flag: "tccli", Ext: ".sh", Name: "Tencent Cloud CLI"},
 }
 
 // GetVersion returns the compiler library version.
 func GetVersion() string { return Version }
 
-// GetSupportedTargets returns all 42+ target language names.
+// GetSupportedTargets returns all supported target language flags.
 func GetSupportedTargets() []string {
-	out := make([]string, len(allTargets))
-	copy(out, allTargets)
+	out := make([]string, len(allTargetInfos))
+	for i, t := range allTargetInfos {
+		out[i] = t.Flag
+	}
+	return out
+}
+
+// GetSupportedTargetInfos returns full metadata for all target languages.
+func GetSupportedTargetInfos() []TargetInfo {
+	out := make([]TargetInfo, len(allTargetInfos))
+	copy(out, allTargetInfos)
 	return out
 }
 
@@ -389,7 +435,37 @@ func InspectSpec(target string) (*codegen.LanguageProfile, error) {
 
 // UpdateSpec updates or registers a target language specification profile locally.
 func UpdateSpec(profile codegen.LanguageProfile) (*codegen.LanguageProfile, error) {
-	return codegen.UpdateLanguageProfile(profile)
+	res, err := codegen.UpdateLanguageProfile(profile)
+	if err == nil {
+		_ = SaveLocalState(DefaultStateDir)
+	}
+	return res, err
+}
+
+// DefaultStateDir is the local, project-scoped directory where xql persists
+// self-evolved language specs and evolution memory across process restarts.
+const DefaultStateDir = ".xql"
+
+// LoadLocalState loads previously self-evolved language specs and evolution memory
+// from dirPath if available. A missing directory or file is not an error.
+func LoadLocalState(dirPath string) error {
+	if dirPath == "" {
+		dirPath = DefaultStateDir
+	}
+	_ = codegen.LoadProfilesFromFile(filepath.Join(dirPath, "profiles.json"))
+	_ = evolution.LoadEvolutionState(filepath.Join(dirPath, "evolution"))
+	return nil
+}
+
+// SaveLocalState persists the current in-memory language specs and evolution memory
+// to dirPath so agent-supplied updates survive process restarts.
+func SaveLocalState(dirPath string) error {
+	if dirPath == "" {
+		dirPath = DefaultStateDir
+	}
+	_ = codegen.SaveProfilesToFile(filepath.Join(dirPath, "profiles.json"))
+	_ = evolution.SaveEvolutionState(filepath.Join(dirPath, "evolution"))
+	return nil
 }
 
 // GetAllSpecs returns all 42+ registered target language profiles.
