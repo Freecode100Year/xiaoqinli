@@ -27,7 +27,6 @@ var (
 
 func init() {
 	resetDefaultProfiles()
-	_ = LoadProfilesFromFile(filepath.Join(".xql", "profiles.json"))
 }
 
 func resetDefaultProfiles() {
@@ -242,7 +241,6 @@ func UpdateLanguageProfile(profile LanguageProfile) (*LanguageProfile, error) {
 	}
 
 	profiles[norm] = &profile
-	_ = saveProfilesToFileLocked(filepath.Join(".xql", "profiles.json"))
 	return &profile, nil
 }
 

@@ -18,10 +18,6 @@ const MaxSelfEvolutionRetries = 3
 // MaxRecursionDepth bounds self-evolution & AST resolution tree depth.
 const MaxRecursionDepth = 64
 
-func init() {
-	_ = LoadEvolutionState("")
-}
-
 // SafeExecute runs a self-evolution function with panic recovery to guarantee zero crashes.
 func SafeExecute(fn func() error) (err error) {
 	defer func() {
