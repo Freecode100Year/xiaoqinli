@@ -1,4 +1,4 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.27.0
+# Xiaoqinli (xql) 极简安全转译器 v3.27.1
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
@@ -6,11 +6,15 @@
 
 ---
 
-## 📢 最新更新 (2026-07-27 - v3.27.0 AI Agent 检索引擎与自进化持久化完整发布)
+## 📢 最新更新 (2026-07-27 - v3.27.1 架构解耦与单测幂等性物理闭环)
 
-### 🔍 AI Agent 检索引擎、数据源收敛与自进化持久化闭环
-- **单一数据源与 Version 对齐**：
-  - 收敛 `compiler.allTargetInfos`（包含 Flag, Ext, Name）为 43+ 目标语言唯一元数据源，消除了 MCP `toolTargets` 手写硬编码副本导致的 `tccli` 遗漏问题；同步 `compiler.Version` 至 `3.27.0`。
+### 🔍 解耦纯计算包磁盘 I/O 依赖、收敛单一数据源与全规范对齐
+- **磁盘 I/O 从纯计算包解耦 (commit `ed883e3`)**：
+  - 彻底移除了 `codegen` 与 `evolution` 内部隐式与 CWD 强耦合的相对路径文件写透与 `init()` 载入，将持久化唯一收敛至控制层 `compiler.LoadLocalState` 和 `compiler.SaveLocalState`，确保 `go test ./codegen` 具备 100% 物理幂等性。
+- **单一数据源与 Version v3.27.1 对齐**：
+  - 收敛 `compiler.allTargetInfos` 为 43+ 目标语言唯一元数据源；同步 `compiler.Version` 至 `3.27.1`，消除版本号漂移。
+- **AI Agent 高性能检索引擎与死锁重入修复**：
+  - 交付 `evolution.SearchEngine` 本地检索引擎；修复 `sync.RWMutex` 锁重入死锁崩溃。
 - **跨会话自进化持久化链路 (Write-Through & Persistence)**：
   - 补全 `evolution.LoadEvolutionState` 与启动自动载入逻辑；并在 `specs_update`、`diagnostic_memory_record`、`security_policy` 和 `skills` 更新时触发 Write-Through 自动写透落盘至本地 `.xql/` 目录。
   - 配置 `.gitignore` 保护 `.xql/` 本地私有自进化状态，避免团队协作 Git 冲突。
