@@ -149,7 +149,7 @@ func resetDefaultProfiles() {
 			Language:       "Nim",
 			LatestVersion:  "2.0+",
 			ModernFeatures: []string{"ARC/ORC memory management", "Option[T] & Result[T, E]", "strictFuncs & effect tracking", "Macro metaprogramming"},
-			CodegenOptions: map[string]string{"docker_verified": "2026-07-28", "gc": "arc"},
+			CodegenOptions: map[string]string{"verification_status": "ast_validated", "gc": "arc"},
 			LastUpdated:    now,
 		},
 		{
@@ -157,7 +157,7 @@ func resetDefaultProfiles() {
 			Language:       "Julia",
 			LatestVersion:  "1.10+",
 			ModernFeatures: []string{"Vector{T} typed arrays", "Multiple dispatch type annotations", "Union{T, Nothing} optionals", "Struct type coercion"},
-			CodegenOptions: map[string]string{"docker_verified": "2026-07-28", "opt_level": "2"},
+			CodegenOptions: map[string]string{"verification_status": "ast_validated", "opt_level": "2"},
 			LastUpdated:    now,
 		},
 		{
@@ -165,7 +165,7 @@ func resetDefaultProfiles() {
 			Language:       "PHP",
 			LatestVersion:  "8.3+",
 			ModernFeatures: []string{"Readonly classes & properties", "Match expressions", "Typed class constants", "Union & Intersection types"},
-			CodegenOptions: map[string]string{"docker_verified": "2026-07-28", "strict_types": "1"},
+			CodegenOptions: map[string]string{"verification_status": "ast_validated", "strict_types": "1"},
 			LastUpdated:    now,
 		},
 		{
@@ -173,7 +173,7 @@ func resetDefaultProfiles() {
 			Language:       "Ruby",
 			LatestVersion:  "3.3+",
 			ModernFeatures: []string{"YJIT compiler integration", "Pattern matching (in / case)", "Data value structs", "RBS type signatures"},
-			CodegenOptions: map[string]string{"docker_verified": "2026-07-28", "yjit": "true"},
+			CodegenOptions: map[string]string{"verification_status": "ast_validated", "yjit": "true"},
 			LastUpdated:    now,
 		},
 		{
@@ -181,7 +181,7 @@ func resetDefaultProfiles() {
 			Language:       "Lua",
 			LatestVersion:  "5.4 / LuaJIT",
 			ModernFeatures: []string{"Const & to-be-closed variables", "Generational GC mode", "Metatable OOP pattern", "Bitwise operators"},
-			CodegenOptions: map[string]string{"docker_verified": "2026-07-28", "version": "5.4"},
+			CodegenOptions: map[string]string{"verification_status": "ast_validated", "version": "5.4"},
 			LastUpdated:    now,
 		},
 		{
