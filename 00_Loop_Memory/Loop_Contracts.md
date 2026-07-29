@@ -1,6 +1,6 @@
 # 📜 Loop Engineering Contract
 
-- **Current Goal**: 阶段十二：Codegen 物理推导式分支生成与 learned Diagnostic 修复覆盖 v3.31.0 (1) 在 codegen/python.go 中重构 emitForStmt，真正的物理分支逻辑：PreferComprehension 为 true 时生成列表推导式 extend([elem for item in iterable])，为 false 时生成传统 3 行 for 循环 + append；(2) 修正 compiler.wrapDiag 中 fix == "" 逻辑漏洞，只要 InspectDiagnosticFixes 中有学习到的修法建议，优先覆盖默认兜底文案；(3) 全量物理单元测试 100% 跑通闭环。
+- **Current Goal**: 阶段十三：报错摘要文本 (content[0].text) 与结构化 Diagnostics 修复建议完全对齐 v3.32.0 (1) 重构 compiler.formatDiagError 与 server.toolErrorResult，在返回编译/校验错误时，将经过 wrapDiag 覆盖后的最新 SuggestedFix 重新格式化并同步更新至 content[0].text 摘要文本与 Error 字符串；(2) 物理解决 Agent/人类在默认视图下看到的仍然是旧文案的问题，实现 100% 体验与文本对齐。
 - **Verification Command**: go test ./...
 - **Status**: Complete
 - **Gatekeeper Status**: Test: Passed | Audit: Audited

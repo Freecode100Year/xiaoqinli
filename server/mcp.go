@@ -827,6 +827,11 @@ func (s *MCPServer) toolCodegenStrategyUpdate(id interface{}, rawArgs json.RawMe
 }
 
 func toolErrorResult(id interface{}, errMsg string, diagnostics []compiler.Diagnostic) jsonRPCResponse {
+	if len(diagnostics) > 0 {
+		if b, err := json.MarshalIndent(diagnostics, "", "  "); err == nil {
+			errMsg = string(b)
+		}
+	}
 	res := map[string]interface{}{
 		"isError": true,
 		"content": []map[string]interface{}{

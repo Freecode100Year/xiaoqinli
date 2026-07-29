@@ -1,8 +1,20 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.31.0
+# Xiaoqinli (xql) 极简安全转译器 v3.32.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-28 - v3.32.0 报错摘要文本 content[0].text 与结构化 Diagnostics 对齐)
+
+### 📝 格式化错误文本 (`content[0].text`) 100% 同步学习到的修法建议
+- **重构 `formatDiagError` 与 `toolErrorResult`**：
+  - 在 `compiler.formatDiagError` 与 `server.toolErrorResult` 中，当存在由 `wrapDiag` 覆盖后的最新 Diagnostics 时，将重新格式化的 JSON/文本直接更新至 `content[0].text`（人类/LLM 默认阅读的主摘要文本）与 `ValidateResult.Error` 字段。
+- **物理解决默认文本视图残余**：
+  - 彻底消除了只在结构化 `diagnostics` 数组中生效、但在默认 `content[0].text` 主摘要中显示旧文案的最后 1% 展示层不对齐问题。
+- **单元测试全量验证**：
+  - 更新 `compiler_test.go` 物理断言 `vr.Error` 字符串中包含 learned fix 策略，`go test ./...` 100% 跑通，`xql.exe` 已自动更新至 `C:\Users\sj929\go\bin\xql.exe`。
 
 ---
 

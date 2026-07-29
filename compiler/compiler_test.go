@@ -315,6 +315,10 @@ func TestLearnedDiagnosticFixOverridesPrePopulatedDefault(t *testing.T) {
 	if vr.Diagnostics[0].SuggestedFix != learnedFix {
 		t.Errorf("expected learned fix '%s' to override pre-populated default, got: '%s'", learnedFix, vr.Diagnostics[0].SuggestedFix)
 	}
+
+	if !contains(vr.Error, learnedFix) {
+		t.Errorf("expected vr.Error string to contain learned fix '%s', got: '%s'", learnedFix, vr.Error)
+	}
 }
 
 func TestGetSupportedTargets(t *testing.T) {

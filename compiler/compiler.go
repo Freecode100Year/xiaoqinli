@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version is the current version of the xiaoqinli compiler package.
-	Version = "3.31.0"
+	Version = "3.32.0"
 
 	// MaxASTBytes is the maximum allowed size for an AST payload (mirrors ast.MaxASTBytes).
 	MaxASTBytes = 2 << 20 // 2 MB
@@ -136,10 +136,11 @@ func Validate(req ValidateRequest) ValidateResult {
 		}
 	}
 	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: req.StrictCapabilities}); err != nil {
+		diags := wrapDiag(err)
 		return ValidateResult{
-			Error:       err.Error(),
+			Error:       formatDiagError(err, diags),
 			ErrorCode:   extractCode(err.Error()),
-			Diagnostics: wrapDiag(err),
+			Diagnostics: diags,
 		}
 	}
 	return ValidateResult{Success: true}
@@ -150,10 +151,11 @@ func Compile(req CompileRequest) CompileResult {
 	start := time.Now()
 	if req.AST == nil {
 		err := errors.New("XQL_E001: AST is nil")
+		diags := wrapDiag(err)
 		return CompileResult{
-			Error:       err.Error(),
+			Error:       formatDiagError(err, diags),
 			ErrorCode:   "XQL_E001",
-			Diagnostics: wrapDiag(err),
+			Diagnostics: diags,
 		}
 	}
 	if req.Target == "" {
@@ -162,10 +164,11 @@ func Compile(req CompileRequest) CompileResult {
 
 	// Phase 1: validate.
 	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: req.StrictCapabilities}); err != nil {
+		diags := wrapDiag(err)
 		return CompileResult{
-			Error:       err.Error(),
+			Error:       formatDiagError(err, diags),
 			ErrorCode:   extractCode(err.Error()),
-			Diagnostics: wrapDiag(err),
+			Diagnostics: diags,
 		}
 	}
 	if req.ValidateOnly {
@@ -436,6 +439,16 @@ func wrapDiag(err error) []Diagnostic {
 		SuggestedFix: fix,
 		Level:        "error",
 	}}
+}
+
+func formatDiagError(err error, diags []Diagnostic) string {
+	if len(diags) > 0 {
+		data, mErr := json.MarshalIndent(diags, "", "  ")
+		if mErr == nil {
+			return string(data)
+		}
+	}
+	return err.Error()
 }
 
 // InspectSpec retrieves the latest language specification profile for target language.
