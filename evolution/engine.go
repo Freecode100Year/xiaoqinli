@@ -105,7 +105,7 @@ func RecordDiagnosticFix(code, errCtx, astPattern, fix string) *DiagnosticFixRec
 			r.SuccessCount++
 			r.LastUsed = now
 			diagMutex.Unlock()
-			_ = SaveEvolutionState("")
+			autoSave()
 			return r
 		}
 	}
@@ -121,7 +121,7 @@ func RecordDiagnosticFix(code, errCtx, astPattern, fix string) *DiagnosticFixRec
 	diagFixes[code] = append(diagFixes[code], newRec)
 	diagMutex.Unlock()
 
-	_ = SaveEvolutionState("")
+	autoSave()
 	return newRec
 }
 
@@ -176,7 +176,7 @@ func UpdateTreeSitterMapping(m TreeSitterMapping) *TreeSitterMapping {
 		ModernFeatures: []string{"Tree-sitter WASM grammar mapping", "Dynamic AST synthesis"},
 	})
 
-	_ = SaveEvolutionState("")
+	autoSave()
 	return &m
 }
 
@@ -232,7 +232,7 @@ func UpdateSecurityPolicy(policy SecurityPolicyConfig) SecurityPolicyConfig {
 	currentPolicy = &policy
 	secMutex.Unlock()
 
-	_ = SaveEvolutionState("")
+	autoSave()
 	return *currentPolicy
 }
 
@@ -295,7 +295,7 @@ type CodegenStrategyConfig = codegen.CodegenStrategyConfig
 // UpdateCodegenStrategy updates performance strategy settings.
 func UpdateCodegenStrategy(s CodegenStrategyConfig) *CodegenStrategyConfig {
 	res := codegen.UpdateCodegenStrategy(s)
-	_ = SaveEvolutionState("")
+	autoSave()
 	return res
 }
 
@@ -403,10 +403,41 @@ func RegisterDynamicSkill(skill DynamicSkill) *DynamicSkill {
 	skill.Name = name
 	skill.LastUpdated = time.Now().Format("2006-01-02 15:04:05")
 	dynamicSkills[name] = &skill
-	skillMutex.Unlock()
-
-	_ = SaveEvolutionState("")
+	autoSave()
 	return &skill
+}
+
+var (
+	autoSaveDir      string
+	autoSaveDisabled bool
+	autoSaveMutex    sync.RWMutex
+)
+
+// SetAutoSaveDir configures custom target directory for write-through state persistence.
+func SetAutoSaveDir(dir string) {
+	autoSaveMutex.Lock()
+	defer autoSaveMutex.Unlock()
+	autoSaveDir = dir
+}
+
+// SetAutoSaveDisabled enables or disables write-through disk side effects.
+func SetAutoSaveDisabled(disabled bool) {
+	autoSaveMutex.Lock()
+	defer autoSaveMutex.Unlock()
+	autoSaveDisabled = disabled
+}
+
+func autoSave() {
+	autoSaveMutex.RLock()
+	disabled := autoSaveDisabled
+	dir := autoSaveDir
+	autoSaveMutex.RUnlock()
+
+	if disabled {
+		GetSearchEngine().AutoUpdateIndex()
+		return
+	}
+	_ = SaveEvolutionState(dir)
 }
 
 // GetDynamicSkill retrieves a registered dynamic skill by name.
