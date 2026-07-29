@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version is the current version of the xiaoqinli compiler package.
-	Version = "3.29.0"
+	Version = "3.30.0"
 
 	// MaxASTBytes is the maximum allowed size for an AST payload (mirrors ast.MaxASTBytes).
 	MaxASTBytes = 2 << 20 // 2 MB
@@ -128,11 +128,11 @@ func ParseAST(req ParseRequest) ParseResult {
 // Validate runs all semantic checks without generating code.
 func Validate(req ValidateRequest) ValidateResult {
 	if req.AST == nil {
+		err := errors.New("XQL_E001: AST is nil")
 		return ValidateResult{
-			Error: "AST is nil", ErrorCode: "XQL_E001",
-			Diagnostics: []Diagnostic{{
-				Code: "XQL_E001", Message: "AST is nil", Level: "error",
-			}},
+			Error:       err.Error(),
+			ErrorCode:   "XQL_E001",
+			Diagnostics: wrapDiag(err),
 		}
 	}
 	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: req.StrictCapabilities}); err != nil {
@@ -149,11 +149,11 @@ func Validate(req ValidateRequest) ValidateResult {
 func Compile(req CompileRequest) CompileResult {
 	start := time.Now()
 	if req.AST == nil {
+		err := errors.New("XQL_E001: AST is nil")
 		return CompileResult{
-			Error: "AST is nil", ErrorCode: "XQL_E001",
-			Diagnostics: []Diagnostic{{
-				Code: "XQL_E001", Message: "AST is nil", Level: "error",
-			}},
+			Error:       err.Error(),
+			ErrorCode:   "XQL_E001",
+			Diagnostics: wrapDiag(err),
 		}
 	}
 	if req.Target == "" {
@@ -411,20 +411,32 @@ func wrapDiag(err error) []Diagnostic {
 	if errors.As(err, &we) {
 		out := make([]Diagnostic, len(we.Diagnostics))
 		for i, d := range we.Diagnostics {
+			fix := d.SuggestedFix
+			if fix == "" {
+				if learned := InspectDiagnosticFixes(d.Code); len(learned) > 0 {
+					fix = learned[len(learned)-1].SuggestedFix
+				}
+			}
 			out[i] = Diagnostic{
 				Code:         d.Code,
 				Message:      d.Message,
 				Location:     d.Location,
-				SuggestedFix: d.SuggestedFix,
+				SuggestedFix: fix,
 				Level:        "error",
 			}
 		}
 		return out
 	}
+	code := extractCode(err.Error())
+	fix := ""
+	if learned := InspectDiagnosticFixes(code); len(learned) > 0 {
+		fix = learned[len(learned)-1].SuggestedFix
+	}
 	return []Diagnostic{{
-		Code:    extractCode(err.Error()),
-		Message: err.Error(),
-		Level:   "error",
+		Code:         code,
+		Message:      err.Error(),
+		SuggestedFix: fix,
+		Level:        "error",
 	}}
 }
 

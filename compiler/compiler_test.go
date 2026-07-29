@@ -261,6 +261,23 @@ func TestCompilerEvolutionBridge(t *testing.T) {
 	}
 }
 
+func TestAutoAttachLearnedFixToDiagnostic(t *testing.T) {
+	// Record a learned fix strategy for XQL_E001
+	_ = RecordDiagnosticFix("XQL_E001", "AST is nil", "ASTPattern", "Provide valid AST root node")
+
+	// Trigger validate failure with nil AST
+	res := Validate(ValidateRequest{AST: nil})
+	if res.Success {
+		t.Fatal("expected validate failure for nil AST")
+	}
+	if len(res.Diagnostics) == 0 {
+		t.Fatal("expected diagnostic report")
+	}
+	if res.Diagnostics[0].SuggestedFix != "Provide valid AST root node" {
+		t.Errorf("expected learned SuggestedFix to be automatically attached, got: %s", res.Diagnostics[0].SuggestedFix)
+	}
+}
+
 func TestGetSupportedTargets(t *testing.T) {
 	targets := GetSupportedTargets()
 	if len(targets) < 40 {

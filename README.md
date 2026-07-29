@@ -1,8 +1,22 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.29.0
+# Xiaoqinli (xql) 极简安全转译器 v3.30.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-28 - v3.30.0 Codegen 性能策略反馈闭环与诊断记忆自适应报错附着)
+
+### 🤖 Codegen 性能策略反馈解封与诊断记忆自动附着
+- **Codegen 性能策略反馈解封 (`CodegenStrategyConfig`)**：
+  - 解封并激活 `codegen.CodegenStrategyConfig` 性能反馈机制。在 `SaveEvolutionState` / `LoadEvolutionState` 中补齐 `codegen_strategies.json` 本地持久化与 Write-Through 写透落盘，进程重启不再丢记忆。
+- **全新 MCP Tools & REST Endpoints 接入**：
+  - 暴露 MCP Tools `codegen_strategy_inspect` 与 `codegen_strategy_update`，以及 REST API `GET/POST /codegen/strategy`，允许 Agent/外部基准测试程序实时写入 benchmark 评分与策略选项。
+- **Codegen 生成器自适应读取策略 (Python Backend)**：
+  - 打通 `codegen/python.go` 动态感知并读取 `InspectCodegenStrategy("py")`，根据 `PreferComprehension` / `OptimizationFlags` 自适应调整 Python 生成逻辑与策略 Header 标记。
+- **诊断记忆自适应报错附着 (`wrapDiag`)**：
+  - 重构 `compiler.wrapDiag` 错误包装逻辑。当编译或类型检查产生 `XQL_E...` 报错时，自动查询 `InspectDiagnosticFixes` 并将最高效的修法策略自动附着于 Diagnostic `SuggestedFix`，减少 Agent 多轮往返查询。
 
 ---
 

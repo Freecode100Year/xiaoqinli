@@ -362,6 +362,50 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 				"properties": map[string]interface{}{},
 			},
 		},
+		{
+			"name":        "codegen_strategy_inspect",
+			"description": "Inspect codegen performance strategy configuration for a target language backend.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"target": map[string]string{
+						"type":        "string",
+						"description": "Target language flag (e.g. py, go, ts, rust)",
+					},
+				},
+				"required": []string{"target"},
+			},
+		},
+		{
+			"name":        "codegen_strategy_update",
+			"description": "Update codegen performance strategy configuration and benchmark feedback for a target backend.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"target": map[string]string{
+						"type":        "string",
+						"description": "Target language flag (e.g. py)",
+					},
+					"prefer_comprehension": map[string]string{
+						"type":        "boolean",
+						"description": "Whether to prefer list/array comprehensions",
+					},
+					"inline_threshold": map[string]string{
+						"type":        "number",
+						"description": "Function inlining threshold",
+					},
+					"optimization_flags": map[string]interface{}{
+						"type":        "object",
+						"description": "Optimization key-value flags",
+					},
+					"benchmark_score": map[string]string{
+						"type":        "number",
+						"description": "Measured benchmark score",
+					},
+				},
+				"required": []string{"target"},
+			},
+		},
 	}
 	return jsonRPCResponse{
 		JSONRPC: "2.0",
@@ -431,6 +475,10 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 		return s.toolAgentSearchQuery(req.ID, params.Arguments)
 	case "agent_search_autoupdate":
 		return s.toolAgentSearchAutoUpdate(req.ID)
+	case "codegen_strategy_inspect":
+		return s.toolCodegenStrategyInspect(req.ID, params.Arguments)
+	case "codegen_strategy_update":
+		return s.toolCodegenStrategyUpdate(req.ID, params.Arguments)
 	default:
 		return jsonRPCResponse{
 			JSONRPC: "2.0",
@@ -712,6 +760,67 @@ func (s *MCPServer) toolAgentSearchAutoUpdate(id interface{}) jsonRPCResponse {
 		Result: map[string]interface{}{
 			"content": []map[string]string{
 				{"type": "text", "text": fmt.Sprintf("AI Agent Search Engine auto-updated successfully. Total indexed entries: %d", count)},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolCodegenStrategyInspect(id interface{}, rawArgs json.RawMessage) jsonRPCResponse {
+	var input struct {
+		Target string `json:"target"`
+	}
+	_ = json.Unmarshal(rawArgs, &input)
+	if input.Target == "" {
+		input.Target = "py"
+	}
+
+	strat := compiler.InspectCodegenStrategy(input.Target)
+	b, _ := json.MarshalIndent(strat, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": string(b)},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolCodegenStrategyUpdate(id interface{}, rawArgs json.RawMessage) jsonRPCResponse {
+	var input struct {
+		Target              string            `json:"target"`
+		PreferComprehension bool              `json:"prefer_comprehension"`
+		InlineThreshold     int               `json:"inline_threshold"`
+		OptimizationFlags   map[string]string `json:"optimization_flags"`
+		BenchmarkScore      float64           `json:"benchmark_score"`
+	}
+	if err := json.Unmarshal(rawArgs, &input); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: "invalid codegen_strategy_update parameters"},
+		}
+	}
+	if input.Target == "" {
+		input.Target = "py"
+	}
+
+	strat := compiler.UpdateCodegenStrategy(compiler.CodegenStrategyConfig{
+		Target:              input.Target,
+		PreferComprehension: input.PreferComprehension,
+		InlineThreshold:     input.InlineThreshold,
+		OptimizationFlags:   input.OptimizationFlags,
+		BenchmarkScore:      input.BenchmarkScore,
+	})
+
+	b, _ := json.MarshalIndent(strat, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": fmt.Sprintf("Successfully updated codegen strategy profile:\n%s", string(b))},
 			},
 		},
 	}

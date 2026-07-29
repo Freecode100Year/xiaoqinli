@@ -1,6 +1,12 @@
 package compiler
 
-import "xiaoqinli/ast"
+import (
+	"xiaoqinli/ast"
+	"xiaoqinli/evolution"
+)
+
+// CodegenStrategyConfig alias for evolution.CodegenStrategyConfig
+type CodegenStrategyConfig = evolution.CodegenStrategyConfig
 
 // CompileRequest describes what to compile and how.
 type CompileRequest struct {

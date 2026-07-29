@@ -290,50 +290,18 @@ func InspectStdlibMatrix(target string) (*StdlibAPIMatrix, error) {
 // ---------------------------------------------------------------------------
 
 // CodegenStrategyConfig holds performance tuned options for code generators.
-type CodegenStrategyConfig struct {
-	Target              string            `json:"target"`
-	PreferComprehension bool              `json:"prefer_comprehension"`
-	InlineThreshold     int               `json:"inline_threshold"`
-	OptimizationFlags   map[string]string `json:"optimization_flags"`
-	BenchmarkScore      float64           `json:"benchmark_score"`
-	LastUpdated         string            `json:"last_updated"`
-}
-
-var (
-	stratMutex sync.RWMutex
-	strategies = map[string]*CodegenStrategyConfig{}
-)
+type CodegenStrategyConfig = codegen.CodegenStrategyConfig
 
 // UpdateCodegenStrategy updates performance strategy settings.
 func UpdateCodegenStrategy(s CodegenStrategyConfig) *CodegenStrategyConfig {
-	stratMutex.Lock()
-	defer stratMutex.Unlock()
-
-	norm := strings.ToLower(strings.TrimSpace(s.Target))
-	s.Target = norm
-	s.LastUpdated = time.Now().Format("2006-01-02 15:04:05")
-	strategies[norm] = &s
-	return &s
+	res := codegen.UpdateCodegenStrategy(s)
+	_ = SaveEvolutionState("")
+	return res
 }
 
 // InspectCodegenStrategy gets current performance strategy for a target.
 func InspectCodegenStrategy(target string) *CodegenStrategyConfig {
-	stratMutex.RLock()
-	defer stratMutex.RUnlock()
-
-	norm := strings.ToLower(strings.TrimSpace(target))
-	if s, ok := strategies[norm]; ok {
-		cp := *s
-		return &cp
-	}
-	return &CodegenStrategyConfig{
-		Target:              norm,
-		PreferComprehension: true,
-		InlineThreshold:     30,
-		OptimizationFlags:   map[string]string{"opt_level": "2"},
-		BenchmarkScore:      100.0,
-		LastUpdated:         time.Now().Format("2006-01-02"),
-	}
+	return codegen.InspectCodegenStrategy(target)
 }
 
 // SaveEvolutionState persists all evolution states to disk.
@@ -362,6 +330,8 @@ func SaveEvolutionState(dirPath string) error {
 	skData, _ := json.MarshalIndent(dynamicSkills, "", "  ")
 	skillMutex.RUnlock()
 	_ = os.WriteFile(filepath.Join(dirPath, "skills.json"), skData, 0644)
+
+	_ = codegen.SaveStrategiesToFile(filepath.Join(dirPath, "codegen_strategies.json"))
 
 	GetSearchEngine().AutoUpdateIndex()
 	return nil
@@ -400,6 +370,9 @@ func LoadEvolutionState(dirPath string) error {
 		_ = json.Unmarshal(data, &dynamicSkills)
 		skillMutex.Unlock()
 	}
+
+	// 5. Codegen strategies
+	_ = codegen.LoadStrategiesFromFile(filepath.Join(dirPath, "codegen_strategies.json"))
 
 	return nil
 }

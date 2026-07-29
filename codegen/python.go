@@ -10,11 +10,21 @@ import (
 
 // GeneratePython produces Python source code from the given typed AST.
 func GeneratePython(root ast.Node) ([]byte, error) {
-	g := &pyGen{buf: &strings.Builder{}}
+	strat := InspectCodegenStrategy("py")
+	g := &pyGen{buf: &strings.Builder{}, strat: strat}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	if strat != nil && (strat.OptimizationFlags["header_comment"] == "true" || strat.OptimizationFlags["strategy_tag"] != "") {
+		tag := strat.OptimizationFlags["strategy_tag"]
+		if tag == "" {
+			tag = fmt.Sprintf("PreferComprehension=%v, InlineThreshold=%d, Score=%.1f", strat.PreferComprehension, strat.InlineThreshold, strat.BenchmarkScore)
+		}
+		g.writeln("# Codegen Strategy: " + tag)
+		g.writeln("")
 	}
 
 	hasMain := false
@@ -78,6 +88,7 @@ type pyGen struct {
 	needDataclass bool
 	needEnum      bool
 	needResult    bool
+	strat         *CodegenStrategyConfig
 }
 
 func (g *pyGen) write(s string)   { g.buf.WriteString(s) }

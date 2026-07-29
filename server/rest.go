@@ -25,7 +25,7 @@ func (s *RESTServer) Serve(addr string) error {
 	mux.HandleFunc("/compile", s.handleCompile)
 	mux.HandleFunc("/validate", s.handleValidate)
 	mux.HandleFunc("/specs", s.handleSpecs)
-	mux.HandleFunc("/evolution/diagnostics", s.handleEvolutionDiagnostics)
+	mux.HandleFunc("/codegen/strategy", s.handleCodegenStrategy)
 	mux.HandleFunc("/api/v1/search", s.handleSearch)
 	mux.HandleFunc("/api/v1/search/autoupdate", s.handleSearchAutoUpdate)
 	mux.HandleFunc("/skills/", handleSkillsREST)
@@ -273,4 +273,32 @@ func (s *RESTServer) handleSearchAutoUpdate(w http.ResponseWriter, r *http.Reque
 		"indexed_count": count,
 		"message":       "AI Agent Search Engine auto-updated successfully",
 	})
+}
+
+func (s *RESTServer) handleCodegenStrategy(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		target := r.URL.Query().Get("target")
+		if target == "" {
+			target = "py"
+		}
+		strat := compiler.InspectCodegenStrategy(target)
+		writeJSON(w, http.StatusOK, strat)
+		return
+	}
+
+	if r.Method == http.MethodPost {
+		var input compiler.CodegenStrategyConfig
+		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+		if input.Target == "" {
+			input.Target = "py"
+		}
+		updated := compiler.UpdateCodegenStrategy(input)
+		writeJSON(w, http.StatusOK, updated)
+		return
+	}
+
+	http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 }
