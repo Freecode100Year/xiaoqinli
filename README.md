@@ -1,8 +1,40 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.27.1
+# Xiaoqinli (xql) 极简安全转译器 v3.29.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-28 - v3.29.0 AI Agent 检索引擎 5 大缺陷全量重构与物理闭环)
+
+### 🔍 语言 Spec 索引、Write-Through 实时感知与确定性相关性评分
+- **补全语言 Spec 索引 (`indexSpecs`)**：
+  - 在 `AutoUpdateIndex` 中补齐全量 43+ 语言 Specification Profiles (`category: "spec"`) 索引，包含 `modern_features` 与 `codegen_options`，彻底解决 Agent 无法检索最新语言特性的断层。
+- **自动 Write-Through 索引实时感知**：
+  - 绑定 `SaveEvolutionState` 触发 `se.AutoUpdateIndex()`，任何诊断记录、技能模块、安全策略与 Spec Profiles 的更新均自动刷新索引，彻底消除手调 `agent_search_auto_update` 的隐式依赖。
+- **确定性相关性评分与排序 (Relevance Scoring & Sorting)**：
+  - 摒弃 Go Map 随机遍历顺序，引入标题 (Score+10)、标签 (Score+5)、内容 (Score+2) 权重评分计算，并按 `Score↓ -> UpdatedAt↓ -> ID↑` 严格确定性排序，确保 Agent 检索行为 100% 可预期。
+- **Diagnostic 错误码覆盖机制 (Single Key ID Overwrite)**：
+  - 调整诊断条目 ID 为 `diag-<code>` 单 Key 模式，新增或升级修复建议时自动覆盖旧记录，彻底解决过时修复建议堆积问题。
+- **能力审计风险联动 (`category: "risk"`)**：
+  - 联动 `check` 包能力校验，自动注册未解析函数调用风险（`risk-unresolved-calls` / `XQL_E303` / `--strict-caps`）至 `category: "risk"` 检索库。
+
+---
+
+## 📢 最新更新 (2026-07-28 - v3.28.0 未解析函数调用严格校验与 Capability/Effect 信任边界固化)
+
+### 🛡️ 核心能力审计防护与 Opt-in 严格模式 (`--strict-caps`)
+- **未解析函数调用 Fail-Open 漏斗封堵**：
+  - 修复 `check/capability.go` (`checkCapExpr`) 与 `check/types.go` (`collectEffects`) 中，对于未在 `builtinFuncs`、同文件或模块导入表中的函数调用直接静默放行的结构性缺口。
+- **引入 Opt-in 严格能力校验机制**：
+  - 新增 `CheckCapabilitiesStrict` / `CheckCapabilitiesWithOptions` 校验接口，以及 `CheckOptions{StrictCapabilities: true}`。
+  - 新增 CLI Flag `--strict-caps`，在 `xiaoqinli validate --file <path> --strict-caps` 中选择性开启严格模式。
+- **全新安全诊断码 `XQL_E303`**：
+  - 在严格模式下，当检测到无法被解析验证能力的未知/未声明函数调用时，不再隐式放行，而是精确触发 `XQL_E303: cannot verify capability for unresolved call 'xxx'` 抛出编译阻断错误。
+- **向前兼容与单元测试覆盖**：
+  - 保持默认模式完全向前兼容，同时新增 `TestStrictCapabilityUnresolvedCall` 单元测试，全量 `go test ./...` 100% 跑通。
+  - 全局二进制 `xql.exe` 已同步重新编译并部署至 `C:\Users\sj929\go\bin\xql.exe`。
 
 ---
 

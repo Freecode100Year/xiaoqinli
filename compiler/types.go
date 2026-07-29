@@ -18,6 +18,9 @@ type CompileRequest struct {
 
 	// ValidateOnly skips codegen when true.
 	ValidateOnly bool
+
+	// StrictCapabilities enables strict capability check for unresolved function calls.
+	StrictCapabilities bool
 }
 
 // CompileStats provides performance and size metrics for a compilation.
@@ -69,8 +72,9 @@ type ParseResult struct {
 
 // ValidateRequest describes a validate-only operation.
 type ValidateRequest struct {
-	AST           ast.Node
-	WorkspacePath string
+	AST                ast.Node
+	WorkspacePath      string
+	StrictCapabilities bool
 }
 
 // ValidateResult holds the outcome of a Validate call.

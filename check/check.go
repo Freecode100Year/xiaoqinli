@@ -30,11 +30,19 @@ func (we WorkspaceError) Error() string {
 	return string(data)
 }
 
+type CheckOptions struct {
+	StrictCapabilities bool
+}
+
 func RunAll(root ast.Node) error {
 	return RunAllInWorkspace(root, "", nil)
 }
 
 func RunAllInWorkspace(root ast.Node, currentFile string, ws *vfs.Workspace) error {
+	return RunAllWithOptions(root, currentFile, ws, CheckOptions{})
+}
+
+func RunAllWithOptions(root ast.Node, currentFile string, ws *vfs.Workspace, opts CheckOptions) error {
 	if root == nil {
 		return errors.New("root node is nil")
 	}
@@ -45,7 +53,7 @@ func RunAllInWorkspace(root ast.Node, currentFile string, ws *vfs.Workspace) err
 
 	_ = tc.Check(root)
 	_ = CheckEffectsWithTC(root, tc)
-	_ = CheckCapabilitiesWithTC(root, tc)
+	_ = CheckCapabilitiesWithOptions(root, tc, opts)
 
 	if len(tc.errors) > 0 {
 		return WorkspaceError{Diagnostics: tc.Diagnostics}

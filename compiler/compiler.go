@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version is the current version of the xiaoqinli compiler package.
-	Version = "3.27.1"
+	Version = "3.29.0"
 
 	// MaxASTBytes is the maximum allowed size for an AST payload (mirrors ast.MaxASTBytes).
 	MaxASTBytes = 2 << 20 // 2 MB
@@ -135,7 +135,7 @@ func Validate(req ValidateRequest) ValidateResult {
 			}},
 		}
 	}
-	if err := check.RunAll(req.AST); err != nil {
+	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: req.StrictCapabilities}); err != nil {
 		return ValidateResult{
 			Error:       err.Error(),
 			ErrorCode:   extractCode(err.Error()),
@@ -161,7 +161,7 @@ func Compile(req CompileRequest) CompileResult {
 	}
 
 	// Phase 1: validate.
-	if err := check.RunAll(req.AST); err != nil {
+	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: req.StrictCapabilities}); err != nil {
 		return CompileResult{
 			Error:       err.Error(),
 			ErrorCode:   extractCode(err.Error()),

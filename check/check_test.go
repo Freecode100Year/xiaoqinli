@@ -1293,3 +1293,41 @@ func TestDiagnosticSuggestedFix(t *testing.T) {
 		t.Error("expected capability lack diagnostic to be found")
 	}
 }
+
+func TestStrictCapabilityUnresolvedCall(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "danger",
+			"params": [],
+			"returnType": {"kind": "Void"},
+			"effects": [],
+			"grant": [],
+			"body": [{
+				"kind": "ExprStmt",
+				"expr": {
+					"kind": "CallExpr",
+					"callee": "totally_unknown_dangerous_syscall_wrapper",
+					"args": []
+				}
+			}]
+		}]
+	}`
+
+	root := mustParse(t, src)
+
+	// Non-strict check should pass without error
+	if err := CheckCapabilities(root); err != nil {
+		t.Errorf("expected non-strict CheckCapabilities to pass, got: %v", err)
+	}
+
+	// Strict check should fail with XQL_E303
+	err := CheckCapabilitiesStrict(root)
+	if err == nil {
+		t.Fatal("expected strict CheckCapabilities to fail on unresolved call")
+	}
+	if !strings.Contains(err.Error(), "XQL_E303") {
+		t.Errorf("expected error to contain XQL_E303, got: %v", err)
+	}
+}

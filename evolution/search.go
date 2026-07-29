@@ -1,16 +1,20 @@
 package evolution
 
 import (
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+
+	"xiaoqinli/codegen"
 )
 
 // IndexEntry represents a searchable item in the AI Agent Search Engine.
 type IndexEntry struct {
 	ID        string   `json:"id"`
-	Category  string   `json:"category"` // e.g. "skill", "diagnostic", "spec", "policy"
+	Category  string   `json:"category"` // e.g. "skill", "diagnostic", "spec", "policy", "risk"
 	Title     string   `json:"title"`
 	Content   string   `json:"content"`
 	Tags      []string `json:"tags"`
@@ -52,12 +56,17 @@ func (se *SearchEngine) RegisterEntry(entry IndexEntry) *IndexEntry {
 	return &entry
 }
 
-// Query searches entries matching keyword and category.
+type scoredEntry struct {
+	entry *IndexEntry
+	score int
+}
+
+// Query searches entries matching keyword and category with deterministic relevance sorting.
 func (se *SearchEngine) Query(keyword, category string) []*IndexEntry {
 	se.mu.RLock()
 	defer se.mu.RUnlock()
 
-	var results []*IndexEntry
+	var scored []*scoredEntry
 	kw := strings.ToLower(strings.TrimSpace(keyword))
 	cat := strings.ToLower(strings.TrimSpace(category))
 
@@ -65,35 +74,77 @@ func (se *SearchEngine) Query(keyword, category string) []*IndexEntry {
 		if cat != "" && strings.ToLower(entry.Category) != cat {
 			continue
 		}
-		if matchEntry(entry, kw) {
+		if kw == "" {
 			cp := *entry
-			results = append(results, &cp)
+			scored = append(scored, &scoredEntry{entry: &cp, score: 0})
+			continue
 		}
+
+		score := calculateScore(entry, kw, cat)
+		if score > 0 {
+			cp := *entry
+			scored = append(scored, &scoredEntry{entry: &cp, score: score})
+		}
+	}
+
+	sort.Slice(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		if scored[i].entry.UpdatedAt != scored[j].entry.UpdatedAt {
+			return scored[i].entry.UpdatedAt > scored[j].entry.UpdatedAt
+		}
+		return scored[i].entry.ID < scored[j].entry.ID
+	})
+
+	results := make([]*IndexEntry, len(scored))
+	for i, s := range scored {
+		results[i] = s.entry
 	}
 	return results
 }
 
-// matchEntry checks if an IndexEntry matches the keyword.
-func matchEntry(e *IndexEntry, kw string) bool {
-	if kw == "" {
-		return true
+func calculateScore(e *IndexEntry, kw, cat string) int {
+	score := 0
+	titleLower := strings.ToLower(e.Title)
+	contentLower := strings.ToLower(e.Content)
+
+	if titleLower == kw {
+		score += 20
+	} else if strings.Contains(titleLower, kw) {
+		score += 10
 	}
-	if strings.Contains(strings.ToLower(e.Title), kw) || strings.Contains(strings.ToLower(e.Content), kw) {
-		return true
-	}
+
 	for _, tag := range e.Tags {
-		if strings.Contains(strings.ToLower(tag), kw) {
-			return true
+		if strings.ToLower(tag) == kw {
+			score += 8
+		} else if strings.Contains(strings.ToLower(tag), kw) {
+			score += 4
 		}
 	}
-	return false
+
+	if strings.Contains(contentLower, kw) {
+		score += 2
+	}
+
+	if cat != "" && strings.ToLower(e.Category) == cat {
+		score += 1
+	}
+
+	return score
 }
 
 // AutoUpdateIndex scans evolution memory and re-indexes all entries.
 func (se *SearchEngine) AutoUpdateIndex() int {
+	se.mu.Lock()
+	se.entries = make(map[string]*IndexEntry)
+	se.mu.Unlock()
+
 	se.indexSkills()
 	se.indexDiagnostics()
 	se.indexSecurityPolicies()
+	se.indexSpecs()
+	se.indexCapabilityRisks()
 	se.mu.RLock()
 	defer se.mu.RUnlock()
 	return len(se.entries)
@@ -116,9 +167,10 @@ func (se *SearchEngine) indexDiagnostics() {
 	diagMutex.RLock()
 	defer diagMutex.RUnlock()
 	for code, records := range diagFixes {
-		for _, r := range records {
+		if len(records) > 0 {
+			r := records[len(records)-1]
 			se.RegisterEntry(IndexEntry{
-				ID:       fmt.Sprintf("diag-%s-%s", code, r.SuggestedFix),
+				ID:       "diag-" + code,
 				Category: "diagnostic",
 				Title:    "Diagnostic Fix " + code,
 				Content:  r.ErrorContext + " " + r.SuggestedFix,
@@ -136,5 +188,35 @@ func (se *SearchEngine) indexSecurityPolicies() {
 		Title:    "Security Policy " + pol.Environment,
 		Content:  fmt.Sprintf("Allowed: %v, Forbidden: %v", pol.AllowedGrants, pol.ForbiddenGrants),
 		Tags:     []string{"policy", pol.Environment},
+	})
+}
+
+func (se *SearchEngine) indexSpecs() {
+	allProfiles := codegen.ListAllLanguageProfiles()
+	for target, prof := range allProfiles {
+		featuresStr := strings.Join(prof.ModernFeatures, ", ")
+		content := fmt.Sprintf("Language: %s (Target: %s), Version: %s, Modern Features: [%s]", prof.Language, target, prof.LatestVersion, featuresStr)
+		if len(prof.CodegenOptions) > 0 {
+			optsStr, _ := json.Marshal(prof.CodegenOptions)
+			content += fmt.Sprintf(", CodegenOptions: %s", string(optsStr))
+		}
+		tags := append([]string{"spec", target, prof.Language}, prof.ModernFeatures...)
+		se.RegisterEntry(IndexEntry{
+			ID:       "spec-" + target,
+			Category: "spec",
+			Title:    fmt.Sprintf("Language Spec %s (%s)", prof.Language, target),
+			Content:  content,
+			Tags:     tags,
+		})
+	}
+}
+
+func (se *SearchEngine) indexCapabilityRisks() {
+	se.RegisterEntry(IndexEntry{
+		ID:       "risk-unresolved-calls",
+		Category: "risk",
+		Title:    "Capability Security Audit: Unresolved Function Call Fail-Open Risk",
+		Content:  "Unresolved or unknown function calls pass capability check with zero required grant in default mode. Enable strict mode (--strict-caps / CheckCapabilitiesStrict) to intercept unresolved calls with error XQL_E303.",
+		Tags:     []string{"risk", "capability", "effect", "XQL_E303", "strict-caps", "fail-open"},
 	})
 }

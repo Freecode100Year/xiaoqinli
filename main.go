@@ -59,7 +59,7 @@ func main() {
 	}
 }
 
-// parseFlags extracts --key value or --key=value pairs from args.
+// parseFlags extracts --key value, --key=value, or --key boolean flags from args.
 func parseFlags(args []string) map[string]string {
 	flags := make(map[string]string)
 	for i := 0; i < len(args); i++ {
@@ -67,9 +67,11 @@ func parseFlags(args []string) map[string]string {
 			rest := args[i][2:]
 			if eqIdx := strings.IndexByte(rest, '='); eqIdx >= 0 {
 				flags[rest[:eqIdx]] = rest[eqIdx+1:]
-			} else if i+1 < len(args) {
+			} else if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
 				flags[rest] = args[i+1]
 				i++
+			} else {
+				flags[rest] = "true"
 			}
 		}
 	}
@@ -96,7 +98,8 @@ func cmdValidate(args []string) {
 		os.Exit(1)
 	}
 
-	vr := compiler.Validate(compiler.ValidateRequest{AST: pr.AST})
+	strictCaps := flags["strict-caps"] == "true"
+	vr := compiler.Validate(compiler.ValidateRequest{AST: pr.AST, StrictCapabilities: strictCaps})
 	if !vr.Success {
 		fmt.Fprintf(os.Stderr, "%s\n", vr.Error)
 		os.Exit(1)

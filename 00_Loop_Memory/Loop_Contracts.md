@@ -1,6 +1,6 @@
 # 📜 Loop Engineering Contract
 
-- **Current Goal**: 阶段八：Agent 互操作性收敛与自进化持久化闭环 (1) 消灭 toolTargets 与 compiler.allTargetInfos 数据源漂移，收敛 43+ 语言与 tccli 统一定义；(2) 打通 .xql/ 本地 Write-Through 持久化闭环与启动载入，防止 Agent 自进化知识随着 MCP 子进程重启丢失；(3) 接入 AI Agent 检索引擎与全量 REST/MCP 映射。
+- **Current Goal**: 阶段十：AI Agent 检索引擎全量补全与实时感知闭环 (1) 补全 indexSpecs 与 indexCapabilityRisks，支持全量 43+ 语言 Spec 特性和能力风险条目 (risk/XQL_E303) 检索；(2) 引入 Write-Through 索引自动刷新机制，在任意知识写入时自动同步更新引擎索引；(3) 引入确定性相关性评分排序 (Relevance Scoring) 与 Diagnostic 覆盖机制 (Single Key ID Overwrite)。
 - **Verification Command**: go test ./...
 - **Status**: Complete
 - **Gatekeeper Status**: Test: Passed | Audit: Audited

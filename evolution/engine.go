@@ -363,6 +363,7 @@ func SaveEvolutionState(dirPath string) error {
 	skillMutex.RUnlock()
 	_ = os.WriteFile(filepath.Join(dirPath, "skills.json"), skData, 0644)
 
+	GetSearchEngine().AutoUpdateIndex()
 	return nil
 }
 
