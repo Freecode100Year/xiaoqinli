@@ -120,7 +120,6 @@ func RecordDiagnosticFix(code, errCtx, astPattern, fix string) *DiagnosticFixRec
 	}
 	diagFixes[code] = append(diagFixes[code], newRec)
 	diagMutex.Unlock()
-
 	autoSave()
 	return newRec
 }
@@ -403,6 +402,8 @@ func RegisterDynamicSkill(skill DynamicSkill) *DynamicSkill {
 	skill.Name = name
 	skill.LastUpdated = time.Now().Format("2006-01-02 15:04:05")
 	dynamicSkills[name] = &skill
+	skillMutex.Unlock()
+
 	autoSave()
 	return &skill
 }
