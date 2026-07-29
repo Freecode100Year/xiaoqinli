@@ -1,8 +1,19 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.32.0
+# Xiaoqinli (xql) 极简安全转译器 v3.36.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-28 - v3.36.0 跨文件元数据与物理契约 100% 一致性对齐)
+
+### ⚖️ 契约表格 (`Loop_Contracts.md`) 与 Profiles 元数据完备统一
+- **物理契约同步对齐 (`Loop_Contracts.md`)**：
+  - 将 `00_Loop_Memory/Loop_Contracts.md` 阶段七表格中 Nim/Julia/PHP/Ruby/Lua 5 门后端的历史描述全量重构纠正为 **“AST 语义生成已验证，Docker 容器编译待物理重测”**。
+  - 彻底消除了 `codegen/docker_e2e_test.go` 测试清理后，契约表格旧断言与 `codegen/profile.go` 中 `verification_status: ast_validated` 之间的跨文件矛盾。
+- **全量单元测试物理闭环**：
+  - `go test ./...` 100% 测试通过，二进制 `xql.exe` 已同步部署至 `C:\Users\sj929\go\bin\xql.exe`。
 
 ---
 

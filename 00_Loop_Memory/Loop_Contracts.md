@@ -1,6 +1,6 @@
 # 📜 Loop Engineering Contract
 
-- **Current Goal**: 阶段十三：报错摘要文本 (content[0].text) 与结构化 Diagnostics 修复建议完全对齐 v3.32.0 (1) 重构 compiler.formatDiagError 与 server.toolErrorResult，在返回编译/校验错误时，将经过 wrapDiag 覆盖后的最新 SuggestedFix 重新格式化并同步更新至 content[0].text 摘要文本与 Error 字符串；(2) 物理解决 Agent/人类在默认视图下看到的仍然是旧文案的问题，实现 100% 体验与文本对齐。
+- **Current Goal**: 阶段十四：跨文件元数据与物理契约 100% 一致性对齐 v3.36.0 (1) 重构 Loop_Contracts.md 阶段七表格中 Nim/Julia/PHP/Ruby/Lua 5 门后端的验证状态，将其统一纠正为“AST 语义生成已验证，Docker 容器编译待物理重测”；(2) 与 codegen/profile.go 中的 verification_status: ast_validated 保持 100% 诚实无矛盾跨文件完备对齐。
 - **Verification Command**: go test ./...
 - **Status**: Complete
 - **Gatekeeper Status**: Test: Passed | Audit: Audited
@@ -19,11 +19,11 @@
 | **Swift** | 4 | `swift:5.8-slim` | `swift main.swift service.swift models.swift` | **已于 2026-07-07 01:23 物理通过** |
 | **Dart** | 5 | `dart:stable-alpine` | `dart run main.dart service.dart models.dart` | **已于 2026-07-08 15:06 物理跑通** |
 | **Zig** | 6 | `ziglang/zig:0.11.0-alpine` | `zig run main.zig service.zig models.zig` | **已于 2026-07-08 15:19 物理跑通** |
-| **Nim** | 7 | `nimlang/nim:alpine` | `nim c -r main.nim` | **已于 2026-07-26 22:12 物理跑通** |
-| **Julia** | 8 | `julia:alpine` | `julia main.jl` | **已于 2026-07-26 22:12 物理跑通** |
-| **PHP** | 9 | `php:8.2-alpine` | `php main.php` | **已于 2026-07-26 22:12 物理跑通** |
-| **Ruby** | 10 | `ruby:3.2-alpine` | `ruby main.rb` | **已于 2026-07-26 22:12 物理跑通** |
-| **Lua** | 11 | `lua:5.4-alpine` | `lua main.lua` | **已于 2026-07-26 22:12 物理跑通** |
+| **Nim** | 7 | `nimlang/nim:alpine` | `nim c -r main.nim` | **AST 语义生成已验证，Docker 容器编译待物理重测** |
+| **Julia** | 8 | `julia:alpine` | `julia main.jl` | **AST 语义生成已验证，Docker 容器编译待物理重测** |
+| **PHP** | 9 | `php:8.2-alpine` | `php main.php` | **AST 语义生成已验证，Docker 容器编译待物理重测** |
+| **Ruby** | 10 | `ruby:3.2-alpine` | `ruby main.rb` | **AST 语义生成已验证，Docker 容器编译待物理重测** |
+| **Lua** | 11 | `lua:5.4-alpine` | `lua main.lua` | **AST 语义生成已验证，Docker 容器编译待物理重测** |
 
 ### 2. 物理验证红线准则
 1. **严格的 Build Tag 隔离**：所有的 Docker E2E 测试均被移入 `codegen/docker_e2e_test.go`，前置头部标记 `//go:build docker_e2e`。保证日常 `go test ./...` 速度不受拖累。
