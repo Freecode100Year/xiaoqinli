@@ -384,6 +384,37 @@ func (g *pyGen) emitWhile(ws *ast.WhileStmt) error {
 }
 
 func (g *pyGen) emitForStmt(fs *ast.ForStmt) error {
+	if g.strat != nil && g.strat.PreferComprehension && len(fs.Body) == 1 {
+		if es, ok := fs.Body[0].(*ast.ExprStmt); ok {
+			if ce, ok := es.Expr.(*ast.CallExpr); ok && strings.HasSuffix(ce.Callee, ".append") && len(ce.Args) == 1 {
+				target := strings.TrimSuffix(ce.Callee, ".append")
+				g.writeIndent()
+				g.write(target + ".extend([")
+				if err := g.emitExpr(ce.Args[0]); err != nil {
+					return err
+				}
+				g.write(" for " + fs.Var + " in ")
+				if fs.Form == "range" {
+					g.write("range(")
+					if err := g.emitExpr(fs.Start); err != nil {
+						return err
+					}
+					g.write(", (")
+					if err := g.emitExpr(fs.End); err != nil {
+						return err
+					}
+					g.write(") + 1)")
+				} else {
+					if err := g.emitExpr(fs.Iterable); err != nil {
+						return err
+					}
+				}
+				g.writeln("])")
+				return nil
+			}
+		}
+	}
+
 	g.writeIndent()
 	switch fs.Form {
 	case "range":

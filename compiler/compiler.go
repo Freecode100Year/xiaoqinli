@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version is the current version of the xiaoqinli compiler package.
-	Version = "3.30.0"
+	Version = "3.31.0"
 
 	// MaxASTBytes is the maximum allowed size for an AST payload (mirrors ast.MaxASTBytes).
 	MaxASTBytes = 2 << 20 // 2 MB
@@ -412,10 +412,8 @@ func wrapDiag(err error) []Diagnostic {
 		out := make([]Diagnostic, len(we.Diagnostics))
 		for i, d := range we.Diagnostics {
 			fix := d.SuggestedFix
-			if fix == "" {
-				if learned := InspectDiagnosticFixes(d.Code); len(learned) > 0 {
-					fix = learned[len(learned)-1].SuggestedFix
-				}
+			if learned := InspectDiagnosticFixes(d.Code); len(learned) > 0 {
+				fix = learned[len(learned)-1].SuggestedFix
 			}
 			out[i] = Diagnostic{
 				Code:         d.Code,

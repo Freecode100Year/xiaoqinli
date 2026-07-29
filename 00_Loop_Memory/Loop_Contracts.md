@@ -1,6 +1,6 @@
 # 📜 Loop Engineering Contract
 
-- **Current Goal**: 阶段十一：Codegen 性能策略反馈闭环与诊断记忆自适应报错附着 (1) 解封并持久化 CodegenStrategyConfig，暴露 MCP 工具 (codegen_strategy_inspect / codegen_strategy_update) 与 REST /codegen/strategy 接口；(2) 打通 codegen (如 Python 生成器) 动态感知与读取 Codegen 性能策略，实现代码生成行为自适应调整；(3) 编译与类型检查报错 (wrapDiag) 自动附着已学习的 Diagnostic 修复建议。
+- **Current Goal**: 阶段十二：Codegen 物理推导式分支生成与 learned Diagnostic 修复覆盖 v3.31.0 (1) 在 codegen/python.go 中重构 emitForStmt，真正的物理分支逻辑：PreferComprehension 为 true 时生成列表推导式 extend([elem for item in iterable])，为 false 时生成传统 3 行 for 循环 + append；(2) 修正 compiler.wrapDiag 中 fix == "" 逻辑漏洞，只要 InspectDiagnosticFixes 中有学习到的修法建议，优先覆盖默认兜底文案；(3) 全量物理单元测试 100% 跑通闭环。
 - **Verification Command**: go test ./...
 - **Status**: Complete
 - **Gatekeeper Status**: Test: Passed | Audit: Audited

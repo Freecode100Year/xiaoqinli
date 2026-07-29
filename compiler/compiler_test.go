@@ -278,6 +278,45 @@ func TestAutoAttachLearnedFixToDiagnostic(t *testing.T) {
 	}
 }
 
+func TestLearnedDiagnosticFixOverridesPrePopulatedDefault(t *testing.T) {
+	// Record a learned fix strategy for XQL_E201 (Type Check Failure)
+	learnedFix := "Custom Learned Fix Strategy: cast String to Int explicitly"
+	_ = RecordDiagnosticFix("XQL_E201", "return type mismatch", "ReturnStmt", learnedFix)
+
+	// Create an AST with type mismatch where check pre-populates a default SuggestedFix
+	src := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "badReturn",
+			"params": [],
+			"returnType": {"kind": "Int"},
+			"effects": ["pure"],
+			"grant": [],
+			"body": [{
+				"kind": "ReturnStmt",
+				"value": {"kind": "Literal", "valueType": "String", "value": "invalid_int"}
+			}]
+		}]
+	}`
+	pr := ParseAST(ParseRequest{Data: []byte(src)})
+	if !pr.Success {
+		t.Fatalf("ParseAST failed: %s", pr.Error)
+	}
+
+	vr := Validate(ValidateRequest{AST: pr.AST})
+	if vr.Success {
+		t.Fatal("expected validate failure for type mismatch")
+	}
+	if len(vr.Diagnostics) == 0 {
+		t.Fatal("expected diagnostic report")
+	}
+
+	if vr.Diagnostics[0].SuggestedFix != learnedFix {
+		t.Errorf("expected learned fix '%s' to override pre-populated default, got: '%s'", learnedFix, vr.Diagnostics[0].SuggestedFix)
+	}
+}
+
 func TestGetSupportedTargets(t *testing.T) {
 	targets := GetSupportedTargets()
 	if len(targets) < 40 {

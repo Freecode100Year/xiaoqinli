@@ -1,8 +1,20 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.30.0
+# Xiaoqinli (xql) 极简安全转译器 v3.31.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-28 - v3.31.0 Codegen 列表推导式物理分支生成与 Learned Fix 优先覆盖修复)
+
+### 🐍 真正自适应 Python 列表推导式分支 & Learned Fix 覆盖默认文案
+- **Codegen 真正的列表推导式分支 (`emitForStmt`)**：
+  - 在 `codegen/python.go` 中重构 `emitForStmt`。当 `PreferComprehension == true` 且匹配单语句累加循环时，生成真正的 Python 列表推导式 `target.extend([elem for item in iterable])`；当为 `false` 时生成标准 3 行 `for` 循环 + `.append()`。
+- **Learned Fix 覆盖默认文案 (`wrapDiag`)**：
+  - 修复 `compiler.wrapDiag` 中因默认 `SuggestedFix` 不为空导致 `fix == ""` 永不成立的漏洞。调整优先级：只要 `InspectDiagnosticFixes(code)` 存在学习到的修法建议，优先覆盖默认兜底文案。
+- **单元测试与物理验证 (`TestCodegenStrategyBranchComprehensionVsLoop` & `TestLearnedDiagnosticFixOverridesPrePopulatedDefault`)**：
+  - 增加对应单元测试，`go test ./...` 100% 跑通，全局 `xql.exe` 已同步更新至 `C:\Users\sj929\go\bin\xql.exe`。
 
 ---
 
