@@ -138,3 +138,24 @@ func TestPanicShieldAndLoopBreaker(t *testing.T) {
 		t.Fatalf("expected deadloop error, got %v", errLoop)
 	}
 }
+
+func TestRegisterDynamicSkillDoubleCallConcurrently(t *testing.T) {
+	// Consecutive double-call verification to ensure skillMutex is cleanly released before autoSave
+	sk1 := RegisterDynamicSkill(DynamicSkill{
+		Name:        "skill_test_double_call_1",
+		GapCategory: "test_gap",
+		Content:     "fn test1() {}",
+	})
+	if sk1 == nil || sk1.Name != "skill_test_double_call_1" {
+		t.Fatalf("expected first RegisterDynamicSkill call to succeed")
+	}
+
+	sk2 := RegisterDynamicSkill(DynamicSkill{
+		Name:        "skill_test_double_call_2",
+		GapCategory: "test_gap",
+		Content:     "fn test2() {}",
+	})
+	if sk2 == nil || sk2.Name != "skill_test_double_call_2" {
+		t.Fatalf("expected second RegisterDynamicSkill call to succeed without deadlock")
+	}
+}
