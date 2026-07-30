@@ -2457,3 +2457,25 @@ func TestGenerateAndroidProject(t *testing.T) {
 		t.Errorf("MainActivity.kt should contain runXqlApp, got:\n%s", ktCode)
 	}
 }
+
+func TestRubyCodegenStrategyInspection(t *testing.T) {
+	_ = UpdateCodegenStrategy(CodegenStrategyConfig{
+		Target:              "ruby",
+		PreferComprehension: true,
+		BenchmarkScore:      98.5,
+		OptimizationFlags:   map[string]string{"strategy_tag": "RubyComprehensionMode"},
+	})
+	defer func() {
+		_ = UpdateCodegenStrategy(CodegenStrategyConfig{Target: "ruby", PreferComprehension: false})
+	}()
+
+	root := mustParse(t, addFibMain)
+	out, err := GenerateRuby(root)
+	if err != nil {
+		t.Fatalf("GenerateRuby failed: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, "# Codegen Strategy: RubyComprehensionMode") {
+		t.Errorf("expected Ruby codegen to emit strategy header, got:\n%s", code)
+	}
+}

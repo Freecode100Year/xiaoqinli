@@ -3,6 +3,7 @@ package compiler
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -330,6 +331,95 @@ func TestGetSupportedTargets(t *testing.T) {
 	fresh := GetSupportedTargets()
 	if fresh[0] == "MODIFIED" {
 		t.Fatal("GetSupportedTargets returned a reference, not a copy")
+	}
+}
+
+func TestStrictCapabilitiesDefaultTrue(t *testing.T) {
+	// Program with unresolved call 'externalCall'
+	unresolvedCapJSON := `{
+		"kind": "Program",
+		"declarations": [
+			{
+				"kind": "FunctionDecl",
+				"name": "main",
+				"params": [],
+				"returnType": {"kind": "Void"},
+				"effects": [],
+				"grant": [],
+				"body": [
+					{
+						"kind": "ExprStmt",
+						"expr": {
+							"kind": "CallExpr",
+							"callee": "println",
+							"args": [
+								{
+									"kind": "Literal",
+									"valueType": "String",
+									"value": "hello"
+								}
+							]
+						}
+					}
+				]
+			}
+		]
+	}`
+
+	pr := ParseAST(ParseRequest{Data: []byte(unresolvedCapJSON)})
+	if !pr.Success {
+		t.Fatalf("ParseAST failed: %v", pr.Error)
+	}
+
+	// 1. Default CompileRequest (StrictCapabilities defaults to true) -> should succeed for builtin println
+	crDefault := Compile(CompileRequest{AST: pr.AST, Target: "go"})
+	if !crDefault.Success {
+		t.Fatalf("expected Compile with builtin call to succeed, got: %s", crDefault.Error)
+	}
+
+	// Unresolved call JSON
+	unresolvedCallJSON := `{
+		"kind": "Program",
+		"declarations": [
+			{
+				"kind": "FunctionDecl",
+				"name": "main",
+				"params": [],
+				"returnType": {"kind": "Void"},
+				"effects": [],
+				"grant": [],
+				"body": [
+					{
+						"kind": "ExprStmt",
+						"expr": {
+							"kind": "CallExpr",
+							"callee": "unresolvedExternalCall",
+							"args": []
+						}
+					}
+				]
+			}
+		]
+	}`
+
+	prUnresolved := ParseAST(ParseRequest{Data: []byte(unresolvedCallJSON)})
+	if !prUnresolved.Success {
+		t.Fatalf("ParseAST failed: %v", prUnresolved.Error)
+	}
+
+	// 2. Default Compile (StrictCapabilities = true) on unresolved call -> triggers XQL_E303
+	crStrict := Compile(CompileRequest{AST: prUnresolved.AST, Target: "go"})
+	if crStrict.Success {
+		t.Fatalf("expected Compile on unresolved call to fail by default under StrictCapabilities, but succeeded")
+	}
+	if !strings.Contains(crStrict.Error, "XQL_E303") {
+		t.Errorf("expected XQL_E303 error, got: %s", crStrict.Error)
+	}
+
+	// 3. DisableStrictCapabilities = true -> bypasses XQL_E303 capability check
+	crBypass := Compile(CompileRequest{AST: prUnresolved.AST, Target: "go", DisableStrictCapabilities: true})
+	if crBypass.Success && strings.Contains(crBypass.Error, "XQL_E303") {
+		t.Errorf("DisableStrictCapabilities=true should bypass XQL_E303, got: %s", crBypass.Error)
 	}
 }
 

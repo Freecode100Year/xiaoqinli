@@ -126,6 +126,13 @@ func ParseAST(req ParseRequest) ParseResult {
 	return ParseResult{Success: true, AST: root}
 }
 
+func determineStrictCapabilities(strictCaps, disableStrictCaps bool) bool {
+	if disableStrictCaps {
+		return false
+	}
+	return true
+}
+
 // Validate runs all semantic checks without generating code.
 func Validate(req ValidateRequest) ValidateResult {
 	if req.AST == nil {
@@ -136,7 +143,8 @@ func Validate(req ValidateRequest) ValidateResult {
 			Diagnostics: wrapDiag(err),
 		}
 	}
-	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: req.StrictCapabilities}); err != nil {
+	strictCaps := determineStrictCapabilities(req.StrictCapabilities, req.DisableStrictCapabilities)
+	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: strictCaps}); err != nil {
 		diags := wrapDiag(err)
 		return ValidateResult{
 			Error:       formatDiagError(err, diags),
@@ -164,7 +172,8 @@ func Compile(req CompileRequest) CompileResult {
 	}
 
 	// Phase 1: validate.
-	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: req.StrictCapabilities}); err != nil {
+	strictCaps := determineStrictCapabilities(req.StrictCapabilities, req.DisableStrictCapabilities)
+	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: strictCaps}); err != nil {
 		diags := wrapDiag(err)
 		return CompileResult{
 			Error:       formatDiagError(err, diags),

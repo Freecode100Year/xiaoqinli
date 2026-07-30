@@ -6,6 +6,20 @@
 
 ---
 
+## 📢 最新更新 (2026-07-29 - v3.39.0 StrictCapabilities 扶正默认 & Ruby Codegen 策略反馈扩展)
+
+### 🛡️ 核心能力安全防线与 Codegen 策略多语言拓展
+- **能力校验防线默认使能 (`compiler/compiler.go` & `compiler/types.go`)**：
+  - 将 `StrictCapabilities`（严格能力校验）扶正为 `compiler.Compile` 与 `Validate` 的默认行为。未解析的外部高危函数调用将默认触发 `XQL_E303` 规则进行安全隔离。
+  - 新增 `DisableStrictCapabilities: true` 选项用于向下兼容及显式 Opt-out。
+- **Codegen 策略反馈闭环拓展至 Ruby (`codegen/ruby.go`)**：
+  - 成功将自适应性能策略感知机制拓展至第二门语言（Ruby）。
+  - 在 `ruby.go` 中打通 `InspectCodegenStrategy("ruby")`，动态感知 `PreferComprehension` 标志并支持 `RubyComprehensionMode` / Header 策略标记输出，证明了策略反馈系统的多语言通用能力。
+- **全量物理测试验证**：
+  - 新增 `TestStrictCapabilitiesDefaultTrue` 与 `TestRubyCodegenStrategyInspection` 测试用例，`go test ./...` 100% PASS，全局 `xql.exe` 已同步完成重新构建与部署。
+
+---
+
 ## 📢 最新更新 (2026-07-29 - v3.38.0 多文件工程架构扩展 & Android (Gradle APK) 目标全量接入)
 
 ### 📱 多文件工程树生成架构 & Android (Gradle APK) 目标

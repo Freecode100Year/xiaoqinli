@@ -10,11 +10,21 @@ import (
 // GenerateRuby produces Ruby source code from the given typed AST.
 // The "main" function's body is emitted at top level.
 func GenerateRuby(root ast.Node) ([]byte, error) {
-	g := &rbGen{buf: &strings.Builder{}}
+	strat := InspectCodegenStrategy("ruby")
+	g := &rbGen{buf: &strings.Builder{}, strat: strat}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	if strat != nil && (strat.OptimizationFlags["header_comment"] == "true" || strat.OptimizationFlags["strategy_tag"] != "" || strat.PreferComprehension) {
+		tag := strat.OptimizationFlags["strategy_tag"]
+		if tag == "" {
+			tag = fmt.Sprintf("PreferComprehension=%v, InlineThreshold=%d, Score=%.1f", strat.PreferComprehension, strat.InlineThreshold, strat.BenchmarkScore)
+		}
+		g.writeln("# Codegen Strategy: " + tag)
+		g.writeln("")
 	}
 
 	first := true
@@ -77,6 +87,7 @@ func GenerateRuby(root ast.Node) ([]byte, error) {
 type rbGen struct {
 	buf    *strings.Builder
 	indent int
+	strat  *CodegenStrategyConfig
 }
 
 func (g *rbGen) write(s string)   { g.buf.WriteString(s) }
