@@ -530,15 +530,6 @@ func InspectDiagnosticFixes(code string) []*evolution.DiagnosticFixRecord {
 	return evolution.InspectDiagnosticFixes(code)
 }
 
-// TreeSitter Mapping Wrappers
-func UpdateTreeSitterMapping(m evolution.TreeSitterMapping) *evolution.TreeSitterMapping {
-	return evolution.UpdateTreeSitterMapping(m)
-}
-
-func InspectTreeSitterMapping(target string) (*evolution.TreeSitterMapping, error) {
-	return evolution.InspectTreeSitterMapping(target)
-}
-
 // Security Policy Wrappers
 func InspectSecurityPolicy() evolution.SecurityPolicyConfig {
 	return evolution.InspectSecurityPolicy()
@@ -546,15 +537,6 @@ func InspectSecurityPolicy() evolution.SecurityPolicyConfig {
 
 func UpdateSecurityPolicy(policy evolution.SecurityPolicyConfig) evolution.SecurityPolicyConfig {
 	return evolution.UpdateSecurityPolicy(policy)
-}
-
-// Stdlib Matrix Wrappers
-func InspectStdlibMatrix(target string) (*evolution.StdlibAPIMatrix, error) {
-	return evolution.InspectStdlibMatrix(target)
-}
-
-func UpdateStdlibMatrix(m evolution.StdlibAPIMatrix) *evolution.StdlibAPIMatrix {
-	return evolution.UpdateStdlibMatrix(m)
 }
 
 // Codegen Strategy Wrappers

@@ -64,10 +64,6 @@ func ResetMemoryForTesting() {
 	diagFixes = map[string][]*DiagnosticFixRecord{}
 	diagMutex.Unlock()
 
-	tsMutex.Lock()
-	tsMappings = map[string]*TreeSitterMapping{}
-	tsMutex.Unlock()
-
 	skillMutex.Lock()
 	dynamicSkills = map[string]*DynamicSkill{}
 	skillMutex.Unlock()
@@ -140,61 +136,7 @@ func InspectDiagnosticFixes(code string) []*DiagnosticFixRecord {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Tree-sitter WASM Mapping Synthesis (小众语言 AST 自适应映射引擎)
-// ---------------------------------------------------------------------------
-
-// TreeSitterMapping defines AST node mapping between Tree-sitter and .xql.json.
-type TreeSitterMapping struct {
-	Language       string            `json:"language"`        // e.g. "Mojo", "Gleam"
-	Target         string            `json:"target"`          // e.g. "mojo", "gleam"
-	NodeMappings   map[string]string `json:"node_mappings"`   // e.g. "function_definition" -> "FunctionDecl"
-	KeywordMapping map[string]string `json:"keyword_mapping"` // e.g. "fn" -> "function"
-	LastUpdated    string            `json:"last_updated"`
-}
-
-var (
-	tsMutex    sync.RWMutex
-	tsMappings = map[string]*TreeSitterMapping{}
-)
-
-// UpdateTreeSitterMapping registers or updates a Tree-sitter WASM grammar mapping locally.
-func UpdateTreeSitterMapping(m TreeSitterMapping) *TreeSitterMapping {
-	tsMutex.Lock()
-
-	target := strings.ToLower(strings.TrimSpace(m.Target))
-	m.Target = target
-	m.LastUpdated = time.Now().Format("2006-01-02 15:04:05")
-	tsMappings[target] = &m
-	tsMutex.Unlock()
-
-	// Also ensure target is in codegen profile
-	_, _ = codegen.UpdateLanguageProfile(codegen.LanguageProfile{
-		Target:         target,
-		Language:       m.Language,
-		LatestVersion:  "WASM Dynamic",
-		ModernFeatures: []string{"Tree-sitter WASM grammar mapping", "Dynamic AST synthesis"},
-	})
-
-	autoSave()
-	return &m
-}
-
-// InspectTreeSitterMapping retrieves AST node mapping for a target language.
-func InspectTreeSitterMapping(target string) (*TreeSitterMapping, error) {
-	tsMutex.RLock()
-	defer tsMutex.RUnlock()
-
-	norm := strings.ToLower(strings.TrimSpace(target))
-	m, ok := tsMappings[norm]
-	if !ok {
-		return nil, fmt.Errorf("XQL_E404: tree-sitter mapping for target '%s' not found", target)
-	}
-	cp := *m
-	return &cp, nil
-}
-
-// ---------------------------------------------------------------------------
-// 3. Security & Capability Policy (环境权限策略演进引擎)
+// 2. Security & Capability Policy (环境权限策略演进引擎)
 // ---------------------------------------------------------------------------
 
 // SecurityPolicyConfig defines dynamic capability grant rules and sandbox bounds.
@@ -236,56 +178,7 @@ func UpdateSecurityPolicy(policy SecurityPolicyConfig) SecurityPolicyConfig {
 }
 
 // ---------------------------------------------------------------------------
-// 4. Stdlib API Change Matrix (标准库 API 变动矩阵)
-// ---------------------------------------------------------------------------
-
-// StdlibAPIMatrix holds deprecated and new recommended API mappings per language version.
-type StdlibAPIMatrix struct {
-	Target          string            `json:"target"`           // e.g. "py", "go"
-	DeprecatedAPIs  map[string]string `json:"deprecated_apis"`  // old_api -> reason/new_api
-	RecommendedAPIs map[string]string `json:"recommended_apis"` // feature -> new_api
-	LastUpdated     string            `json:"last_updated"`
-}
-
-var (
-	matrixMutex sync.RWMutex
-	matrices    = map[string]*StdlibAPIMatrix{}
-)
-
-// UpdateStdlibMatrix updates standard library API evolution matrix.
-func UpdateStdlibMatrix(m StdlibAPIMatrix) *StdlibAPIMatrix {
-	matrixMutex.Lock()
-	defer matrixMutex.Unlock()
-
-	norm := strings.ToLower(strings.TrimSpace(m.Target))
-	m.Target = norm
-	m.LastUpdated = time.Now().Format("2006-01-02 15:04:05")
-	matrices[norm] = &m
-	return &m
-}
-
-// InspectStdlibMatrix gets standard library API evolution matrix for target language.
-func InspectStdlibMatrix(target string) (*StdlibAPIMatrix, error) {
-	matrixMutex.RLock()
-	defer matrixMutex.RUnlock()
-
-	norm := strings.ToLower(strings.TrimSpace(target))
-	m, ok := matrices[norm]
-	if !ok {
-		// Return empty default matrix
-		return &StdlibAPIMatrix{
-			Target:          norm,
-			DeprecatedAPIs:  map[string]string{},
-			RecommendedAPIs: map[string]string{},
-			LastUpdated:     time.Now().Format("2006-01-02"),
-		}, nil
-	}
-	cp := *m
-	return &cp, nil
-}
-
-// ---------------------------------------------------------------------------
-// 5. Codegen Optimization Strategy (Codegen 性能策略反馈引擎)
+// 3. Codegen Optimization Strategy (Codegen 性能策略反馈引擎)
 // ---------------------------------------------------------------------------
 
 // CodegenStrategyConfig holds performance tuned options for code generators.
@@ -314,11 +207,6 @@ func SaveEvolutionState(dirPath string) error {
 	dData, _ := json.MarshalIndent(diagFixes, "", "  ")
 	diagMutex.RUnlock()
 	_ = os.WriteFile(filepath.Join(dirPath, "diagnostic_memory.json"), dData, 0644)
-
-	tsMutex.RLock()
-	tData, _ := json.MarshalIndent(tsMappings, "", "  ")
-	tsMutex.RUnlock()
-	_ = os.WriteFile(filepath.Join(dirPath, "treesitter_mappings.json"), tData, 0644)
 
 	secMutex.RLock()
 	sData, _ := json.MarshalIndent(currentPolicy, "", "  ")
@@ -349,28 +237,21 @@ func LoadEvolutionState(dirPath string) error {
 		diagMutex.Unlock()
 	}
 
-	// 2. Tree-sitter mappings
-	if data, err := os.ReadFile(filepath.Join(dirPath, "treesitter_mappings.json")); err == nil {
-		tsMutex.Lock()
-		_ = json.Unmarshal(data, &tsMappings)
-		tsMutex.Unlock()
-	}
-
-	// 3. Security policy
+	// 2. Security policy
 	if data, err := os.ReadFile(filepath.Join(dirPath, "security_policy.json")); err == nil {
 		secMutex.Lock()
 		_ = json.Unmarshal(data, currentPolicy)
 		secMutex.Unlock()
 	}
 
-	// 4. Dynamic skills
+	// 3. Dynamic skills
 	if data, err := os.ReadFile(filepath.Join(dirPath, "skills.json")); err == nil {
 		skillMutex.Lock()
 		_ = json.Unmarshal(data, &dynamicSkills)
 		skillMutex.Unlock()
 	}
 
-	// 5. Codegen strategies
+	// 4. Codegen strategies
 	_ = codegen.LoadStrategiesFromFile(filepath.Join(dirPath, "codegen_strategies.json"))
 
 	return nil

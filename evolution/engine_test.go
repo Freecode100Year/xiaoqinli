@@ -22,30 +22,7 @@ func TestFullSelfEvolutionEngine(t *testing.T) {
 		t.Errorf("unexpected suggested fix: %s", fixes[0].SuggestedFix)
 	}
 
-	// 2. Test Tree-sitter WASM Mapping
-	tsMap := UpdateTreeSitterMapping(TreeSitterMapping{
-		Language: "Mojo",
-		Target:   "mojo",
-		NodeMappings: map[string]string{
-			"function_definition": "FunctionDecl",
-		},
-		KeywordMapping: map[string]string{
-			"fn": "function",
-		},
-	})
-	if tsMap.Target != "mojo" {
-		t.Errorf("expected target mojo, got %s", tsMap.Target)
-	}
-
-	inspectedMap, err := InspectTreeSitterMapping("mojo")
-	if err != nil {
-		t.Fatalf("InspectTreeSitterMapping error: %v", err)
-	}
-	if inspectedMap.Language != "Mojo" {
-		t.Errorf("expected Mojo, got %s", inspectedMap.Language)
-	}
-
-	// 3. Test Security Policy
+	// 2. Test Security Policy
 	pol := UpdateSecurityPolicy(SecurityPolicyConfig{
 		Environment:     "wasm_sandbox",
 		AllowedGrants:   []string{"io"},
@@ -60,28 +37,7 @@ func TestFullSelfEvolutionEngine(t *testing.T) {
 		t.Errorf("expected environment wasm_sandbox, got %s", curPol.Environment)
 	}
 
-	// 4. Test Stdlib Matrix
-	mat := UpdateStdlibMatrix(StdlibAPIMatrix{
-		Target: "py",
-		DeprecatedAPIs: map[string]string{
-			"asyncio.get_event_loop": "Use asyncio.new_event_loop() in 3.12+",
-		},
-		RecommendedAPIs: map[string]string{
-			"union_type": "PEP 604 T | None",
-		},
-	})
-	if mat.Target != "py" {
-		t.Errorf("expected target py, got %s", mat.Target)
-	}
-	inspectedMat, err := InspectStdlibMatrix("py")
-	if err != nil {
-		t.Fatalf("InspectStdlibMatrix error: %v", err)
-	}
-	if _, ok := inspectedMat.DeprecatedAPIs["asyncio.get_event_loop"]; !ok {
-		t.Errorf("expected deprecated API entry for asyncio.get_event_loop")
-	}
-
-	// 5. Test Codegen Strategy
+	// 3. Test Codegen Strategy
 	strat := UpdateCodegenStrategy(CodegenStrategyConfig{
 		Target:              "py",
 		PreferComprehension: true,
