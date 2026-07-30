@@ -6,16 +6,19 @@
 
 ---
 
-## 📢 最新更新 (2026-07-29 - v3.37.0 物理验证契约全量对齐与基线重构)
+## 📢 最新更新 (2026-07-29 - v3.37.0 物理验证契约重构与 Lua 多文件 Module 生成 Bug 修复)
 
-### 🔬 物理验证红线准则重构 & 跨文件契约全量无矛盾对齐
+### 🐛 物理验证闭环 & Lua 多文件 Module/Require 重构修复
+- **Lua 跨文件 Module & Require 彻底修复 (`lua.go`)**：
+  - 针对多文件场景（如 `e2e_workspace`），修复 `GenerateLua` 在无 `main` 函数的模块文件中未导出模块表的问题。现在自动生成 `local M = {}`，导出方法 `function M.funcName(...)`，并在文件末尾输出 `return M`。
+  - 重构 `emitImportDecl`，为 `import "./service.xql" as service` 生成标准的 `local service = require("service")` 语法绑定。
+  - 内置极简 `Result` 辅助结构体（闭包安全支持 `res.unwrap()` / `res.isOk`），解决真实环境 `lua5.4` 执行时 `nil (global 'service')` 的物理崩溃。
+  - 新增 `TestLuaWorkspaceDogfoodCodegen` 静态拓扑断言与本地测试校验。
 - **物理验证契约重构 (`Loop_Contracts.md`)**：
   - 彻底修正物理验证红线准则第 1 条，移除已废弃的 Docker E2E 隔离及 `//go:build docker_e2e` 描述，替换为统一基于 `codegen/local_e2e_test.go` (`TestLocalE2EWorkspaceDogfood`) 的本地物理编译运行断言守则。
-  - 统一 11 门非主力后端语言的物理验证契约描述为 **“AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)”**，彻底解决原 Docker 历史描述下前 6 门与后 5 门双标割裂问题。
+  - 统一 11 门非主力后端语言的物理验证契约描述为 **“AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)”**。
 - **Profiles 元数据完备跨文件对齐 (`profile.go`)**：
-  - 将 11 门非主力语言的 `CodegenOptions` 统一配置为 `"verification_status": "local_e2e_validated"`，保持代码元数据与工程契约 100% 诚实无矛盾。
-- **全量物理闭环验证**：
-  - `go test ./...` 100% 通过（`xiaoqinli/codegen` 包含 11 门语言本地物理编译运行断言），`xql.exe` 已同步部署至 `C:\Users\sj929\go\bin\xql.exe`。
+  - 将 11 门非主力语言的 `CodegenOptions` 统一配置为 `"verification_status": "local_e2e_validated"`。
 
 ---
 

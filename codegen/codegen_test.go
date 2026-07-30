@@ -1,6 +1,8 @@
 package codegen
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -2369,5 +2371,53 @@ func TestGenerateTCCLI(t *testing.T) {
 	}
 	if !strings.Contains(code, "tccli") {
 		t.Errorf("expected tccli command check in script")
+	}
+}
+
+func TestLuaWorkspaceDogfoodCodegen(t *testing.T) {
+	servicePath := filepath.Join("..", "examples", "e2e_workspace", "service.xql")
+	mainPath := filepath.Join("..", "examples", "e2e_workspace", "main.xql")
+
+	serviceSrc, err := os.ReadFile(servicePath)
+	if err != nil {
+		t.Fatalf("failed to read service.xql: %v", err)
+	}
+	mainSrc, err := os.ReadFile(mainPath)
+	if err != nil {
+		t.Fatalf("failed to read main.xql: %v", err)
+	}
+
+	serviceNode, err := ast.Parse(serviceSrc)
+	if err != nil {
+		t.Fatalf("parse service.xql failed: %v", err)
+	}
+	mainNode, err := ast.Parse(mainSrc)
+	if err != nil {
+		t.Fatalf("parse main.xql failed: %v", err)
+	}
+
+	serviceLua, err := GenerateLua(serviceNode)
+	if err != nil {
+		t.Fatalf("GenerateLua service.xql failed: %v", err)
+	}
+	mainLua, err := GenerateLua(mainNode)
+	if err != nil {
+		t.Fatalf("GenerateLua main.xql failed: %v", err)
+	}
+
+	svcCode := string(serviceLua)
+	if !strings.Contains(svcCode, "local M = {}") || !strings.Contains(svcCode, "return M") {
+		t.Errorf("Lua module service.lua must export table M, got:\n%s", svcCode)
+	}
+	if !strings.Contains(svcCode, "function M.fetchUsers") {
+		t.Errorf("Lua module service.lua must contain function M.fetchUsers, got:\n%s", svcCode)
+	}
+
+	mainCode := string(mainLua)
+	if !strings.Contains(mainCode, `local service = require("service")`) {
+		t.Errorf("Lua main.lua must contain require for service, got:\n%s", mainCode)
+	}
+	if !strings.Contains(mainCode, `service.fetchUsers`) {
+		t.Errorf("Lua main.lua must call service.fetchUsers, got:\n%s", mainCode)
 	}
 }

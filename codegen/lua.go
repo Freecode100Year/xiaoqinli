@@ -2,13 +2,15 @@ package codegen
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"xiaoqinli/ast"
 )
 
 // GenerateLua produces Lua source code from the given typed AST.
-// The "main" function's body is emitted at top level.
+// If the program contains a "main" function, its body is emitted at top level.
+// If the program is a module (no "main" function), declarations are exported via a module table 'M'.
 func GenerateLua(root ast.Node) ([]byte, error) {
 	g := &luaGen{buf: &strings.Builder{}}
 
@@ -17,51 +19,82 @@ func GenerateLua(root ast.Node) ([]byte, error) {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
+	hasMain := false
+	for _, d := range prog.Decls {
+		if fd, ok := d.(*ast.FunctionDecl); ok && fd.Name == "main" {
+			hasMain = true
+			break
+		}
+	}
+
+	// Helper for Result type
+	g.writeln("local Result = {")
+	g.writeln("    ok = function(v) return { isOk = true, val = v, unwrap = function() return v end } end,")
+	g.writeln("    err = function(e) return { isOk = false, errVal = e, unwrapErr = function() return e end } end")
+	g.writeln("}")
+	g.writeln("")
+
+	// Emit import declarations
+	for _, d := range prog.Decls {
+		if id, ok := d.(*ast.ImportDecl); ok {
+			if err := g.emitImportDecl(id); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if !hasMain {
+		g.writeln("local M = {}")
+		g.writeln("")
+	}
+
 	first := true
-	// Emit enum declarations first.
+	// Emit enum declarations.
 	for _, d := range prog.Decls {
 		if ed, ok := d.(*ast.EnumDecl); ok {
 			if !first {
 				g.writeln("")
 			}
-			if err := g.emitEnumDecl(ed); err != nil {
+			if err := g.emitEnumDecl(ed, !hasMain); err != nil {
 				return nil, err
 			}
 			first = false
 		}
 	}
 
-	for _, d := range prog.Decls {
-		switch node := d.(type) {
-		case *ast.FunctionDecl:
-			if node.Name == "main" {
-				continue
-			}
-			if !first {
-				g.writeln("")
-			}
-			if err := g.emitFunctionDecl(node); err != nil {
-				return nil, err
-			}
-			first = false
-		case *ast.StructDecl:
-			// Lua uses tables; no struct declaration needed.
-		}
-	}
-
+	// Emit function declarations (non-main).
 	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
-		if !ok || fd.Name != "main" {
+		if !ok || fd.Name == "main" {
 			continue
 		}
 		if !first {
 			g.writeln("")
 		}
-		for _, stmt := range fd.Body {
-			if err := g.emitNode(stmt); err != nil {
-				return nil, err
+		if err := g.emitFunctionDecl(fd, !hasMain); err != nil {
+			return nil, err
+		}
+		first = false
+	}
+
+	if hasMain {
+		for _, d := range prog.Decls {
+			fd, ok := d.(*ast.FunctionDecl)
+			if !ok || fd.Name != "main" {
+				continue
+			}
+			if !first {
+				g.writeln("")
+			}
+			for _, stmt := range fd.Body {
+				if err := g.emitNode(stmt); err != nil {
+					return nil, err
+				}
 			}
 		}
+	} else {
+		g.writeln("")
+		g.writeln("return M")
 	}
 
 	return []byte(g.buf.String()), nil
@@ -85,7 +118,7 @@ func (g *luaGen) emitNode(n ast.Node) error {
 	case *ast.ImportDecl:
 		return g.emitImportDecl(node)
 	case *ast.FunctionDecl:
-		return g.emitFunctionDecl(node)
+		return g.emitFunctionDecl(node, false)
 	case *ast.ReturnStmt:
 		return g.emitReturn(node)
 	case *ast.VarDecl:
@@ -109,7 +142,7 @@ func (g *luaGen) emitNode(n ast.Node) error {
 	case *ast.StructDecl:
 		return nil // Lua uses tables; no struct declaration needed.
 	case *ast.EnumDecl:
-		return g.emitEnumDecl(node)
+		return g.emitEnumDecl(node, false)
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
 	default:
@@ -123,13 +156,26 @@ func (g *luaGen) emitImportDecl(id *ast.ImportDecl) error {
 	if strings.HasSuffix(path, ".xql") {
 		path = path[:len(path)-4]
 	}
-	g.writeln(fmt.Sprintf("require(%q)", path))
+	if strings.HasPrefix(path, "./") {
+		path = path[2:]
+	}
+	if strings.HasPrefix(path, ".\\") {
+		path = path[2:]
+	}
+	alias := id.As
+	if alias == "" {
+		alias = filepath.Base(path)
+	}
+	g.writeln(fmt.Sprintf("local %s = require(%q)", alias, path))
 	return nil
 }
 
-func (g *luaGen) emitEnumDecl(ed *ast.EnumDecl) error {
+func (g *luaGen) emitEnumDecl(ed *ast.EnumDecl, isModule bool) error {
 	for i, v := range ed.Variants {
 		g.writeIndent()
+		if isModule {
+			g.writeln(fmt.Sprintf("M.%s = %d", v, i))
+		}
 		g.writeln(fmt.Sprintf("%s = %d", v, i))
 	}
 	return nil
@@ -170,9 +216,14 @@ func (g *luaGen) emitMatchExpr(me *ast.MatchExpr) error {
 	return nil
 }
 
-func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl, isModule bool) error {
 	g.writeIndent()
-	g.write("function " + fd.Name + "(")
+	funcName := fd.Name
+	if isModule {
+		g.write("function M." + funcName + "(")
+	} else {
+		g.write("function " + funcName + "(")
+	}
 	for i, p := range fd.Params {
 		if i > 0 {
 			g.write(", ")
@@ -189,6 +240,10 @@ func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.indent--
 	g.writeIndent()
 	g.writeln("end")
+	if isModule {
+		g.writeIndent()
+		g.writeln(fmt.Sprintf("%s = M.%s", funcName, funcName))
+	}
 	return nil
 }
 
