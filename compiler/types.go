@@ -11,6 +11,9 @@ type CodegenStrategyConfig = evolution.CodegenStrategyConfig
 // StdlibAPIMatrix alias for evolution.StdlibAPIMatrix
 type StdlibAPIMatrix = evolution.StdlibAPIMatrix
 
+// TreeSitterMapping alias for evolution.TreeSitterMapping
+type TreeSitterMapping = evolution.TreeSitterMapping
+
 // CompileRequest describes what to compile and how.
 type CompileRequest struct {
 	// AST is the parsed root node (required).

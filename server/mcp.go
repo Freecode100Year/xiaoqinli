@@ -284,6 +284,48 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 			},
 		},
 		{
+			"name":        "treesitter_mapping_inspect",
+			"description": "Retrieve AST node and keyword mapping for a target language Tree-sitter WASM grammar.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"target": map[string]string{
+						"type":        "string",
+						"description": "Target language identifier (e.g. mojo, gleam)",
+					},
+				},
+				"required": []string{"target"},
+			},
+		},
+		{
+			"name":        "treesitter_mapping_update",
+			"description": "Register or update a Tree-sitter WASM grammar mapping for AST node synthesis locally.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"language": map[string]string{
+						"type":        "string",
+						"description": "Language name (e.g. Mojo, Gleam)",
+					},
+					"target": map[string]string{
+						"type":        "string",
+						"description": "Target language identifier (e.g. mojo, gleam)",
+					},
+					"node_mappings": map[string]interface{}{
+						"type":                 "object",
+						"description":          "Tree-sitter AST node to xql AST node mapping",
+						"additionalProperties": map[string]string{"type": "string"},
+					},
+					"keyword_mapping": map[string]interface{}{
+						"type":                 "object",
+						"description":          "Grammar keyword mapping",
+						"additionalProperties": map[string]string{"type": "string"},
+					},
+				},
+				"required": []string{"language", "target"},
+			},
+		},
+		{
 			"name":        "specs_inspect",
 			"description": "Retrieve modern language specification profile & latest version features for any target language (e.g. py, go, ts, rust) before code generation.",
 			"inputSchema": map[string]interface{}{
@@ -501,6 +543,10 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 		return s.toolStdlibMatrixInspect(req.ID, args.Target)
 	case "stdlib_matrix_update":
 		return s.toolStdlibMatrixUpdate(req.ID, params.Arguments)
+	case "treesitter_mapping_inspect":
+		return s.toolTreeSitterMappingInspect(req.ID, args.Target)
+	case "treesitter_mapping_update":
+		return s.toolTreeSitterMappingUpdate(req.ID, params.Arguments)
 	case "specs_inspect":
 		return s.toolSpecsInspect(req.ID, args.Target)
 	case "specs_update":
@@ -664,6 +710,62 @@ func (s *MCPServer) toolStdlibMatrixUpdate(id interface{}, rawArgs json.RawMessa
 		Result: map[string]interface{}{
 			"content": []map[string]string{
 				{"type": "text", "text": fmt.Sprintf("Successfully updated stdlib matrix:\n%s", string(b))},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolTreeSitterMappingInspect(id interface{}, target string) jsonRPCResponse {
+	m, err := compiler.InspectTreeSitterMapping(target)
+	if err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: err.Error()},
+		}
+	}
+	b, _ := json.MarshalIndent(m, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": string(b)},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolTreeSitterMappingUpdate(id interface{}, rawArgs json.RawMessage) jsonRPCResponse {
+	var input struct {
+		Language       string            `json:"language"`
+		Target         string            `json:"target"`
+		NodeMappings   map[string]string `json:"node_mappings"`
+		KeywordMapping map[string]string `json:"keyword_mapping"`
+	}
+	if err := json.Unmarshal(rawArgs, &input); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: "invalid treesitter_mapping_update parameters"},
+		}
+	}
+
+	m := evolution.TreeSitterMapping{
+		Language:       input.Language,
+		Target:         input.Target,
+		NodeMappings:   input.NodeMappings,
+		KeywordMapping: input.KeywordMapping,
+	}
+	updated := compiler.UpdateTreeSitterMapping(m)
+
+	b, _ := json.MarshalIndent(updated, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": fmt.Sprintf("Successfully updated tree-sitter mapping:\n%s", string(b))},
 			},
 		},
 	}

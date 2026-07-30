@@ -22,7 +22,30 @@ func TestFullSelfEvolutionEngine(t *testing.T) {
 		t.Errorf("unexpected suggested fix: %s", fixes[0].SuggestedFix)
 	}
 
-	// 2. Test Security Policy
+	// 2. Test Tree-sitter WASM Mapping
+	tsMap := UpdateTreeSitterMapping(TreeSitterMapping{
+		Language: "Mojo",
+		Target:   "mojo",
+		NodeMappings: map[string]string{
+			"function_definition": "FunctionDecl",
+		},
+		KeywordMapping: map[string]string{
+			"fn": "function",
+		},
+	})
+	if tsMap.Target != "mojo" {
+		t.Errorf("expected target mojo, got %s", tsMap.Target)
+	}
+
+	inspectedMap, err := InspectTreeSitterMapping("mojo")
+	if err != nil {
+		t.Fatalf("InspectTreeSitterMapping error: %v", err)
+	}
+	if inspectedMap.Language != "Mojo" {
+		t.Errorf("expected Mojo, got %s", inspectedMap.Language)
+	}
+
+	// 3. Test Security Policy
 	pol := UpdateSecurityPolicy(SecurityPolicyConfig{
 		Environment:     "wasm_sandbox",
 		AllowedGrants:   []string{"io"},

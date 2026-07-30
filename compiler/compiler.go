@@ -539,6 +539,17 @@ func UpdateSecurityPolicy(policy evolution.SecurityPolicyConfig) evolution.Secur
 	return evolution.UpdateSecurityPolicy(policy)
 }
 
+// TreeSitter Mapping Wrappers
+func InspectTreeSitterMapping(target string) (*evolution.TreeSitterMapping, error) {
+	return evolution.InspectTreeSitterMapping(target)
+}
+
+func UpdateTreeSitterMapping(m evolution.TreeSitterMapping) *evolution.TreeSitterMapping {
+	res := evolution.UpdateTreeSitterMapping(m)
+	_ = SaveLocalState(DefaultStateDir)
+	return res
+}
+
 // Stdlib Matrix Wrappers
 func InspectStdlibMatrix(target string) (*evolution.StdlibAPIMatrix, error) {
 	return evolution.InspectStdlibMatrix(target)
