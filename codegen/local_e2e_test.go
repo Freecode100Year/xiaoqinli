@@ -240,6 +240,15 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 				"main.xql": "app/src/main/java/com/xql/app/MainActivity.kt",
 			},
 		},
+		{
+			name:     "iOS",
+			target:   "ios",
+			checkCmd: "swift",
+			runCmd:   "swift build",
+			files: map[string]string{
+				"main.xql": "Sources/XqlApp/main.swift",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -293,6 +302,15 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 					out, err = GenerateLua(node)
 				case "android":
 					proj, pErr := GenerateAndroidProject(node)
+					err = pErr
+					if proj != nil {
+						for fName, fBytes := range proj.Files {
+							filesMap[fName] = fBytes
+						}
+						out = proj.MainCode
+					}
+				case "ios":
+					proj, pErr := GenerateIOSProject(node)
 					err = pErr
 					if proj != nil {
 						for fName, fBytes := range proj.Files {

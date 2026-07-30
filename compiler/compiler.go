@@ -76,6 +76,7 @@ var allTargetInfos = []TargetInfo{
 	{Flag: "chrome", Ext: ".crx.json", Name: "Chrome Extension"},
 	{Flag: "tccli", Ext: ".sh", Name: "Tencent Cloud CLI"},
 	{Flag: "android", Ext: ".kt", Name: "Android (Gradle APK Project)"},
+	{Flag: "ios", Ext: ".swift", Name: "iOS (Swift Package Manager Project)"},
 }
 
 // GetVersion returns the compiler library version.

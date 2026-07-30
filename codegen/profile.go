@@ -137,6 +137,14 @@ func resetDefaultProfiles() {
 			LastUpdated:    now,
 		},
 		{
+			Target:         "ios",
+			Language:       "iOS (Swift Package Manager)",
+			LatestVersion:  "Swift 5.8+ / iOS 14.0+",
+			ModernFeatures: []string{"Complete Swift Package Manager project scaffolding", "SwiftUI & Foundation container", "Xcode & swift build compatibility"},
+			CodegenOptions: map[string]string{"swift_version": "5.8", "spm": "true"},
+			LastUpdated:    now,
+		},
+		{
 			Target:         "deepseek",
 			Language:       "DeepSeek Coder / V3",
 			LatestVersion:  "V3 / Coder",

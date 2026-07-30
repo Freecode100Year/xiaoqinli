@@ -6,6 +6,19 @@
 
 ---
 
+## 📢 最新更新 (2026-07-29 - v3.40.0 iOS (Swift Package Manager) 脚手架 & CLI 多文件树视效全量接入)
+
+### 🍎 iOS (Swift Package Manager) 移动端 & CLI 拓扑层
+- **iOS / Swift Package Manager 源码工程脚手架 (`codegen/ios.go`)**：
+  - 全量接入 `ios` / `swift-pkg` 目标生成器，打通移动端双向对齐（Android + iOS）。
+  - 直接吐出符合 Apple / SPM 规范的工程源码树：`Package.swift`, `Sources/XqlApp/main.swift`, `Sources/XqlApp/App.swift` 及 `README.md`。可直接在命令行 `swift build` 或双击用 Xcode 物理打开运行打包。
+- **CLI (`xql`) 多文件工程拓扑树渲染 (`main.go`)**：
+  - 增强 `xql compile --target android/ios` 命令行反馈层：自动在 stderr / 控制台优雅渲染 `├──` 拓扑树，方便用户与 AI Agent 直观预览生成的多文件全量拓扑。
+- **物理验证契约矩阵扩充 (`local_e2e_test.go` & `Loop_Contracts.md`)**：
+  - 将 `iOS` 写入非主力物理验证契约矩阵第 13 位，全量 `go test ./...` 100% PASS。
+
+---
+
 ## 📢 最新更新 (2026-07-29 - v3.39.0 StrictCapabilities 扶正默认 & Ruby Codegen 策略反馈扩展)
 
 ### 🛡️ 核心能力安全防线与 Codegen 策略多语言拓展

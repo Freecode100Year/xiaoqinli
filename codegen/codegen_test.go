@@ -2479,3 +2479,33 @@ func TestRubyCodegenStrategyInspection(t *testing.T) {
 		t.Errorf("expected Ruby codegen to emit strategy header, got:\n%s", code)
 	}
 }
+
+func TestGenerateIOSProject(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	proj, err := GenerateProject(root, "ios")
+	if err != nil {
+		t.Fatalf("GenerateProject ios error: %v", err)
+	}
+	if proj == nil || len(proj.Files) == 0 {
+		t.Fatalf("expected multi-file iOS project output, got nil or empty")
+	}
+
+	requiredFiles := []string{
+		"Package.swift",
+		"Sources/XqlApp/main.swift",
+		"Sources/XqlApp/App.swift",
+		"README.md",
+	}
+
+	for _, file := range requiredFiles {
+		content, ok := proj.Files[file]
+		if !ok || len(content) == 0 {
+			t.Errorf("missing or empty file in iOS project: %s", file)
+		}
+	}
+
+	mainSwift := string(proj.Files["Sources/XqlApp/main.swift"])
+	if !strings.Contains(mainSwift, "print(result)") {
+		t.Errorf("main.swift should contain top-level execution code, got:\n%s", mainSwift)
+	}
+}

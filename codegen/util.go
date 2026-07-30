@@ -17,6 +17,9 @@ func GenerateProject(root ast.Node, target string) (*ProjectOutput, error) {
 	if target == "android" || target == "apk" {
 		return GenerateAndroidProject(root)
 	}
+	if target == "ios" || target == "swift-pkg" {
+		return GenerateIOSProject(root)
+	}
 	code, err := Generate(root, target)
 	if err != nil {
 		return nil, err
@@ -35,6 +38,12 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return nil, err
 	}
 	switch target {
+	case "ios", "swift-pkg":
+		proj, err := GenerateIOSProject(root)
+		if err != nil {
+			return nil, err
+		}
+		return proj.MainCode, nil
 	case "android", "apk":
 		proj, err := GenerateAndroidProject(root)
 		if err != nil {

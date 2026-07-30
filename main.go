@@ -126,7 +126,7 @@ func cmdCompile(args []string) {
 		os.Exit(2)
 	}
 
-	outputCompileResult(outPath, target, result.Code)
+	outputCompileResult(outPath, target, result)
 }
 
 func handleCompileError(result compiler.CompileResult) {
@@ -137,7 +137,24 @@ func handleCompileError(result compiler.CompileResult) {
 	}
 }
 
-func outputCompileResult(outPath, target string, code []byte) {
+func outputCompileResult(outPath, target string, result compiler.CompileResult) {
+	if len(result.Files) > 0 {
+		if outPath != "" {
+			fmt.Fprintf(os.Stderr, "ok: compiled multi-file %s project (%d files) to %s/\n", target, len(result.Files), outPath)
+			for relPath := range result.Files {
+				fmt.Fprintf(os.Stderr, "    ├── %s\n", relPath)
+			}
+		} else {
+			fmt.Fprintf(os.Stderr, "ok: generated multi-file %s project (%d files):\n", target, len(result.Files))
+			for relPath := range result.Files {
+				fmt.Fprintf(os.Stderr, "    ├── %s\n", relPath)
+			}
+			fmt.Fprintln(os.Stderr, "=== Main Entry Source Code ===")
+			fmt.Print(string(result.Code))
+		}
+		return
+	}
+
 	if outPath != "" {
 		if target == "chrome" {
 			fmt.Fprintf(os.Stderr, "ok: Chrome extension unpacked to %s/\n", outPath)
@@ -146,7 +163,7 @@ func outputCompileResult(outPath, target string, code []byte) {
 			fmt.Fprintf(os.Stderr, "ok: compiled to %s\n", outPath)
 		}
 	} else {
-		fmt.Print(string(code))
+		fmt.Print(string(result.Code))
 	}
 }
 
