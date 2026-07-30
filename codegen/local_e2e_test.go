@@ -234,8 +234,8 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 		{
 			name:     "Android",
 			target:   "android",
-			checkCmd: "gradlew",
-			runCmd:   "gradlew assembleDebug",
+			checkCmd: "gradle",
+			runCmd:   "gradle assembleDebug",
 			files: map[string]string{
 				"main.xql": "app/src/main/java/com/xql/app/MainActivity.kt",
 			},

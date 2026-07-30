@@ -16,7 +16,7 @@ func GenerateIOSProject(root ast.Node) (*ProjectOutput, error) {
 	readme := getIOSReadmeCode()
 
 	files := map[string][]byte{
-		"Package.swift":            []byte(pkgSwift),
+		"Package.swift":             []byte(pkgSwift),
 		"Sources/XqlApp/main.swift": swiftCode,
 		"Sources/XqlApp/App.swift":  []byte(appSwift),
 		"README.md":                 []byte(readme),

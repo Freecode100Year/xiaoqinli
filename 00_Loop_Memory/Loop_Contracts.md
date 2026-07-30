@@ -24,7 +24,7 @@
 | **PHP** | 9 | `php main.php` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
 | **Ruby** | 10 | `ruby main.rb` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
 | **Lua** | 11 | `lua main.lua` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
-| **Android** | 12 | `gradlew assembleDebug` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
+| **Android** | 12 | `gradle assembleDebug` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
 | **iOS** | 13 | `swift build` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
 
 ### 2. 物理验证红线准则

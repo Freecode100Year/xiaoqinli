@@ -324,6 +324,27 @@ func (g *rbGen) emitWhile(ws *ast.WhileStmt) error {
 
 func (g *rbGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
+	if fs.Form == "each" && g.strat != nil && g.strat.PreferComprehension && len(fs.Body) == 1 {
+		if es, ok := fs.Body[0].(*ast.ExprStmt); ok {
+			if call, ok := es.Expr.(*ast.CallExpr); ok && (call.Callee == "push" || strings.HasSuffix(call.Callee, ".push") || strings.HasSuffix(call.Callee, ".concat")) {
+				parts := strings.Split(call.Callee, ".")
+				if len(parts) == 2 && len(call.Args) == 1 {
+					targetVar := parts[0]
+					g.write(targetVar + " += ")
+					if err := g.emitExpr(fs.Iterable); err != nil {
+						return err
+					}
+					g.write(".map { |" + fs.Var + "| ")
+					if err := g.emitExpr(call.Args[0]); err != nil {
+						return err
+					}
+					g.writeln(" }")
+					return nil
+				}
+			}
+		}
+	}
+
 	switch fs.Form {
 	case "range":
 		g.write("(")

@@ -2478,6 +2478,56 @@ func TestRubyCodegenStrategyInspection(t *testing.T) {
 	if !strings.Contains(code, "# Codegen Strategy: RubyComprehensionMode") {
 		t.Errorf("expected Ruby codegen to emit strategy header, got:\n%s", code)
 	}
+
+	// Test comprehension loop branch
+	loopProg := `{
+		"kind": "Program",
+		"declarations": [
+			{
+				"kind": "FunctionDecl",
+				"name": "main",
+				"params": [],
+				"returnType": {"kind": "Void"},
+				"body": [
+					{
+						"kind": "VarDecl",
+						"name": "res",
+						"value": {"kind": "ArrayLit", "elements": []}
+					},
+					{
+						"kind": "ForStmt",
+						"form": "each",
+						"var": "x",
+						"iterable": {"kind": "Ident", "name": "items"},
+						"body": [
+							{
+								"kind": "ExprStmt",
+								"expr": {
+									"kind": "CallExpr",
+									"callee": "res.push",
+									"args": [{"kind": "Ident", "name": "x"}]
+								}
+							}
+						]
+					}
+				]
+			}
+		]
+	}`
+
+	loopNode := mustParse(t, loopProg)
+	compOut, _ := GenerateRuby(loopNode)
+	compCode := string(compOut)
+	if !strings.Contains(compCode, "res += items.map { |x| x }") {
+		t.Errorf("expected Ruby comprehension .map output when PreferComprehension=true, got:\n%s", compCode)
+	}
+
+	_ = UpdateCodegenStrategy(CodegenStrategyConfig{Target: "ruby", PreferComprehension: false})
+	stdOut, _ := GenerateRuby(loopNode)
+	stdCode := string(stdOut)
+	if !strings.Contains(stdCode, "items.each do |x|") {
+		t.Errorf("expected Ruby standard .each output when PreferComprehension=false, got:\n%s", stdCode)
+	}
 }
 
 func TestGenerateIOSProject(t *testing.T) {

@@ -6,6 +6,20 @@
 
 ---
 
+## 📢 最新更新 (2026-07-29 - v3.40.1 物理实测反馈全量打磨 & 4 大问题彻底修复)
+
+### 🔨 物理实测反馈锤炼 & 精细化 Bug 修复
+- **Android 字符串字面量引号格式化修复 (`codegen/android.go`)**：
+  - 修复 `emitExpr` 在生成 `String` 字面量时漏双引号的真实 Bug，现在精确输出带双引号的字符串（如 `println("hello")`），避免在真实 Kotlin 编译器中被误识别为未定义变量而报错。
+- **Android 物理验证契约检测修正 (`local_e2e_test.go` & `Loop_Contracts.md`)**：
+  - 将 `local_e2e_test.go` 与 `Loop_Contracts.md` 中的 `checkCmd` 从脚本路径 `gradlew` 统一修正为真正的系统全局命令 `gradle`（`gradle assembleDebug`），消除了因 `exec.LookPath("gradlew")` 永远失败而导致契约被无条件 Skip 的缺陷。
+- **Ruby Codegen 真正自适应 Iterator 逻辑分支 (`codegen/ruby.go`)**：
+  - 在 `ruby.go` 的 `emitForStmt` 中补全真正根据 `PreferComprehension` 标志切换的分支逻辑：为 `true` 时输出 `iterable.map { |x| ... }` 映射 Iterator；为 `false` 时输出标准 `.each do |x|` 循环，并在 `codegen_test.go` 中增加了双向分支断言。
+- **代码规范重塑 (`gofmt -w`)**：
+  - 全量执行 `go fmt ./...`，自动清洗格式化 `codegen/android.go` 与 `codegen/ios.go`，保持 100% 干净标准的代码范式。
+
+---
+
 ## 📢 最新更新 (2026-07-29 - v3.40.0 iOS (Swift Package Manager) 脚手架 & CLI 多文件树视效全量接入)
 
 ### 🍎 iOS (Swift Package Manager) 移动端 & CLI 拓扑层

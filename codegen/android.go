@@ -15,12 +15,12 @@ func GenerateAndroidProject(root ast.Node) (*ProjectOutput, error) {
 	}
 
 	files := map[string][]byte{
-		"build.gradle":                            []byte(getAndroidRootBuildGradle()),
-		"settings.gradle":                         []byte(getAndroidSettingsGradle()),
-		"app/build.gradle":                        []byte(getAndroidAppBuildGradle()),
-		"app/src/main/AndroidManifest.xml":        []byte(getAndroidManifest()),
-		"app/src/main/res/layout/activity_main.xml": []byte(getAndroidLayoutXml()),
-		"app/src/main/res/values/strings.xml":      []byte(getAndroidStringsXml()),
+		"build.gradle":                                  []byte(getAndroidRootBuildGradle()),
+		"settings.gradle":                               []byte(getAndroidSettingsGradle()),
+		"app/build.gradle":                              []byte(getAndroidAppBuildGradle()),
+		"app/src/main/AndroidManifest.xml":              []byte(getAndroidManifest()),
+		"app/src/main/res/layout/activity_main.xml":     []byte(getAndroidLayoutXml()),
+		"app/src/main/res/values/strings.xml":           []byte(getAndroidStringsXml()),
 		"app/src/main/java/com/xql/app/MainActivity.kt": ktCode,
 	}
 
@@ -207,7 +207,14 @@ func (g *androidGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 func (g *androidGen) emitExpr(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.Literal:
-		g.write(fmt.Sprintf("%v", node.Value))
+		if node.ValueType == "String" {
+			strVal, _ := node.Value.(string)
+			g.write(fmt.Sprintf("%q", strVal))
+		} else if strVal, ok := node.Value.(string); ok {
+			g.write(fmt.Sprintf("%q", strVal))
+		} else {
+			g.write(fmt.Sprintf("%v", node.Value))
+		}
 		return nil
 	case *ast.Ident:
 		g.write(node.Name)
