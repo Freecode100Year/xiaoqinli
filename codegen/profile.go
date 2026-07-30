@@ -69,7 +69,7 @@ func resetDefaultProfiles() {
 			Language:       "Zig",
 			LatestVersion:  "0.13+",
 			ModernFeatures: []string{"Strongly-typed anonymous struct coercion", "Comptime generics", "Explicit allocator injection"},
-			CodegenOptions: map[string]string{"version": "0.13+"},
+			CodegenOptions: map[string]string{"version": "0.13+", "verification_status": "local_e2e_validated"},
 			LastUpdated:    now,
 		},
 		{
@@ -77,7 +77,7 @@ func resetDefaultProfiles() {
 			Language:       "C#",
 			LatestVersion:  "12.0 (.NET 8+)",
 			ModernFeatures: []string{"Primary constructors", "Collection expressions", "#nullable enable/disable protection", "Generic math"},
-			CodegenOptions: map[string]string{"dotnet": "8.0"},
+			CodegenOptions: map[string]string{"dotnet": "8.0", "verification_status": "local_e2e_validated"},
 			LastUpdated:    now,
 		},
 		{
@@ -85,7 +85,7 @@ func resetDefaultProfiles() {
 			Language:       "Java",
 			LatestVersion:  "21+",
 			ModernFeatures: []string{"Record classes", "Pattern matching for switch", "Virtual threads", "Sealed classes"},
-			CodegenOptions: map[string]string{"jdk": "21"},
+			CodegenOptions: map[string]string{"jdk": "21", "verification_status": "local_e2e_validated"},
 			LastUpdated:    now,
 		},
 		{
@@ -93,7 +93,7 @@ func resetDefaultProfiles() {
 			Language:       "Swift",
 			LatestVersion:  "5.10 / 6.0",
 			ModernFeatures: []string{"Strict concurrency checking", "Macros", "Result<Success, Failure> enum", "Opaque types"},
-			CodegenOptions: map[string]string{"swift_version": "5.10"},
+			CodegenOptions: map[string]string{"swift_version": "5.10", "verification_status": "local_e2e_validated"},
 			LastUpdated:    now,
 		},
 		{
@@ -101,7 +101,7 @@ func resetDefaultProfiles() {
 			Language:       "Kotlin",
 			LatestVersion:  "2.0+",
 			ModernFeatures: []string{"K2 compiler alignment", "Sealed interfaces", "Inline value classes", "Coroutines flow"},
-			CodegenOptions: map[string]string{"kotlin_version": "2.0"},
+			CodegenOptions: map[string]string{"kotlin_version": "2.0", "verification_status": "local_e2e_validated"},
 			LastUpdated:    now,
 		},
 		{
@@ -109,7 +109,7 @@ func resetDefaultProfiles() {
 			Language:       "Dart",
 			LatestVersion:  "3.4+",
 			ModernFeatures: []string{"Sound null safety", "Records & pattern matching", "Class modifiers (base/interface/final)", "Extension types"},
-			CodegenOptions: map[string]string{"null_safety": "true"},
+			CodegenOptions: map[string]string{"null_safety": "true", "verification_status": "local_e2e_validated"},
 			LastUpdated:    now,
 		},
 		{
@@ -149,7 +149,7 @@ func resetDefaultProfiles() {
 			Language:       "Nim",
 			LatestVersion:  "2.0+",
 			ModernFeatures: []string{"ARC/ORC memory management", "Option[T] & Result[T, E]", "strictFuncs & effect tracking", "Macro metaprogramming"},
-			CodegenOptions: map[string]string{"verification_status": "ast_validated", "gc": "arc"},
+			CodegenOptions: map[string]string{"verification_status": "local_e2e_validated", "gc": "arc"},
 			LastUpdated:    now,
 		},
 		{
@@ -157,7 +157,7 @@ func resetDefaultProfiles() {
 			Language:       "Julia",
 			LatestVersion:  "1.10+",
 			ModernFeatures: []string{"Vector{T} typed arrays", "Multiple dispatch type annotations", "Union{T, Nothing} optionals", "Struct type coercion"},
-			CodegenOptions: map[string]string{"verification_status": "ast_validated", "opt_level": "2"},
+			CodegenOptions: map[string]string{"verification_status": "local_e2e_validated", "opt_level": "2"},
 			LastUpdated:    now,
 		},
 		{
@@ -165,7 +165,7 @@ func resetDefaultProfiles() {
 			Language:       "PHP",
 			LatestVersion:  "8.3+",
 			ModernFeatures: []string{"Readonly classes & properties", "Match expressions", "Typed class constants", "Union & Intersection types"},
-			CodegenOptions: map[string]string{"verification_status": "ast_validated", "strict_types": "1"},
+			CodegenOptions: map[string]string{"verification_status": "local_e2e_validated", "strict_types": "1"},
 			LastUpdated:    now,
 		},
 		{
@@ -173,7 +173,7 @@ func resetDefaultProfiles() {
 			Language:       "Ruby",
 			LatestVersion:  "3.3+",
 			ModernFeatures: []string{"YJIT compiler integration", "Pattern matching (in / case)", "Data value structs", "RBS type signatures"},
-			CodegenOptions: map[string]string{"verification_status": "ast_validated", "yjit": "true"},
+			CodegenOptions: map[string]string{"verification_status": "local_e2e_validated", "yjit": "true"},
 			LastUpdated:    now,
 		},
 		{
@@ -181,7 +181,7 @@ func resetDefaultProfiles() {
 			Language:       "Lua",
 			LatestVersion:  "5.4 / LuaJIT",
 			ModernFeatures: []string{"Const & to-be-closed variables", "Generational GC mode", "Metatable OOP pattern", "Bitwise operators"},
-			CodegenOptions: map[string]string{"verification_status": "ast_validated", "version": "5.4"},
+			CodegenOptions: map[string]string{"verification_status": "local_e2e_validated", "version": "5.4"},
 			LastUpdated:    now,
 		},
 		{

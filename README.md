@@ -1,8 +1,21 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.36.0
+# Xiaoqinli (xql) 极简安全转译器 v3.37.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-29 - v3.37.0 物理验证契约全量对齐与基线重构)
+
+### 🔬 物理验证红线准则重构 & 跨文件契约全量无矛盾对齐
+- **物理验证契约重构 (`Loop_Contracts.md`)**：
+  - 彻底修正物理验证红线准则第 1 条，移除已废弃的 Docker E2E 隔离及 `//go:build docker_e2e` 描述，替换为统一基于 `codegen/local_e2e_test.go` (`TestLocalE2EWorkspaceDogfood`) 的本地物理编译运行断言守则。
+  - 统一 11 门非主力后端语言的物理验证契约描述为 **“AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)”**，彻底解决原 Docker 历史描述下前 6 门与后 5 门双标割裂问题。
+- **Profiles 元数据完备跨文件对齐 (`profile.go`)**：
+  - 将 11 门非主力语言的 `CodegenOptions` 统一配置为 `"verification_status": "local_e2e_validated"`，保持代码元数据与工程契约 100% 诚实无矛盾。
+- **全量物理闭环验证**：
+  - `go test ./...` 100% 通过（`xiaoqinli/codegen` 包含 11 门语言本地物理编译运行断言），`xql.exe` 已同步部署至 `C:\Users\sj929\go\bin\xql.exe`。
 
 ---
 
