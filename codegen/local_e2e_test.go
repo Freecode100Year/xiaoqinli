@@ -27,6 +27,16 @@ func runLocalE2E(t *testing.T, checkCmd string, runCmd string, files map[string]
 				return
 			}
 		}
+		if parts[0] == "gradle" {
+			sdkHome := os.Getenv("ANDROID_HOME")
+			if sdkHome == "" {
+				sdkHome = os.Getenv("ANDROID_SDK_ROOT")
+			}
+			if sdkHome == "" {
+				t.Skip("Local Gradle found, but ANDROID_HOME / ANDROID_SDK_ROOT is not set. Skipping physical execution verification.")
+				return
+			}
+		}
 	}
 
 	// 2. Write generated source files to a temporary directory

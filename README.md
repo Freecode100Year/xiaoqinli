@@ -6,6 +6,17 @@
 
 ---
 
+## 📢 最新更新 (2026-07-29 - v3.40.2 Android Gradle SDK 前置环境探测与物理契约加固)
+
+### 🛡️ Android 物理验证防线加固 (`local_e2e_test.go`)
+- **精细化 SDK 前置探测**：
+  - 在 `local_e2e_test.go` 中，对 `gradle` 命令增加对 `ANDROID_HOME` 与 `ANDROID_SDK_ROOT` 环境变量的精细预检。
+  - 当本地仅安装了 `gradle` 命令行但未配置 Android SDK 环境（或处于离线隔离沙盒）时，优雅提示 `Local Gradle found, but ANDROID_HOME / ANDROID_SDK_ROOT is not set` 并 Skip 避让，杜绝将环境缺失误杀打红的情况。
+- **全量物理验证 100% PASS**：
+  - `go test ./...` 100% 通过，全局 `xql.exe` 已完成同步构建与部署。
+
+---
+
 ## 📢 最新更新 (2026-07-29 - v3.40.1 物理实测反馈全量打磨 & 4 大问题彻底修复)
 
 ### 🔨 物理实测反馈锤炼 & 精细化 Bug 修复
