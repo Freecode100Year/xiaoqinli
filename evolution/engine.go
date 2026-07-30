@@ -178,7 +178,61 @@ func UpdateSecurityPolicy(policy SecurityPolicyConfig) SecurityPolicyConfig {
 }
 
 // ---------------------------------------------------------------------------
-// 3. Codegen Optimization Strategy (Codegen 性能策略反馈引擎)
+// 3. Stdlib API Change Matrix (标准库 API 变动矩阵)
+// ---------------------------------------------------------------------------
+
+// StdlibAPIMatrix holds deprecated and new recommended API mappings per language version.
+type StdlibAPIMatrix struct {
+	Target          string            `json:"target"`           // e.g. "py", "go"
+	DeprecatedAPIs  map[string]string `json:"deprecated_apis"`  // old_api -> reason/new_api
+	RecommendedAPIs map[string]string `json:"recommended_apis"` // feature -> new_api
+	LastUpdated     string            `json:"last_updated"`
+}
+
+var (
+	matrixMutex sync.RWMutex
+	matrices    = map[string]*StdlibAPIMatrix{}
+)
+
+// UpdateStdlibMatrix updates standard library API evolution matrix.
+func UpdateStdlibMatrix(m StdlibAPIMatrix) *StdlibAPIMatrix {
+	matrixMutex.Lock()
+	defer matrixMutex.Unlock()
+
+	norm := strings.ToLower(strings.TrimSpace(m.Target))
+	m.Target = norm
+	m.LastUpdated = time.Now().Format("2006-01-02 15:04:05")
+	if m.DeprecatedAPIs == nil {
+		m.DeprecatedAPIs = make(map[string]string)
+	}
+	if m.RecommendedAPIs == nil {
+		m.RecommendedAPIs = make(map[string]string)
+	}
+	matrices[norm] = &m
+	return &m
+}
+
+// InspectStdlibMatrix gets standard library API evolution matrix for target language.
+func InspectStdlibMatrix(target string) (*StdlibAPIMatrix, error) {
+	matrixMutex.RLock()
+	defer matrixMutex.RUnlock()
+
+	norm := strings.ToLower(strings.TrimSpace(target))
+	m, ok := matrices[norm]
+	if !ok {
+		return &StdlibAPIMatrix{
+			Target:          norm,
+			DeprecatedAPIs:  map[string]string{},
+			RecommendedAPIs: map[string]string{},
+			LastUpdated:     time.Now().Format("2006-01-02"),
+		}, nil
+	}
+	cp := *m
+	return &cp, nil
+}
+
+// ---------------------------------------------------------------------------
+// 4. Codegen Optimization Strategy (Codegen 性能策略反馈引擎)
 // ---------------------------------------------------------------------------
 
 // CodegenStrategyConfig holds performance tuned options for code generators.
@@ -218,6 +272,11 @@ func SaveEvolutionState(dirPath string) error {
 	skillMutex.RUnlock()
 	_ = os.WriteFile(filepath.Join(dirPath, "skills.json"), skData, 0644)
 
+	matrixMutex.RLock()
+	mData, _ := json.MarshalIndent(matrices, "", "  ")
+	matrixMutex.RUnlock()
+	_ = os.WriteFile(filepath.Join(dirPath, "stdlib_matrix.json"), mData, 0644)
+
 	_ = codegen.SaveStrategiesToFile(filepath.Join(dirPath, "codegen_strategies.json"))
 
 	GetSearchEngine().AutoUpdateIndex()
@@ -251,7 +310,14 @@ func LoadEvolutionState(dirPath string) error {
 		skillMutex.Unlock()
 	}
 
-	// 4. Codegen strategies
+	// 4. Stdlib API evolution matrix
+	if data, err := os.ReadFile(filepath.Join(dirPath, "stdlib_matrix.json")); err == nil {
+		matrixMutex.Lock()
+		_ = json.Unmarshal(data, &matrices)
+		matrixMutex.Unlock()
+	}
+
+	// 5. Codegen strategies
 	_ = codegen.LoadStrategiesFromFile(filepath.Join(dirPath, "codegen_strategies.json"))
 
 	return nil

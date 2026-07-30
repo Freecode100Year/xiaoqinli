@@ -246,6 +246,44 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 			},
 		},
 		{
+			"name":        "stdlib_matrix_inspect",
+			"description": "Retrieve the known deprecated-vs-recommended standard library API mapping for a target language, so codegen can avoid emitting deprecated stdlib calls.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"target": map[string]string{
+						"type":        "string",
+						"description": "Target language identifier (py, go, ts, rust, etc.)",
+					},
+				},
+				"required": []string{"target"},
+			},
+		},
+		{
+			"name":        "stdlib_matrix_update",
+			"description": "Register or update deprecated-vs-recommended standard library API mappings for a target language locally.",
+			"inputSchema": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"target": map[string]string{
+						"type":        "string",
+						"description": "Target language identifier (e.g. py, go, ts)",
+					},
+					"deprecated_apis": map[string]interface{}{
+						"type":                 "object",
+						"description":          "Map of deprecated API name to reason/replacement, e.g. {\"os.getcwd\": \"use os.Getwd\"}",
+						"additionalProperties": map[string]string{"type": "string"},
+					},
+					"recommended_apis": map[string]interface{}{
+						"type":                 "object",
+						"description":          "Map of feature to the currently recommended API, e.g. {\"http client\": \"net/http.Client\"}",
+						"additionalProperties": map[string]string{"type": "string"},
+					},
+				},
+				"required": []string{"target"},
+			},
+		},
+		{
 			"name":        "specs_inspect",
 			"description": "Retrieve modern language specification profile & latest version features for any target language (e.g. py, go, ts, rust) before code generation.",
 			"inputSchema": map[string]interface{}{
@@ -459,6 +497,10 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 		return s.toolValidate(req.ID, args.Source)
 	case "targets":
 		return s.toolTargets(req.ID)
+	case "stdlib_matrix_inspect":
+		return s.toolStdlibMatrixInspect(req.ID, args.Target)
+	case "stdlib_matrix_update":
+		return s.toolStdlibMatrixUpdate(req.ID, params.Arguments)
 	case "specs_inspect":
 		return s.toolSpecsInspect(req.ID, args.Target)
 	case "specs_update":
@@ -568,6 +610,60 @@ func (s *MCPServer) toolTargets(id interface{}) jsonRPCResponse {
 		Result: map[string]interface{}{
 			"content": []map[string]string{
 				{"type": "text", "text": text},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolStdlibMatrixInspect(id interface{}, target string) jsonRPCResponse {
+	m, err := compiler.InspectStdlibMatrix(target)
+	if err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: err.Error()},
+		}
+	}
+	b, _ := json.MarshalIndent(m, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": string(b)},
+			},
+		},
+	}
+}
+
+func (s *MCPServer) toolStdlibMatrixUpdate(id interface{}, rawArgs json.RawMessage) jsonRPCResponse {
+	var input struct {
+		Target          string            `json:"target"`
+		DeprecatedAPIs  map[string]string `json:"deprecated_apis"`
+		RecommendedAPIs map[string]string `json:"recommended_apis"`
+	}
+	if err := json.Unmarshal(rawArgs, &input); err != nil {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      id,
+			Error:   &rpcError{Code: -32602, Message: "invalid stdlib_matrix_update parameters"},
+		}
+	}
+
+	m := evolution.StdlibAPIMatrix{
+		Target:          input.Target,
+		DeprecatedAPIs:  input.DeprecatedAPIs,
+		RecommendedAPIs: input.RecommendedAPIs,
+	}
+	updated := compiler.UpdateStdlibMatrix(m)
+
+	b, _ := json.MarshalIndent(updated, "", "  ")
+	return jsonRPCResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Result: map[string]interface{}{
+			"content": []map[string]string{
+				{"type": "text", "text": fmt.Sprintf("Successfully updated stdlib matrix:\n%s", string(b))},
 			},
 		},
 	}

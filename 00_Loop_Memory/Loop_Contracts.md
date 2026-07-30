@@ -34,12 +34,13 @@
 
 ---
 
-## 📌 废弃/清理孤儿子系统记录 (Cleaned Up Orphan Subsystems)
+## 📌 子系统接入状态记录 (Subsystems Integration Status)
 
-| 子系统名称 | 处置决定 | 结果记录 |
-| :--- | :--- | :--- |
-| **`StdlibAPIMatrix`** | **彻底移除 (Deleted)** | 移除无消费端的死代码与未生效接线，保持代码库极简轻量。 |
-| **`TreeSitterMapping`** | **彻底移除 (Deleted)** | 移除无反向解析消费端的死代码，保持代码库极简轻量。 |
+| 子系统名称 | 核心定义文件 | 当前接入状态 | 说明与架构设计 |
+| :--- | :--- | :--- | :--- |
+| **`StdlibAPIMatrix`** | `evolution/engine.go`<br>`compiler/compiler.go`<br>`server/mcp.go` | **第二轮已全量接通 (Connected)** | 已成功补齐 MCP 工具 (`stdlib_matrix_update/inspect`)，并接入 `.xql/evolution/stdlib_matrix.json` 磁盘持久化与进程重启存活逻辑。持锁写入无死锁风险。 |
+| **`TreeSitterMapping`** | `evolution/engine.go`<br>`compiler/compiler.go` | **第三轮待定/未接入 (Queued/Unintegrated)** | 定义了 Tree-sitter AST 与 `.xql.json` 映射结构。由于完整的 Tree-sitter WASM/C 依赖与反向导入链路尚未引入，目前仅为基础设施结构。 |
+
 
 
 

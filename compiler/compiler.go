@@ -539,6 +539,17 @@ func UpdateSecurityPolicy(policy evolution.SecurityPolicyConfig) evolution.Secur
 	return evolution.UpdateSecurityPolicy(policy)
 }
 
+// Stdlib Matrix Wrappers
+func InspectStdlibMatrix(target string) (*evolution.StdlibAPIMatrix, error) {
+	return evolution.InspectStdlibMatrix(target)
+}
+
+func UpdateStdlibMatrix(m evolution.StdlibAPIMatrix) *evolution.StdlibAPIMatrix {
+	res := evolution.UpdateStdlibMatrix(m)
+	_ = SaveLocalState(DefaultStateDir)
+	return res
+}
+
 // Codegen Strategy Wrappers
 func InspectCodegenStrategy(target string) *evolution.CodegenStrategyConfig {
 	return evolution.InspectCodegenStrategy(target)
