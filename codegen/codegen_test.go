@@ -2421,3 +2421,39 @@ func TestLuaWorkspaceDogfoodCodegen(t *testing.T) {
 		t.Errorf("Lua main.lua must call service.fetchUsers, got:\n%s", mainCode)
 	}
 }
+
+func TestGenerateAndroidProject(t *testing.T) {
+	root := mustParse(t, addFibMain)
+	proj, err := GenerateProject(root, "android")
+	if err != nil {
+		t.Fatalf("GenerateProject android error: %v", err)
+	}
+	if proj == nil || len(proj.Files) == 0 {
+		t.Fatalf("expected multi-file Android project output, got nil or empty")
+	}
+
+	requiredFiles := []string{
+		"build.gradle",
+		"settings.gradle",
+		"app/build.gradle",
+		"app/src/main/AndroidManifest.xml",
+		"app/src/main/res/layout/activity_main.xml",
+		"app/src/main/res/values/strings.xml",
+		"app/src/main/java/com/xql/app/MainActivity.kt",
+	}
+
+	for _, file := range requiredFiles {
+		content, ok := proj.Files[file]
+		if !ok || len(content) == 0 {
+			t.Errorf("missing or empty file in Android project: %s", file)
+		}
+	}
+
+	ktCode := string(proj.Files["app/src/main/java/com/xql/app/MainActivity.kt"])
+	if !strings.Contains(ktCode, "class MainActivity : AppCompatActivity()") {
+		t.Errorf("MainActivity.kt should declare MainActivity, got:\n%s", ktCode)
+	}
+	if !strings.Contains(ktCode, "fun runXqlApp()") {
+		t.Errorf("MainActivity.kt should contain runXqlApp, got:\n%s", ktCode)
+	}
+}

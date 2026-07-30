@@ -75,6 +75,7 @@ var allTargetInfos = []TargetInfo{
 	{Flag: "shortcut", Ext: ".shortcut", Name: "Apple Shortcuts"},
 	{Flag: "chrome", Ext: ".crx.json", Name: "Chrome Extension"},
 	{Flag: "tccli", Ext: ".sh", Name: "Tencent Cloud CLI"},
+	{Flag: "android", Ext: ".kt", Name: "Android (Gradle APK Project)"},
 }
 
 // GetVersion returns the compiler library version.
@@ -176,7 +177,7 @@ func Compile(req CompileRequest) CompileResult {
 	}
 
 	// Phase 2: codegen.
-	code, err := codegen.Generate(req.AST, req.Target)
+	proj, err := codegen.GenerateProject(req.AST, req.Target)
 	if err != nil {
 		msg := fmt.Sprintf("XQL_E401: codegen error: %v", err)
 		return CompileResult{
@@ -186,12 +187,25 @@ func Compile(req CompileRequest) CompileResult {
 			}},
 		}
 	}
+	code := proj.MainCode
 
 	// Phase 3: optional disk write.
 	if req.OutputPath != "" {
-		if wErr := writeOutput(code, req.OutputPath, req.Target); wErr != nil {
-			return CompileResult{
-				Error: wErr.Error(), ErrorCode: "XQL_E402",
+		if len(proj.Files) > 0 {
+			for relPath, content := range proj.Files {
+				fullPath := filepath.Join(req.OutputPath, relPath)
+				if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
+					return CompileResult{Error: err.Error(), ErrorCode: "XQL_E402"}
+				}
+				if err := os.WriteFile(fullPath, content, 0644); err != nil {
+					return CompileResult{Error: err.Error(), ErrorCode: "XQL_E402"}
+				}
+			}
+		} else {
+			if wErr := writeOutput(code, req.OutputPath, req.Target); wErr != nil {
+				return CompileResult{
+					Error: wErr.Error(), ErrorCode: "XQL_E402",
+				}
 			}
 		}
 	}
@@ -202,6 +216,7 @@ func Compile(req CompileRequest) CompileResult {
 	return CompileResult{
 		Success: true,
 		Code:    code,
+		Files:   proj.Files,
 		Stats:   stats,
 	}
 }

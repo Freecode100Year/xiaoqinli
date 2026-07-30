@@ -6,6 +6,26 @@ import (
 	"xiaoqinli/ast"
 )
 
+// ProjectOutput holds multi-file project contents when target generates a full directory structure.
+type ProjectOutput struct {
+	MainCode []byte
+	Files    map[string][]byte
+}
+
+// GenerateProject dispatches code generation to target, supporting both single-file and multi-file projects.
+func GenerateProject(root ast.Node, target string) (*ProjectOutput, error) {
+	if target == "android" || target == "apk" {
+		return GenerateAndroidProject(root)
+	}
+	code, err := Generate(root, target)
+	if err != nil {
+		return nil, err
+	}
+	return &ProjectOutput{
+		MainCode: code,
+	}, nil
+}
+
 // Generate dispatches code generation to the appropriate backend by target name.
 func Generate(root ast.Node, target string) ([]byte, error) {
 	if err := validateNodesForTarget(root, target); err != nil {
@@ -15,6 +35,12 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return nil, err
 	}
 	switch target {
+	case "android", "apk":
+		proj, err := GenerateAndroidProject(root)
+		if err != nil {
+			return nil, err
+		}
+		return proj.MainCode, nil
 	case "go":
 		return GenerateGo(root)
 	case "rust":

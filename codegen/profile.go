@@ -129,6 +129,14 @@ func resetDefaultProfiles() {
 			LastUpdated:    now,
 		},
 		{
+			Target:         "android",
+			Language:       "Android (Gradle APK)",
+			LatestVersion:  "Gradle 8.0+ / Android 13+",
+			ModernFeatures: []string{"Complete Gradle Android project scaffolding", "Jetpack AppCompat & Core KTX", "MainActivity.kt UI output binding"},
+			CodegenOptions: map[string]string{"gradle": "8.1.0", "kotlin": "1.8.20"},
+			LastUpdated:    now,
+		},
+		{
 			Target:         "deepseek",
 			Language:       "DeepSeek Coder / V3",
 			LatestVersion:  "V3 / Coder",

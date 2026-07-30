@@ -231,6 +231,15 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 				"models.xql":  "models.lua",
 			},
 		},
+		{
+			name:     "Android",
+			target:   "android",
+			checkCmd: "gradlew",
+			runCmd:   "gradlew assembleDebug",
+			files: map[string]string{
+				"main.xql": "app/src/main/java/com/xql/app/MainActivity.kt",
+			},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -282,6 +291,15 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 					out, err = GenerateRuby(node)
 				case "lua":
 					out, err = GenerateLua(node)
+				case "android":
+					proj, pErr := GenerateAndroidProject(node)
+					err = pErr
+					if proj != nil {
+						for fName, fBytes := range proj.Files {
+							filesMap[fName] = fBytes
+						}
+						out = proj.MainCode
+					}
 				}
 
 				if err != nil {

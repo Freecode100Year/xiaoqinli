@@ -24,6 +24,7 @@
 | **PHP** | 9 | `php main.php` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
 | **Ruby** | 10 | `ruby main.rb` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
 | **Lua** | 11 | `lua main.lua` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
+| **Android** | 12 | `gradlew assembleDebug` | **AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)** |
 
 ### 2. 物理验证红线准则
 1. **统一的本地 E2E 物理验证基线**：所有的 E2E 物理编译与运行断言均统一收敛于 `codegen/local_e2e_test.go` (`TestLocalE2EWorkspaceDogfood`)。测试会自动检测当前主机环境是否存在对应语言编译器/运行时：若存在则自动执行真机物理编译与输出断言，若无则优雅 Skip 避让。彻底摒弃对重型 Docker 容器的强依懒，兼顾极速单体单元测试与真实环境物理重测能力。

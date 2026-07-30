@@ -6,19 +6,18 @@
 
 ---
 
-## 📢 最新更新 (2026-07-29 - v3.37.0 物理验证契约重构与 Lua 多文件 Module 生成 Bug 修复)
+## 📢 最新更新 (2026-07-29 - v3.38.0 多文件工程架构扩展 & Android (Gradle APK) 目标全量接入)
 
-### 🐛 物理验证闭环 & Lua 多文件 Module/Require 重构修复
-- **Lua 跨文件 Module & Require 彻底修复 (`lua.go`)**：
-  - 针对多文件场景（如 `e2e_workspace`），修复 `GenerateLua` 在无 `main` 函数的模块文件中未导出模块表的问题。现在自动生成 `local M = {}`，导出方法 `function M.funcName(...)`，并在文件末尾输出 `return M`。
-  - 重构 `emitImportDecl`，为 `import "./service.xql" as service` 生成标准的 `local service = require("service")` 语法绑定。
-  - 内置极简 `Result` 辅助结构体（闭包安全支持 `res.unwrap()` / `res.isOk`），解决真实环境 `lua5.4` 执行时 `nil (global 'service')` 的物理崩溃。
-  - 新增 `TestLuaWorkspaceDogfoodCodegen` 静态拓扑断言与本地测试校验。
-- **物理验证契约重构 (`Loop_Contracts.md`)**：
-  - 彻底修正物理验证红线准则第 1 条，移除已废弃的 Docker E2E 隔离及 `//go:build docker_e2e` 描述，替换为统一基于 `codegen/local_e2e_test.go` (`TestLocalE2EWorkspaceDogfood`) 的本地物理编译运行断言守则。
-  - 统一 11 门非主力后端语言的物理验证契约描述为 **“AST 转换与本地 E2E 物理验证已接入 (`local_e2e_test.go`)”**。
-- **Profiles 元数据完备跨文件对齐 (`profile.go`)**：
-  - 将 11 门非主力语言的 `CodegenOptions` 统一配置为 `"verification_status": "local_e2e_validated"`。
+### 📱 多文件工程树生成架构 & Android (Gradle APK) 目标
+- **多文件工程编译管线扩展 (`compiler/types.go` & `compiler/compiler.go`)**：
+  - 在 `CompileResult` 中扩展 `Files map[string][]byte` 字段；在 `codegen` 增加 `GenerateProject(root, target) (*ProjectOutput, error)` 通用解法。
+  - `compiler.Compile` 完美支持递归磁盘落盘：当目标为多文件工程脚手架时，自动创建相对目录结构并写入全量工程文件，向下兼容单文件后端。
+- **Android Gradle 工程脚手架生成器 (`codegen/android.go`)**：
+  - 新增 `android` / `apk` 目标生成器，直接吐出符合 Android 官方标准的通用 Gradle 工程文件树：`build.gradle`, `settings.gradle`, `app/build.gradle`, `AndroidManifest.xml`, `activity_main.xml`, `strings.xml` 及 `MainActivity.kt`。
+  - 将 XQL AST 的 `println` 输出与状态控制自动映射绑至 `MainActivity.kt` 的 `TextView` UI 与 Android Logcat。
+- **本地 E2E 物理验证接入 (`local_e2e_test.go` & `Loop_Contracts.md`)**：
+  - 增加 `TestLocalE2EWorkspaceDogfood/Android` 物理测试：若宿主机存在 Gradle/Android SDK 环境，自动尝试 `gradlew assembleDebug` 并物理断言 `.apk` 产物，无环境则优雅 Skip。
+  - 新增 `TestGenerateAndroidProject` 静态工程树完整性测试，全量 `go test ./...` 100% 跑通。
 
 ---
 

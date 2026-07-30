@@ -42,13 +42,14 @@ type CompileStats struct {
 
 // CompileResult holds the outcome of a Compile call.
 type CompileResult struct {
-	Success     bool         `json:"success"`
-	Code        []byte       `json:"code,omitempty"`
-	Error       string       `json:"error,omitempty"`
-	ErrorCode   string       `json:"error_code,omitempty"`
-	Diagnostics []Diagnostic `json:"diagnostics,omitempty"`
-	Warnings    []string     `json:"warnings,omitempty"`
-	Stats       CompileStats `json:"stats,omitempty"`
+	Success     bool              `json:"success"`
+	Code        []byte            `json:"code,omitempty"`
+	Files       map[string][]byte `json:"files,omitempty"`
+	Error       string            `json:"error,omitempty"`
+	ErrorCode   string            `json:"error_code,omitempty"`
+	Diagnostics []Diagnostic      `json:"diagnostics,omitempty"`
+	Warnings    []string          `json:"warnings,omitempty"`
+	Stats       CompileStats      `json:"stats,omitempty"`
 }
 
 // Diagnostic is a structured, AI-friendly error report.
