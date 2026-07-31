@@ -32,13 +32,17 @@ func GenerateAndroidProject(root ast.Node) (*ProjectOutput, error) {
 
 // GenerateAndroidKotlin produces the MainActivity.kt logic for Android target.
 func GenerateAndroidKotlin(root ast.Node) ([]byte, error) {
-	g := &androidGen{buf: &strings.Builder{}}
+	g := &androidGen{
+		buf:  &strings.Builder{},
+		muts: map[string]bool{},
+	}
 	return g.generate(root)
 }
 
 type androidGen struct {
 	buf    *strings.Builder
 	indent int
+	muts   map[string]bool
 }
 
 func (g *androidGen) generate(root ast.Node) ([]byte, error) {
@@ -53,6 +57,27 @@ func (g *androidGen) generate(root ast.Node) ([]byte, error) {
 	g.writeln("import android.widget.TextView")
 	g.writeln("import androidx.appcompat.app.AppCompatActivity")
 	g.writeln("")
+
+	// Emit top-level Structs / Classes / Enums outside MainActivity
+	for _, d := range prog.Decls {
+		switch node := d.(type) {
+		case *ast.StructDecl:
+			if err := g.emitStructDecl(node); err != nil {
+				return nil, err
+			}
+			g.writeln("")
+		case *ast.ClassDecl:
+			if err := g.emitClassDecl(node); err != nil {
+				return nil, err
+			}
+			g.writeln("")
+		case *ast.EnumDecl:
+			if err := g.emitEnumDecl(node); err != nil {
+				return nil, err
+			}
+			g.writeln("")
+		}
+	}
 
 	g.writeln("class MainActivity : AppCompatActivity() {")
 	g.indent++
@@ -80,14 +105,14 @@ func (g *androidGen) generate(root ast.Node) ([]byte, error) {
 	g.writeln("private fun runXqlApp() {")
 	g.indent++
 
+	// Collect mutables and emit statements inside main
 	for _, d := range prog.Decls {
-		fd, ok := d.(*ast.FunctionDecl)
-		if !ok || fd.Name != "main" {
-			continue
-		}
-		for _, stmt := range fd.Body {
-			if err := g.emitNode(stmt); err != nil {
-				return nil, err
+		if fd, ok := d.(*ast.FunctionDecl); ok && fd.Name == "main" {
+			g.muts = collectMutables(fd.Body)
+			for _, stmt := range fd.Body {
+				if err := g.emitNode(stmt); err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
@@ -95,7 +120,7 @@ func (g *androidGen) generate(root ast.Node) ([]byte, error) {
 	g.indent--
 	g.writeln("}")
 
-	// Emit non-main helper functions
+	// Emit non-main helper functions inside MainActivity
 	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name == "main" {
@@ -113,30 +138,140 @@ func (g *androidGen) generate(root ast.Node) ([]byte, error) {
 	return []byte(g.buf.String()), nil
 }
 
+func (g *androidGen) emitStructDecl(sd *ast.StructDecl) error {
+	g.writeIndent()
+	g.write("data class " + sd.Name + "(")
+	for i, f := range sd.Fields {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write("val " + f.Name + ": " + typeToKotlin(f.Type))
+	}
+	g.writeln(")")
+	return nil
+}
+
+func (g *androidGen) emitClassDecl(cd *ast.ClassDecl) error {
+	g.writeIndent()
+	g.writeln("public class " + cd.Name + " {")
+	g.indent++
+	for _, f := range cd.Fields {
+		g.writeIndent()
+		vis := f.Visibility
+		if vis == "" {
+			vis = "public"
+		}
+		g.writeln(vis + " var " + f.Name + ": " + typeToKotlin(f.Type) + " = null")
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *androidGen) emitEnumDecl(ed *ast.EnumDecl) error {
+	g.writeIndent()
+	g.write("enum class " + ed.Name + " { ")
+	for i, v := range ed.Variants {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(v)
+	}
+	g.writeln(" }")
+	return nil
+}
+
+func (g *androidGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	prevMuts := g.muts
+	g.muts = collectMutables(fd.Body)
+	defer func() { g.muts = prevMuts }()
+
+	g.writeIndent()
+	g.write(fmt.Sprintf("private fun %s(", fd.Name))
+	for i, p := range fd.Params {
+		if i > 0 {
+			g.write(", ")
+		}
+		g.write(fmt.Sprintf("%s: %s", p.Name, typeToKotlin(p.Type)))
+	}
+	g.write(")")
+	rt := typeToKotlin(fd.ReturnType)
+	if rt != "" && rt != "Unit" && rt != "Any" {
+		g.write(": " + rt)
+	}
+	g.writeln(" {")
+	g.indent++
+	for _, s := range fd.Body {
+		if err := g.emitNode(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
 func (g *androidGen) emitNode(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.VarDecl:
 		return g.emitVarDecl(node)
+	case *ast.AssignStmt:
+		return g.emitAssign(node)
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.IfStmt:
 		return g.emitIf(node)
+	case *ast.WhileStmt:
+		return g.emitWhile(node)
+	case *ast.ForStmt:
+		return g.emitFor(node)
 	case *ast.ReturnStmt:
 		return g.emitReturn(node)
+	case *ast.BreakStmt:
+		g.writeIndent()
+		g.writeln("break")
+		return nil
+	case *ast.ContinueStmt:
+		g.writeIndent()
+		g.writeln("continue")
+		return nil
+	case *ast.SwitchStmt:
+		return g.emitSwitch(node)
 	default:
-		// Fallback to basic Kotlin expr / stmt emission
 		return g.emitExprStmt(&ast.ExprStmt{Expr: node})
 	}
 }
 
 func (g *androidGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
-	g.write(fmt.Sprintf("var %s", vd.Name))
+	kw := "val"
+	if g.muts[vd.Name] {
+		kw = "var"
+	}
+	g.write(fmt.Sprintf("%s %s", kw, vd.Name))
+	if vd.Type.KindName != "" {
+		g.write(fmt.Sprintf(": %s", typeToKotlin(vd.Type)))
+	}
 	if vd.Value != nil {
 		g.write(" = ")
 		if err := g.emitExpr(vd.Value); err != nil {
 			return err
 		}
+	}
+	g.writeln("")
+	return nil
+}
+
+func (g *androidGen) emitAssign(as *ast.AssignStmt) error {
+	g.writeIndent()
+	if err := g.emitExpr(as.Target); err != nil {
+		return err
+	}
+	g.write(" = ")
+	if err := g.emitExpr(as.Value); err != nil {
+		return err
 	}
 	g.writeln("")
 	return nil
@@ -166,6 +301,101 @@ func (g *androidGen) emitIf(is *ast.IfStmt) error {
 	}
 	g.indent--
 	g.writeIndent()
+	if len(is.Else) > 0 {
+		g.writeln("} else {")
+		g.indent++
+		for _, s := range is.Else {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+	}
+	g.writeln("}")
+	return nil
+}
+
+func (g *androidGen) emitWhile(ws *ast.WhileStmt) error {
+	g.writeIndent()
+	g.write("while (")
+	if err := g.emitExpr(ws.Cond); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, s := range ws.Body {
+		if err := g.emitNode(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *androidGen) emitFor(fs *ast.ForStmt) error {
+	g.writeIndent()
+	if fs.Form == "range" {
+		g.write(fmt.Sprintf("for (%s in ", fs.Var))
+		if err := g.emitExpr(fs.Start); err != nil {
+			return err
+		}
+		g.write("..")
+		if err := g.emitExpr(fs.End); err != nil {
+			return err
+		}
+		g.writeln(") {")
+	} else {
+		g.write(fmt.Sprintf("for (%s in ", fs.Var))
+		if err := g.emitExpr(fs.Iterable); err != nil {
+			return err
+		}
+		g.writeln(") {")
+	}
+	g.indent++
+	for _, s := range fs.Body {
+		if err := g.emitNode(s); err != nil {
+			return err
+		}
+	}
+	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+func (g *androidGen) emitSwitch(ss *ast.SwitchStmt) error {
+	g.writeIndent()
+	g.write("when (")
+	if err := g.emitExpr(ss.Value); err != nil {
+		return err
+	}
+	g.writeln(") {")
+	g.indent++
+	for _, c := range ss.Cases {
+		g.writeIndent()
+		if c.Value != nil {
+			if err := g.emitExpr(c.Value); err != nil {
+				return err
+			}
+		} else {
+			g.write("else")
+		}
+		g.writeln(" -> {")
+		g.indent++
+		for _, stmt := range c.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		g.indent--
+		g.writeIndent()
+		g.writeln("}")
+	}
+	g.indent--
+	g.writeIndent()
 	g.writeln("}")
 	return nil
 }
@@ -182,28 +412,6 @@ func (g *androidGen) emitReturn(rs *ast.ReturnStmt) error {
 	return nil
 }
 
-func (g *androidGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
-	g.writeIndent()
-	g.write(fmt.Sprintf("private fun %s(", fd.Name))
-	for i, p := range fd.Params {
-		if i > 0 {
-			g.write(", ")
-		}
-		g.write(fmt.Sprintf("%s: Any", p.Name))
-	}
-	g.writeln(") {")
-	g.indent++
-	for _, s := range fd.Body {
-		if err := g.emitNode(s); err != nil {
-			return err
-		}
-	}
-	g.indent--
-	g.writeIndent()
-	g.writeln("}")
-	return nil
-}
-
 func (g *androidGen) emitExpr(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.Literal:
@@ -212,6 +420,8 @@ func (g *androidGen) emitExpr(n ast.Node) error {
 			g.write(fmt.Sprintf("%q", strVal))
 		} else if strVal, ok := node.Value.(string); ok {
 			g.write(fmt.Sprintf("%q", strVal))
+		} else if f, ok := node.Value.(float64); ok && node.ValueType == "Int" {
+			g.write(fmt.Sprintf("%dL", int64(f)))
 		} else {
 			g.write(fmt.Sprintf("%v", node.Value))
 		}
@@ -219,21 +429,116 @@ func (g *androidGen) emitExpr(n ast.Node) error {
 	case *ast.Ident:
 		g.write(node.Name)
 		return nil
-	case *ast.CallExpr:
-		if node.Callee == "println" {
-			g.write("println(")
-		} else {
-			g.write(node.Callee + "(")
+	case *ast.BinaryExpr:
+		g.write("(")
+		if err := g.emitExpr(node.Left); err != nil {
+			return err
 		}
-		for i, arg := range node.Args {
+		g.write(" " + node.Op + " ")
+		if err := g.emitExpr(node.Right); err != nil {
+			return err
+		}
+		g.write(")")
+		return nil
+	case *ast.UnaryExpr:
+		g.write(node.Op)
+		return g.emitExpr(node.Operand)
+	case *ast.MemberExpr:
+		if err := g.emitExpr(node.Object); err != nil {
+			return err
+		}
+		g.write("." + node.Field)
+		return nil
+	case *ast.IndexExpr:
+		if err := g.emitExpr(node.Target); err != nil {
+			return err
+		}
+		g.write("[(")
+		if err := g.emitExpr(node.Index); err != nil {
+			return err
+		}
+		g.write(").toInt()]")
+		return nil
+	case *ast.ArrayLit:
+		g.write("listOf(")
+		for i, elem := range node.Elements {
 			if i > 0 {
 				g.write(", ")
 			}
-			if err := g.emitExpr(arg); err != nil {
+			if err := g.emitExpr(elem); err != nil {
 				return err
 			}
 		}
 		g.write(")")
+		return nil
+	case *ast.ArrayLiteral:
+		g.write("listOf(")
+		for i, elem := range node.Elements {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(elem); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	case *ast.MapLiteral:
+		g.write("mapOf(")
+		for i, entry := range node.Entries {
+			if i > 0 {
+				g.write(", ")
+			}
+			if err := g.emitExpr(entry.Key); err != nil {
+				return err
+			}
+			g.write(" to ")
+			if err := g.emitExpr(entry.Value); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	case *ast.StructLit:
+		g.write(node.TypeName + "(")
+		for i, f := range node.Fields {
+			if i > 0 {
+				g.write(", ")
+			}
+			g.write(f.Name + " = ")
+			if err := g.emitExpr(f.Value); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	case *ast.CallExpr:
+		if node.Callee == "println" {
+			g.write("println(")
+			for i, arg := range node.Args {
+				if i > 0 {
+					g.write(` + " " + `)
+				}
+				if i == 0 && len(node.Args) > 1 {
+					g.write(`"" + `)
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		} else {
+			g.write(node.Callee + "(")
+			for i, arg := range node.Args {
+				if i > 0 {
+					g.write(", ")
+				}
+				if err := g.emitExpr(arg); err != nil {
+					return err
+				}
+			}
+			g.write(")")
+		}
 		return nil
 	default:
 		g.write(fmt.Sprintf("/* %s */", n.Kind()))
@@ -326,23 +631,28 @@ func getAndroidManifest() string {
 
 func getAndroidLayoutXml() string {
 	return `<?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
+    android:fillViewport="true"
     android:padding="16dp">
-    <TextView
-        android:id="@+id/tvOutput"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:textSize="16sp"
-        android:textColor="#000000" />
-</LinearLayout>
+        android:orientation="vertical">
+        <TextView
+            android:id="@+id/tvOutput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textSize="16sp"
+            android:textColor="#000000" />
+    </LinearLayout>
+</ScrollView>
 `
 }
 
 func getAndroidStringsXml() string {
-	return `resources>
+	return `<resources>
     <string name="app_name">XqlApp</string>
 </resources>
 `

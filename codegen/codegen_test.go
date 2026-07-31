@@ -2456,6 +2456,17 @@ func TestGenerateAndroidProject(t *testing.T) {
 	if !strings.Contains(ktCode, "fun runXqlApp()") {
 		t.Errorf("MainActivity.kt should contain runXqlApp, got:\n%s", ktCode)
 	}
+
+	// Verify XML structure fixes and UI layout
+	stringsXml := string(proj.Files["app/src/main/res/values/strings.xml"])
+	if !strings.Contains(stringsXml, "<resources>") {
+		t.Errorf("strings.xml must contain opening <resources> tag, got:\n%s", stringsXml)
+	}
+
+	layoutXml := string(proj.Files["app/src/main/res/layout/activity_main.xml"])
+	if !strings.Contains(layoutXml, "<ScrollView") {
+		t.Errorf("activity_main.xml layout must contain ScrollView wrapper, got:\n%s", layoutXml)
+	}
 }
 
 func TestRubyCodegenStrategyInspection(t *testing.T) {

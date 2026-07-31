@@ -42,6 +42,7 @@
 | **`TreeSitterMapping`** | `evolution/engine.go`<br>`compiler/compiler.go`<br>`server/mcp.go` | **第三轮已全量接通薄接线 (Connected)** | 已补齐 MCP 工具 (`treesitter_mapping_update/inspect`) 与 `.xql/evolution/treesitter_mappings.json` 持久化接入。底层的真实 Tree-sitter WASM 语法解析与 AST 逆向提取在未来新阶段中接入。 |
 | **`remedy` 包精简** | `remedy/remedy.go`<br>`remedy/remedy_test.go` | **已完成死代码彻底精简 (Refactored)** | 删除了 8 个非 AST 转译业务的无关辅助死函数（如会话保活、GitHub凭证清洗等），仅保留 `ProbeValidateDeferredSchema` 参数校验逻辑。 |
 | **`compiler` 性能基准测试套件** | `compiler/bench_test.go` | **已建立全量 Benchmark 基线 (Benchmarked)** | 新增 `BenchmarkCompile_500Fn`、`BenchmarkValidate_500Fn` 和 `BenchmarkCompile_ScalingFn` 性能基准断言。需配合 `-benchtime=2s` 进行充分采样，allocs/op 保持 502/4846/50016 确定性对齐，超线性耗时拐点受 L3 Cache 与 GC 影响。 |
+| **`android` (Gradle APK) 目标强化** | `codegen/android.go`<br>`codegen/codegen_test.go` | **已全量强化升级 (Enhanced)** | 修复了 `strings.xml` 中 `<resources>` XML 标签缺口；布局升级为 `ScrollView` 防止长日志溢出；补全了 BinaryExpr、ForStmt、WhileStmt、SwitchStmt、StructDecl、ClassDecl、EnumDecl 等 AST 节点的完整 Kotlin 代码生成与单元测试覆盖。 |
 
 
 
