@@ -1,8 +1,29 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.37.0
+# Xiaoqinli (xql) 极简安全转译器 v3.41.0
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-07-30 - v3.41.0 演进子系统全量 MCP 工具链/跨进程持久化对齐与 Remedy 无关死代码深度精简)
+
+### 🧬 演进子系统 MCP 工具链与持久化全量对齐
+- **`StdlibAPIMatrix` 演进矩阵接通与 MCP 工具化 (`server/mcp.go` & `evolution/engine.go`)**：
+  - 新增 `stdlib_matrix_inspect` 与 `stdlib_matrix_update` 两个 MCP 工具，允许 Agent 实时查询与录入各语言废弃 API 映射。
+  - 在 `evolution/engine.go` 中接入 `.xql/evolution/stdlib_matrix.json` 磁盘写透持久化，避开了持锁 `autoSave()` 死锁隐患，保证进程重启后数据全量保存。
+- **`TreeSitterMapping` 节点映射接通与 MCP 工具化 (`server/mcp.go` & `evolution/engine.go`)**：
+  - 新增 `treesitter_mapping_inspect` 与 `treesitter_mapping_update` 两个 MCP 工具，并将节点规则落盘至 `.xql/evolution/treesitter_mappings.json`。
+  - 实现了诊断记忆、安全策略、Skill 补齐、Codegen 策略、Stdlib Matrix、Tree-sitter Mapping 6 大演进子系统 **100% 统一的 MCP 工具链与跨进程持久化结构**。
+
+### 🧹 Remedy 包非 AST 业务无关死代码深度精简 (`remedy/remedy.go`)
+- **清理 8 个与转译器主线无关的框架残留死函数**：
+  - 彻底删除了 `StripURLUserinfo`、`PreserveRecentlyActiveSessions`、`UpdateSkillWithLockedRegistry`、`SanitizeSessionEnv`、`BoundedStartupRestoreGate`、`IdleLoopGate`、`SanitizeGitHubCredentials` 等 203 行无关死代码。
+  - 仅保留在 `server/mcp.go` 中物理调用的 `ProbeValidateDeferredSchema` 参数探针校验逻辑，显著降低包体积与维护审计噪音。
+
+### 🛡️ 全量物理验证与同步部署
+- **单元测试 100% PASS**：`go test ./...` 全量物理测试跑通，无锁竞争与并发隐患。
+- **二进制全量更新与 GitHub 同步**：全局 `xql.exe` 已同步完成重新编译并更新至 `C:\Users\sj929\go\bin\xql.exe`，提交已全量推送至 GitHub 远程 `master` 分支。
 
 ---
 
