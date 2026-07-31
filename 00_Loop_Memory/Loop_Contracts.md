@@ -41,6 +41,7 @@
 | **`StdlibAPIMatrix`** | `evolution/engine.go`<br>`compiler/compiler.go`<br>`server/mcp.go` | **第二轮已全量接通 (Connected)** | 已成功补齐 MCP 工具 (`stdlib_matrix_update/inspect`)，并接入 `.xql/evolution/stdlib_matrix.json` 磁盘持久化与进程重启存活逻辑。持锁写入无死锁风险。 |
 | **`TreeSitterMapping`** | `evolution/engine.go`<br>`compiler/compiler.go`<br>`server/mcp.go` | **第三轮已全量接通薄接线 (Connected)** | 已补齐 MCP 工具 (`treesitter_mapping_update/inspect`) 与 `.xql/evolution/treesitter_mappings.json` 持久化接入。底层的真实 Tree-sitter WASM 语法解析与 AST 逆向提取在未来新阶段中接入。 |
 | **`remedy` 包精简** | `remedy/remedy.go`<br>`remedy/remedy_test.go` | **已完成死代码彻底精简 (Refactored)** | 删除了 8 个非 AST 转译业务的无关辅助死函数（如会话保活、GitHub凭证清洗等），仅保留 `ProbeValidateDeferredSchema` 参数校验逻辑。 |
+| **`compiler` 性能基准测试套件** | `compiler/bench_test.go` | **已建立全量 Benchmark 基线 (Benchmarked)** | 新增 `BenchmarkCompile_500Fn`、`BenchmarkValidate_500Fn` 和 `BenchmarkCompile_ScalingFn` 性能基准断言，可单命令（`go test ./compiler -bench=.`）防范编译性能回退。 |
 
 
 
