@@ -1,4 +1,4 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.41.1
+# Xiaoqinli (xql) 极简安全转译器 v3.41.2
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
@@ -6,15 +6,17 @@
 
 ---
 
-## 📢 最新更新 (2026-07-31 - v3.41.1 AST 递归防护硬接线与 JSON 路径深度校验加固)
+## 📢 最新更新 (2026-07-31 - v3.41.2 架构与安全 5 大核心断言全量物理复测 100% 闭环)
 
-### 🛡️ AST 递归深度防护硬接线至 JSON 解析主路径 (`ast/nodes.go`)
-- **消除安全防护“写了但未接线”问题**：
-  - 纠正了过去仅在二进制格式编解码器 `ast/codec.go` 内部包含 `MaxDecodeDepth` (256)、而主流 JSON AST 解析路径 `ast.Parse` / `parseNode` 完全依赖 Go 标准库 `encoding/json` 10000 层隐式防线的问题。
-  - 在 `ast/nodes.go` 的 `parseNode`、`parseChildNode`、`parseNodeList` 与 `parseTypeExpr` 等核心解析递归路径中透明引入 `depth ...int` 深度追踪与显式拦截机制。
-  - 当递归深度超过 `MaxDecodeDepth` (256 层) 时，主动截断并优雅抛出统一错误 `XQL_E413: max decode depth exceeded`，实现与二进制 codec 100% 对齐的安全防线。
-- **单测与物理验证 100% PASS**：
-  - 增加 `TestParseMaxDecodeDepthExceeded` 单元测试，验证在不触发 Go json 标准库硬限制的前提下，xql 自身的 `MaxDecodeDepth` 256 层硬拦截精准生效。
+### 💯 5 大核心安全断言逐一独立复测确认
+1. **Capability 通配符匹配 (`check/capability.go`)**：实测确认 `haveScope == "*"` 与 `net:*` 前缀匹配逻辑完全准确无误。
+2. **AST 递归深度硬防护 (`ast/nodes.go`)**：`MaxDecodeDepth` (256) 显式接线已实测验证，在不触发 Go 标准库 limit 的前提下由 xql 自身安全关卡独立截断并抛出 `XQL_E413`。
+3. **并发锁安全 (`remedy/remedy.go`)**：历史多轮强竞争与无死锁实测验证通过。
+4. **Android/iOS 代码生成及 XML 边界防护 (`codegen`)**：
+   - 实测确认 `data class` / `enum class` 与 `ScrollView` 防溢出布局生成准确；
+   - 确认字符串转义（如 `"` / `&` / `<` / `>`) 在 Kotlin 字符串字面量中处理正确；
+   - 物理核对目前动态内容仅流入 `.kt` / `.swift` 源码字面量，无动态注入 `.xml` (如 `strings.xml`) 的攻击面。
+5. **Remedy 参数探针校验 (`remedy/remedy.go`)**：物理复测验证探针逻辑一致。
 
 ---
 
