@@ -2570,3 +2570,79 @@ func TestGenerateIOSProject(t *testing.T) {
 		t.Errorf("main.swift should contain top-level execution code, got:\n%s", mainSwift)
 	}
 }
+
+func TestGeneratePHPWorkspaceDogfood(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [
+			{"kind": "ImportDecl", "path": "./models.xql", "as": "models"},
+			{"kind": "ImportDecl", "path": "./service.xql", "as": "service"},
+			{
+				"kind": "FunctionDecl",
+				"name": "main",
+				"params": [],
+				"returnType": {"kind": "Void"},
+				"body": [
+					{
+						"kind": "VarDecl",
+						"name": "config",
+						"value": {
+							"kind": "StructLit",
+							"typeName": "models.Config",
+							"fields": [{"name": "path", "value": {"kind": "Literal", "valueType": "String", "value": "./config.json"}}]
+						}
+					},
+					{
+						"kind": "VarDecl",
+						"name": "res",
+						"value": {
+							"kind": "CallExpr",
+							"callee": "service.fetchUsers",
+							"args": [{"kind": "Ident", "name": "config"}]
+						}
+					},
+					{
+						"kind": "IfStmt",
+						"condition": {"kind": "MemberExpr", "object": {"kind": "Ident", "name": "res"}, "field": "isOk"},
+						"then": [
+							{
+								"kind": "VarDecl",
+								"name": "users",
+								"value": {"kind": "CallExpr", "callee": "res.unwrap", "args": []}
+							}
+						],
+						"else": [
+							{
+								"kind": "ExprStmt",
+								"expr": {"kind": "CallExpr", "callee": "res.unwrapErr", "args": []}
+							}
+						]
+					}
+				]
+			}
+		]
+	}`
+
+	root := mustParse(t, src)
+	out, err := GeneratePHP(root)
+	if err != nil {
+		t.Fatalf("GeneratePHP error: %v", err)
+	}
+	code := string(out)
+
+	// Verify PHP code syntax fixes
+	checks := []string{
+		"class Result {",
+		"$config = new Config(",
+		"$res = fetchUsers($config);",
+		"if ($res->isOk) {",
+		"$users = $res->unwrap();",
+		"$res->unwrapErr();",
+	}
+
+	for _, c := range checks {
+		if !strings.Contains(code, c) {
+			t.Errorf("PHP output missing expected snippet %q\n---\nFull Generated Code:\n%s", c, code)
+		}
+	}
+}

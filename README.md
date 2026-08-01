@@ -1,4 +1,4 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.41.2
+# Xiaoqinli (xql) 极简安全转译器 v3.41.3
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
@@ -6,17 +6,15 @@
 
 ---
 
-## 📢 最新更新 (2026-07-31 - v3.41.2 架构与安全 5 大核心断言全量物理复测 100% 闭环)
+## 📢 最新更新 (2026-07-31 - v3.41.3 PHP 后端跨文件模块与变量方法语法生成加固)
 
-### 💯 5 大核心安全断言逐一独立复测确认
-1. **Capability 通配符匹配 (`check/capability.go`)**：实测确认 `haveScope == "*"` 与 `net:*` 前缀匹配逻辑完全准确无误。
-2. **AST 递归深度硬防护 (`ast/nodes.go`)**：`MaxDecodeDepth` (256) 显式接线已实测验证，在不触发 Go 标准库 limit 的前提下由 xql 自身安全关卡独立截断并抛出 `XQL_E413`。
-3. **并发锁安全 (`remedy/remedy.go`)**：历史多轮强竞争与无死锁实测验证通过。
-4. **Android/iOS 代码生成及 XML 边界防护 (`codegen`)**：
-   - 实测确认 `data class` / `enum class` 与 `ScrollView` 防溢出布局生成准确；
-   - 确认字符串转义（如 `"` / `&` / `<` / `>`) 在 Kotlin 字符串字面量中处理正确；
-   - 物理核对目前动态内容仅流入 `.kt` / `.swift` 源码字面量，无动态注入 `.xml` (如 `strings.xml`) 的攻击面。
-5. **Remedy 参数探针校验 (`remedy/remedy.go`)**：物理复测验证探针逻辑一致。
+### 🐛 修复 PHP 后端跨文件模块调用与变量前缀语法缺陷 (`codegen/php.go`)
+- **修复两大语法转译缺陷**：
+  1. **跨文件模块与结构体调用错用点号 `.` 运算符**：在 PHP 中点号 `.` 为字符串连接符，过去将 `models.Config` 与 `service.fetchUsers` 错误转译为 `models.Config` 与 `service.fetchUsers` 导致 Fatal Error。现已改为自动剥离模块前缀，输出合法裸类名 `new Config(...)` 与裸函数名 `fetchUsers(...)`。
+  2. **变量方法调用遗漏 `$` 前缀与错用点号**：将 `res.unwrap()` 错译为 `res.unwrap()` 的问题，改为输出标准的 PHP 变量对象方法调用 `$res->unwrap()` 与 `$res->unwrapErr()`。
+  3. **标准 Result / Option 支持类注入**：在 PHP 头部优雅补全了 `class Result`（包含 `$isOk`、`unwrap()`、`unwrapErr()` 等方法与静态工厂），确保 PHP 8.3 实测无缝跑通。
+- **单测加固**：
+  - 新增 `TestGeneratePHPWorkspaceDogfood` 单元测试，全面锁定 PHP 跨模块与变量调用的生成正确性。
 
 ---
 

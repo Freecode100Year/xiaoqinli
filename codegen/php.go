@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"xiaoqinli/ast"
@@ -10,7 +11,7 @@ import (
 // GeneratePHP produces PHP source code from the given typed AST.
 // The "main" function's body is emitted at top level after other functions.
 func GeneratePHP(root ast.Node) ([]byte, error) {
-	g := &phpGen{buf: &strings.Builder{}}
+	g := &phpGen{buf: &strings.Builder{}, imports: make(map[string]bool)}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -19,6 +20,41 @@ func GeneratePHP(root ast.Node) ([]byte, error) {
 
 	g.writeln("<?php")
 	g.writeln("")
+	g.writeln("if (!class_exists('Result')) {")
+	g.writeln("    class Result {")
+	g.writeln("        public bool $isOk;")
+	g.writeln("        public $val;")
+	g.writeln("        public $errVal;")
+	g.writeln("        public function __construct(bool $isOk, $val = null, $errVal = null) {")
+	g.writeln("            $this->isOk = $isOk;")
+	g.writeln("            $this->val = $val;")
+	g.writeln("            $this->errVal = $errVal;")
+	g.writeln("        }")
+	g.writeln("        public static function ok($val) { return new Result(true, $val, null); }")
+	g.writeln("        public static function err($e) { return new Result(false, null, $e); }")
+	g.writeln("        public function unwrap() { return $this->val; }")
+	g.writeln("        public function unwrapErr() { return $this->errVal; }")
+	g.writeln("    }")
+	g.writeln("}")
+	g.writeln("")
+
+	// Collect imports upfront
+	for _, d := range prog.Decls {
+		if id, ok := d.(*ast.ImportDecl); ok {
+			alias := id.As
+			if alias == "" {
+				base := filepath.Base(id.Path)
+				if ext := filepath.Ext(base); ext != "" {
+					alias = base[:len(base)-len(ext)]
+				} else {
+					alias = base
+				}
+			}
+			if alias != "" {
+				g.imports[alias] = true
+			}
+		}
+	}
 
 	// Emit enum declarations first.
 	for _, d := range prog.Decls {
@@ -66,8 +102,9 @@ func GeneratePHP(root ast.Node) ([]byte, error) {
 }
 
 type phpGen struct {
-	buf    *strings.Builder
-	indent int
+	buf     *strings.Builder
+	indent  int
+	imports map[string]bool
 }
 
 func (g *phpGen) write(s string)   { g.buf.WriteString(s) }
@@ -79,7 +116,11 @@ func (g *phpGen) writeIndent() {
 }
 
 func typeToPHP(t ast.TypeExpr) string {
-	switch t.KindName {
+	kind := t.KindName
+	if idx := strings.LastIndex(kind, "."); idx != -1 {
+		kind = kind[idx+1:]
+	}
+	switch kind {
 	case "Int":
 		return "int"
 	case "Float":
@@ -100,7 +141,7 @@ func typeToPHP(t ast.TypeExpr) string {
 	case "Result":
 		return "mixed"
 	default:
-		return t.KindName
+		return kind
 	}
 }
 
@@ -146,6 +187,18 @@ func (g *phpGen) emitNode(n ast.Node) error {
 func (g *phpGen) emitImportDecl(id *ast.ImportDecl) error {
 	g.writeIndent()
 	path := id.Path
+	alias := id.As
+	if alias == "" {
+		base := filepath.Base(path)
+		if ext := filepath.Ext(base); ext != "" {
+			alias = base[:len(base)-len(ext)]
+		} else {
+			alias = base
+		}
+	}
+	if alias != "" {
+		g.imports[alias] = true
+	}
 	if strings.HasSuffix(path, ".xql") {
 		path = path[:len(path)-4] + ".php"
 	}
@@ -499,7 +552,11 @@ func (g *phpGen) emitIndexExpr(ie *ast.IndexExpr) error {
 }
 
 func (g *phpGen) emitStructLit(sl *ast.StructLit) error {
-	g.write("new " + sl.TypeName + "(")
+	typeName := sl.TypeName
+	if idx := strings.LastIndex(typeName, "."); idx != -1 {
+		typeName = typeName[idx+1:]
+	}
+	g.write("new " + typeName + "(")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
@@ -570,7 +627,22 @@ func (g *phpGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	default:
-		g.write(ce.Callee + "(")
+		callee := ce.Callee
+		if idx := strings.LastIndex(callee, "."); idx != -1 {
+			prefix := callee[:idx]
+			name := callee[idx+1:]
+			if prefix == "Result" {
+				g.write("Result::" + name + "(")
+			} else if prefix == "Option" {
+				g.write("Option::" + name + "(")
+			} else if g.imports[prefix] {
+				g.write(name + "(")
+			} else {
+				g.write("$" + prefix + "->" + name + "(")
+			}
+		} else {
+			g.write(callee + "(")
+		}
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
