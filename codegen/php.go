@@ -38,7 +38,7 @@ func GeneratePHP(root ast.Node) ([]byte, error) {
 	g.writeln("}")
 	g.writeln("")
 
-	// Collect imports upfront
+	// Collect imports upfront and emit require_once for multi-file symbol resolution
 	for _, d := range prog.Decls {
 		if id, ok := d.(*ast.ImportDecl); ok {
 			alias := id.As
@@ -53,6 +53,12 @@ func GeneratePHP(root ast.Node) ([]byte, error) {
 			if alias != "" {
 				g.imports[alias] = true
 			}
+			reqPath := id.Path
+			reqPath = strings.TrimPrefix(reqPath, "./")
+			if strings.HasSuffix(reqPath, ".xql") {
+				reqPath = reqPath[:len(reqPath)-4] + ".php"
+			}
+			g.writeln(fmt.Sprintf("require_once __DIR__ . '/%s';", reqPath))
 		}
 	}
 

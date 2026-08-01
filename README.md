@@ -1,4 +1,4 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.41.3
+# Xiaoqinli (xql) 极简安全转译器 v3.41.4
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
@@ -6,15 +6,14 @@
 
 ---
 
-## 📢 最新更新 (2026-07-31 - v3.41.3 PHP 后端跨文件模块与变量方法语法生成加固)
+## 📢 最新更新 (2026-08-01 - v3.41.4 PHP 多文件 require_once 输出落地与真实解释器 100% 物理验证)
 
-### 🐛 修复 PHP 后端跨文件模块调用与变量前缀语法缺陷 (`codegen/php.go`)
-- **修复两大语法转译缺陷**：
-  1. **跨文件模块与结构体调用错用点号 `.` 运算符**：在 PHP 中点号 `.` 为字符串连接符，过去将 `models.Config` 与 `service.fetchUsers` 错误转译为 `models.Config` 与 `service.fetchUsers` 导致 Fatal Error。现已改为自动剥离模块前缀，输出合法裸类名 `new Config(...)` 与裸函数名 `fetchUsers(...)`。
-  2. **变量方法调用遗漏 `$` 前缀与错用点号**：将 `res.unwrap()` 错译为 `res.unwrap()` 的问题，改为输出标准的 PHP 变量对象方法调用 `$res->unwrap()` 与 `$res->unwrapErr()`。
-  3. **标准 Result / Option 支持类注入**：在 PHP 头部优雅补全了 `class Result`（包含 `$isOk`、`unwrap()`、`unwrapErr()` 等方法与静态工厂），确保 PHP 8.3 实测无缝跑通。
-- **单测加固**：
-  - 新增 `TestGeneratePHPWorkspaceDogfood` 单元测试，全面锁定 PHP 跨模块与变量调用的生成正确性。
+### 🐛 修复 PHP 后端 ImportDecl 路由遗漏缺陷 (`codegen/php.go`)
+- **根因修复**：
+  - 过去的 `GeneratePHP` 顶层只用四个循环处理 `EnumDecl`、`StructDecl` 与 `FunctionDecl`，`ImportDecl` 节点未被路由给生成器，导致 `emitImportDecl` 成为永远无法被调用的死代码，在多文件场景下缺失 `require_once` 语句。
+  - 在 `GeneratePHP` 顶层 `ImportDecl` 别名预收集循环中接入 `require_once __DIR__ . '/%s';` 落地生成与路径清洗，彻底闭环了 PHP 多文件符号解包。
+- **物理验证**：
+  - 使用真实的 **PHP 8.3.6 解释器** 运行 `TestLocalE2EWorkspaceDogfood/PHP`，三层 Bug（点号运算符、`$` 前缀丢失、缺失 `require_once`）全部消除并 **100% PASS**。
 
 ---
 

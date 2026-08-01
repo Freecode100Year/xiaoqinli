@@ -2633,6 +2633,8 @@ func TestGeneratePHPWorkspaceDogfood(t *testing.T) {
 	// Verify PHP code syntax fixes
 	checks := []string{
 		"class Result {",
+		"require_once __DIR__ . '/models.php';",
+		"require_once __DIR__ . '/service.php';",
 		"$config = new Config(",
 		"$res = fetchUsers($config);",
 		"if ($res->isOk) {",
