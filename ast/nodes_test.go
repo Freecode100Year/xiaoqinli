@@ -1,6 +1,9 @@
 package ast
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseHello(t *testing.T) {
 	src := `{
@@ -283,5 +286,29 @@ func TestParseUnknownKind(t *testing.T) {
 	_, err := Parse([]byte(src))
 	if err == nil {
 		t.Fatal("expected error for unknown kind")
+	}
+}
+
+func TestParseMaxDecodeDepthExceeded(t *testing.T) {
+	// 构造 300 层嵌套的 BinaryExpr map 结构 (300 层小于 Go json 的 10000 层上限，能精确测试 xql 自身的 MaxDecodeDepth 256 防护)
+	curr := map[string]interface{}{
+		"kind":      "Literal",
+		"valueType": "Int",
+		"value":     1,
+	}
+	for i := 0; i < 300; i++ {
+		curr = map[string]interface{}{
+			"kind":  "BinaryExpr",
+			"op":    "+",
+			"left":  curr,
+			"right": map[string]interface{}{"kind": "Literal", "valueType": "Int", "value": 1},
+		}
+	}
+	_, err := parseNode(curr)
+	if err == nil {
+		t.Fatal("expected error for exceeding MaxDecodeDepth")
+	}
+	if !strings.Contains(err.Error(), "XQL_E413") {
+		t.Fatalf("expected XQL_E413 error, got: %v", err)
 	}
 }

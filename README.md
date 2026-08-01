@@ -1,4 +1,4 @@
-﻿# Xiaoqinli (xql) 鏋佺畝瀹夊叏杞瘧鍣?v3.41.0
+# Xiaoqinli (xql) 极简安全转译器 v3.41.1
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
@@ -6,24 +6,15 @@
 
 ---
 
-## 馃摙 鏈€鏂版洿鏂?(2026-07-30 - v3.41.0 婕旇繘瀛愮郴缁熷叏閲?MCP 宸ュ叿閾?璺ㄨ繘绋嬫寔涔呭寲瀵归綈涓?Remedy 鏃犲叧姝讳唬鐮佹繁搴︾簿绠€)
+## 📢 最新更新 (2026-07-31 - v3.41.1 AST 递归防护硬接线与 JSON 路径深度校验加固)
 
-### 馃К 婕旇繘瀛愮郴缁?MCP 宸ュ叿閾句笌鎸佷箙鍖栧叏閲忓榻?
-- **`StdlibAPIMatrix` 婕旇繘鐭╅樀鎺ラ€氫笌 MCP 宸ュ叿鍖?(`server/mcp.go` & `evolution/engine.go`)**锛?
-  - 鏂板 `stdlib_matrix_inspect` 涓?`stdlib_matrix_update` 涓や釜 MCP 宸ュ叿锛屽厑璁?Agent 瀹炴椂鏌ヨ涓庡綍鍏ュ悇璇█搴熷純 API 鏄犲皠銆?
-  - 鍦?`evolution/engine.go` 涓帴鍏?`.xql/evolution/stdlib_matrix.json` 纾佺洏鍐欓€忔寔涔呭寲锛岄伩寮€浜嗘寔閿?`autoSave()` 姝婚攣闅愭偅锛屼繚璇佽繘绋嬮噸鍚悗鏁版嵁鍏ㄩ噺淇濆瓨銆?
-- **`TreeSitterMapping` 鑺傜偣鏄犲皠鎺ラ€氫笌 MCP 宸ュ叿鍖?(`server/mcp.go` & `evolution/engine.go`)**锛?
-  - 鏂板 `treesitter_mapping_inspect` 涓?`treesitter_mapping_update` 涓や釜 MCP 宸ュ叿锛屽苟灏嗚妭鐐硅鍒欒惤鐩樿嚦 `.xql/evolution/treesitter_mappings.json`銆?
-  - 瀹炵幇浜嗚瘖鏂蹇嗐€佸畨鍏ㄧ瓥鐣ャ€丼kill 琛ラ綈銆丆odegen 绛栫暐銆丼tdlib Matrix銆乀ree-sitter Mapping 6 澶ф紨杩涘瓙绯荤粺 **100% 缁熶竴鐨?MCP 宸ュ叿閾句笌璺ㄨ繘绋嬫寔涔呭寲缁撴瀯**銆?
-
-### 馃Ч Remedy 鍖呴潪 AST 涓氬姟鏃犲叧姝讳唬鐮佹繁搴︾簿绠€ (`remedy/remedy.go`)
-- **娓呯悊 8 涓笌杞瘧鍣ㄤ富绾挎棤鍏崇殑妗嗘灦娈嬬暀姝诲嚱鏁?*锛?
-  - 褰诲簳鍒犻櫎浜?`StripURLUserinfo`銆乣PreserveRecentlyActiveSessions`銆乣UpdateSkillWithLockedRegistry`銆乣SanitizeSessionEnv`銆乣BoundedStartupRestoreGate`銆乣IdleLoopGate`銆乣SanitizeGitHubCredentials` 绛?203 琛屾棤鍏虫浠ｇ爜銆?
-  - 浠呬繚鐣欏湪 `server/mcp.go` 涓墿鐞嗚皟鐢ㄧ殑 `ProbeValidateDeferredSchema` 鍙傛暟鎺㈤拡鏍￠獙閫昏緫锛屾樉钁楅檷浣庡寘浣撶Н涓庣淮鎶ゅ璁″櫔闊炽€?
-
-### 馃洝锔?鍏ㄩ噺鐗╃悊楠岃瘉涓庡悓姝ラ儴缃?
-- **鍗曞厓娴嬭瘯 100% PASS**锛歚go test ./...` 鍏ㄩ噺鐗╃悊娴嬭瘯璺戦€氾紝鏃犻攣绔炰簤涓庡苟鍙戦殣鎮ｃ€?
-- **浜岃繘鍒跺叏閲忔洿鏂颁笌 GitHub 鍚屾**锛氬叏灞€ `xql.exe` 宸插悓姝ュ畬鎴愰噸鏂扮紪璇戝苟鏇存柊鑷?`$GOPATH/bin/xql.exe`锛屾彁浜ゅ凡鍏ㄩ噺鎺ㄩ€佽嚦 GitHub 杩滅▼ `master` 鍒嗘敮銆?
+### 🛡️ AST 递归深度防护硬接线至 JSON 解析主路径 (`ast/nodes.go`)
+- **消除安全防护“写了但未接线”问题**：
+  - 纠正了过去仅在二进制格式编解码器 `ast/codec.go` 内部包含 `MaxDecodeDepth` (256)、而主流 JSON AST 解析路径 `ast.Parse` / `parseNode` 完全依赖 Go 标准库 `encoding/json` 10000 层隐式防线的问题。
+  - 在 `ast/nodes.go` 的 `parseNode`、`parseChildNode`、`parseNodeList` 与 `parseTypeExpr` 等核心解析递归路径中透明引入 `depth ...int` 深度追踪与显式拦截机制。
+  - 当递归深度超过 `MaxDecodeDepth` (256 层) 时，主动截断并优雅抛出统一错误 `XQL_E413: max decode depth exceeded`，实现与二进制 codec 100% 对齐的安全防线。
+- **单测与物理验证 100% PASS**：
+  - 增加 `TestParseMaxDecodeDepthExceeded` 单元测试，验证在不触发 Go json 标准库硬限制的前提下，xql 自身的 `MaxDecodeDepth` 256 层硬拦截精准生效。
 
 ---
 
