@@ -406,10 +406,13 @@ func parseNode(raw map[string]interface{}, depth ...int) (Node, error) {
 		return parseSwitchStmt(raw, curDepth)
 	case "StructLit":
 		return parseStructLit(raw, curDepth)
-	case "ArrayLit":
+	case "ArrayLit", "ArrayLiteral":
+		// ArrayLit and ArrayLiteral are the same node (ElemType + Elements)
+		// under two historical spellings. Normalizing both to *ArrayLit here
+		// means every backend that implements one implements both, instead of
+		// requiring each of the 45 codegen backends to carry two identical
+		// emit functions to stay in sync.
 		return parseArrayLit(raw, curDepth)
-	case "ArrayLiteral":
-		return parseArrayLiteral(raw, curDepth)
 	case "MapLiteral":
 		return parseMapLiteral(raw, curDepth)
 	case "IndexExpr":
@@ -961,25 +964,6 @@ func parseStructLit(raw map[string]interface{}, depth ...int) (*StructLit, error
 
 func parseArrayLit(raw map[string]interface{}, depth ...int) (*ArrayLit, error) {
 	al := &ArrayLit{}
-	if t, ok := raw["elemType"]; ok {
-		te, err := parseTypeExpr(t, depth...)
-		if err != nil {
-			return nil, err
-		}
-		al.ElemType = te
-	}
-	if elems, ok := raw["elements"].([]interface{}); ok {
-		nodes, err := parseNodeList(elems, depth...)
-		if err != nil {
-			return nil, err
-		}
-		al.Elements = nodes
-	}
-	return al, nil
-}
-
-func parseArrayLiteral(raw map[string]interface{}, depth ...int) (*ArrayLiteral, error) {
-	al := &ArrayLiteral{}
 	if t, ok := raw["elemType"]; ok {
 		te, err := parseTypeExpr(t, depth...)
 		if err != nil {

@@ -158,6 +158,55 @@ func TestParseAllNodeKinds(t *testing.T) {
 	}
 }
 
+// TestParseArrayLiteralNormalizesToArrayLit pins the fix for a codegen gap:
+// "ArrayLit" and "ArrayLiteral" are the same shape (ElemType + Elements)
+// under two historical JSON spellings, but only a minority of the 45 codegen
+// backends implemented emitArrayLiteral, so a program using the "ArrayLiteral"
+// spelling failed on the other 28. Both spellings must parse to the same Go
+// type so every backend that already handles ArrayLit handles both.
+func TestParseArrayLiteralNormalizesToArrayLit(t *testing.T) {
+	input := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "f",
+			"params": [],
+			"returnType": {"kind": "Void"},
+			"effects": [],
+			"grant": [],
+			"body": [{
+				"kind": "ReturnStmt",
+				"value": {
+					"kind": "ArrayLiteral",
+					"elemType": {"kind": "Int"},
+					"elements": [
+						{"kind": "Literal", "valueType": "Int", "value": 1},
+						{"kind": "Literal", "valueType": "Int", "value": 2}
+					]
+				}
+			}]
+		}]
+	}`
+
+	node, err := Parse([]byte(input))
+	if err != nil {
+		t.Fatalf("Parse failed: %v", err)
+	}
+	fd := node.(*Program).Decls[0].(*FunctionDecl)
+	ret := fd.Body[0].(*ReturnStmt)
+
+	al, ok := ret.Value.(*ArrayLit)
+	if !ok {
+		t.Fatalf("expected \"ArrayLiteral\" JSON to parse into *ArrayLit, got %T", ret.Value)
+	}
+	if al.ElemType.KindName != "Int" {
+		t.Errorf("expected elem type Int, got %q", al.ElemType.KindName)
+	}
+	if len(al.Elements) != 2 {
+		t.Errorf("expected 2 elements, got %d", len(al.Elements))
+	}
+}
+
 func TestParseTypeExprComplex(t *testing.T) {
 	input := `{
 		"kind": "Program",
