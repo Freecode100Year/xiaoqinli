@@ -1218,8 +1218,14 @@ func TestResultTypeRejection(t *testing.T) {
 	}`
 	root := mustParse(t, src)
 
-	// These targets should reject Result
-	rejectTargets := []string{"nim", "julia", "lua", "ruby"}
+	// These targets should reject Result. nim is not a permanent exclusion:
+	// Result.ok/Result.err need both the Ok and Err type parameters at the
+	// call site, and Nim's generic return-type inference (confirmed against
+	// a real Nim 2.2.10 compiler) cannot recover the type that appears only
+	// in the declared return type, not in any argument — fixing this needs
+	// expected-type context threaded through the Nim backend, which the
+	// codegen layer does not currently track.
+	rejectTargets := []string{"nim"}
 	for _, tgt := range rejectTargets {
 		_, err := Generate(root, tgt)
 		if err == nil {
@@ -1229,13 +1235,115 @@ func TestResultTypeRejection(t *testing.T) {
 		}
 	}
 
-	// These targets should accept Result
-	acceptTargets := []string{"go", "rust", "kotlin", "swift", "py", "java", "csharp", "php", "zig", "ts", "dart"}
+	// These targets should accept Result. lua, ruby and julia now emit a
+	// real Result wrapper instead of collapsing the type; see
+	// TestGenerateLuaResultSemantics / TestGenerateRubyResultSemantics /
+	// TestGenerateJuliaResultSemantics for physically-verified round trips.
+	acceptTargets := []string{"go", "rust", "kotlin", "swift", "py", "java", "csharp", "php", "zig", "ts", "dart", "lua", "ruby", "julia"}
 	for _, tgt := range acceptTargets {
 		_, err := Generate(root, tgt)
 		if err != nil {
 			t.Errorf("Generate(%q) should accept Result type, got error: %v", tgt, err)
 		}
+	}
+}
+
+// resultRoundTripProgram exercises Result.ok, Result.err, .isOk, .unwrap and
+// .unwrapErr together, matching examples/e2e_workspace/service.xql's shape.
+const resultRoundTripProgram = `{
+	"kind": "Program",
+	"declarations": [{
+		"kind": "FunctionDecl",
+		"name": "parse",
+		"params": [{"name": "n", "type": {"kind": "Int"}}],
+		"returnType": {"kind": "Result", "okType": {"kind": "Int"}, "errType": {"kind": "String"}},
+		"effects": [],
+		"grant": [],
+		"body": [{
+			"kind": "IfStmt",
+			"condition": {"kind": "BinaryExpr", "op": "<",
+				"left": {"kind": "Ident", "name": "n"},
+				"right": {"kind": "Literal", "valueType": "Int", "value": 0}},
+			"then": [{"kind": "ReturnStmt", "value": {"kind": "CallExpr", "callee": "Result.err",
+				"args": [{"kind": "Literal", "valueType": "String", "value": "negative"}]}}],
+			"else": [{"kind": "ReturnStmt", "value": {"kind": "CallExpr", "callee": "Result.ok",
+				"args": [{"kind": "Ident", "name": "n"}]}}]
+		}]
+	}, {
+		"kind": "FunctionDecl",
+		"name": "main",
+		"params": [],
+		"returnType": {"kind": "Void"},
+		"effects": ["state"],
+		"grant": ["io"],
+		"body": [
+			{
+				"kind": "VarDecl",
+				"name": "res",
+				"type": {"kind": "Result", "okType": {"kind": "Int"}, "errType": {"kind": "String"}},
+				"value": {"kind": "CallExpr", "callee": "parse", "args": [{"kind": "Literal", "valueType": "Int", "value": 5}]}
+			},
+			{
+				"kind": "IfStmt",
+				"condition": {"kind": "MemberExpr", "object": {"kind": "Ident", "name": "res"}, "field": "isOk"},
+				"then": [{"kind": "ExprStmt", "expr": {"kind": "CallExpr", "callee": "println",
+					"args": [{"kind": "CallExpr", "callee": "res.unwrap", "args": []}]}}],
+				"else": [{"kind": "ExprStmt", "expr": {"kind": "CallExpr", "callee": "println",
+					"args": [{"kind": "CallExpr", "callee": "res.unwrapErr", "args": []}]}}]
+			}
+		]
+	}]
+}`
+
+// TestGenerateLuaResultSemantics pins the Lua Result wrapper: physically
+// verified against a real Lua 5.4.6 interpreter (see local_e2e_test.go /
+// TestLocalE2EWorkspaceDogfood/Lua for the interpreter-backed check).
+func TestGenerateLuaResultSemantics(t *testing.T) {
+	root := mustParse(t, resultRoundTripProgram)
+	out, err := GenerateLua(root)
+	if err != nil {
+		t.Fatalf("GenerateLua: %v", err)
+	}
+	code := string(out)
+	for _, s := range []string{"Result.ok(", "Result.err(", "res.isOk", "res.unwrap()", "res.unwrapErr()"} {
+		if !strings.Contains(code, s) {
+			t.Errorf("Lua Result output missing %q\n---\n%s", s, code)
+		}
+	}
+}
+
+// TestGenerateRubyResultSemantics pins the Ruby Result class: physically
+// verified against a real Ruby 3.3.12 interpreter.
+func TestGenerateRubyResultSemantics(t *testing.T) {
+	root := mustParse(t, resultRoundTripProgram)
+	out, err := GenerateRuby(root)
+	if err != nil {
+		t.Fatalf("GenerateRuby: %v", err)
+	}
+	code := string(out)
+	for _, s := range []string{"class Result", "def self.ok", "def self.err", "def isOk", "def unwrap", "def unwrapErr", "Result.ok(", "Result.err(", "res.isOk", "res.unwrap()", "res.unwrapErr()"} {
+		if !strings.Contains(code, s) {
+			t.Errorf("Ruby Result output missing %q\n---\n%s", s, code)
+		}
+	}
+}
+
+// TestGenerateJuliaResultSemantics pins the Julia Result struct: physically
+// verified against a real Julia 1.12.6 interpreter.
+func TestGenerateJuliaResultSemantics(t *testing.T) {
+	root := mustParse(t, resultRoundTripProgram)
+	out, err := GenerateJulia(root)
+	if err != nil {
+		t.Fatalf("GenerateJulia: %v", err)
+	}
+	code := string(out)
+	for _, s := range []string{"mutable struct Result", "resultOk(v)", "resultErr(e)", "resultOk(", "resultErr(", "res.isOk", "xqlUnwrap(res)", "xqlUnwrapErr(res)"} {
+		if !strings.Contains(code, s) {
+			t.Errorf("Julia Result output missing %q\n---\n%s", s, code)
+		}
+	}
+	if strings.Contains(code, "Result.ok") || strings.Contains(code, "Result.err") {
+		t.Errorf("Julia output still contains unrewritten Result.ok/Result.err callee:\n%s", code)
 	}
 }
 

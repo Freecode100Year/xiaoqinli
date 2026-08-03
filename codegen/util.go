@@ -241,13 +241,16 @@ func forkLocalVars(parent map[string]bool) map[string]bool {
 
 // unsupportedResultTargets lists targets that silently map Result<T> to just T,
 // losing error-handling semantics. These should reject Result types explicitly.
+//
+// lua, ruby and julia are not listed: all three now emit a real Result
+// wrapper (a Lua table, a Ruby class, or a Julia struct with resultOk/
+// resultErr/xqlUnwrap/xqlUnwrapErr helpers) instead of collapsing the type,
+// with CallExpr/MemberExpr rewritten to match. Verified against real Lua
+// 5.4.6, Ruby 3.3.12, and Julia 1.12.6 interpreters.
 var unsupportedResultTargets = map[string]bool{
 	"js":         true,
 	"javascript": true,
 	"nim":        true,
-	"julia":      true,
-	"lua":        true,
-	"ruby":       true,
 }
 
 // validateTypesForTarget walks the AST and returns an error if any type is

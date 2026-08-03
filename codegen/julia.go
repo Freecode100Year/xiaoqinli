@@ -17,6 +17,23 @@ func GenerateJulia(root ast.Node) ([]byte, error) {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
 	}
 
+	// Result helper, emitted unconditionally. Fields are untyped (Any) rather
+	// than a true parametric struct: Julia can't infer the unused branch's
+	// type parameter from a single-argument constructor call (resultOk(v)
+	// has no way to know E), and the source language doesn't need static
+	// precision here — this mirrors the interface{}-based Result already
+	// used by the Go backend.
+	g.writeln("mutable struct Result")
+	g.writeln("    isOk::Bool")
+	g.writeln("    val::Any")
+	g.writeln("    errVal::Any")
+	g.writeln("end")
+	g.writeln("resultOk(v) = Result(true, v, nothing)")
+	g.writeln("resultErr(e) = Result(false, nothing, e)")
+	g.writeln("xqlUnwrap(r::Result) = r.val")
+	g.writeln("xqlUnwrapErr(r::Result) = r.errVal")
+	g.writeln("")
+
 	// Emit enum declarations first.
 	for _, d := range prog.Decls {
 		if ed, ok := d.(*ast.EnumDecl); ok {
@@ -87,10 +104,7 @@ func typeToJulia(t ast.TypeExpr) string {
 		}
 		return "Union{Any, Nothing}"
 	case "Result":
-		if t.OkType != nil {
-			return typeToJulia(*t.OkType)
-		}
-		return "Any"
+		return "Result"
 	default:
 		return t.KindName
 	}
@@ -504,7 +518,32 @@ func (g *jlGen) emitStructLit(sl *ast.StructLit) error {
 }
 
 func (g *jlGen) emitCall(ce *ast.CallExpr) error {
-	switch ce.Callee {
+	// Result is a struct, not a namespace, so Julia has no "Result.ok(v)"
+	// call syntax; and res.unwrap()/res.unwrapErr() are free functions here
+	// (see the Result helper emitted at the top of the file), not struct
+	// methods, so they can't use Julia's obj.field(...) call sugar either.
+	// Both need rewriting to plain function calls before the generic
+	// passthrough below.
+	callee := ce.Callee
+	switch callee {
+	case "Result.ok":
+		callee = "resultOk"
+	case "Result.err":
+		callee = "resultErr"
+	default:
+		if idx := strings.LastIndex(callee, "."); idx > 0 {
+			obj, method := callee[:idx], callee[idx+1:]
+			switch method {
+			case "unwrap":
+				g.write("xqlUnwrap(" + obj + ")")
+				return nil
+			case "unwrapErr":
+				g.write("xqlUnwrapErr(" + obj + ")")
+				return nil
+			}
+		}
+	}
+	switch callee {
 	case "println":
 		g.write("println(")
 		for i, arg := range ce.Args {
@@ -536,7 +575,7 @@ func (g *jlGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	default:
-		g.write(ce.Callee + "(")
+		g.write(callee + "(")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")

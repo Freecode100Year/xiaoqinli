@@ -27,6 +27,35 @@ func GenerateRuby(root ast.Node) ([]byte, error) {
 		g.writeln("")
 	}
 
+	// Result helper class, emitted unconditionally like Lua's Result table.
+	// Callee/field passthrough (Result.ok, Result.err, res.unwrap, res.isOk)
+	// only needs matching method names, not shared identity, so reopening
+	// this class in every generated file when a program is split across
+	// several .rb files via require_relative is harmless.
+	g.writeln("class Result")
+	g.writeln("  def self.ok(v)")
+	g.writeln("    new(true, v, nil)")
+	g.writeln("  end")
+	g.writeln("  def self.err(e)")
+	g.writeln("    new(false, nil, e)")
+	g.writeln("  end")
+	g.writeln("  def initialize(is_ok, val, err_val)")
+	g.writeln("    @isOk = is_ok")
+	g.writeln("    @val = val")
+	g.writeln("    @err_val = err_val")
+	g.writeln("  end")
+	g.writeln("  def isOk")
+	g.writeln("    @isOk")
+	g.writeln("  end")
+	g.writeln("  def unwrap")
+	g.writeln("    @val")
+	g.writeln("  end")
+	g.writeln("  def unwrapErr")
+	g.writeln("    @err_val")
+	g.writeln("  end")
+	g.writeln("end")
+	g.writeln("")
+
 	first := true
 	for _, d := range prog.Decls {
 		if ed, ok := d.(*ast.EnumDecl); ok {
