@@ -658,6 +658,9 @@ func parseAssignStmt(raw map[string]interface{}, depth ...int) (*AssignStmt, err
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, fmt.Errorf("XQL_E101: AssignStmt missing 'value'")
+	}
 	as.Value = val
 	return as, nil
 }
@@ -775,6 +778,9 @@ func parseExprStmt(raw map[string]interface{}, depth ...int) (*ExprStmt, error) 
 	if err != nil {
 		return nil, err
 	}
+	if expr == nil {
+		return nil, fmt.Errorf("XQL_E101: ExprStmt missing 'expr'")
+	}
 	es.Expr = expr
 	return es, nil
 }
@@ -846,6 +852,9 @@ func parseMatchExpr(raw map[string]interface{}, depth ...int) (*MatchExpr, error
 	if err != nil {
 		return nil, err
 	}
+	if val == nil {
+		return nil, fmt.Errorf("XQL_E101: MatchExpr missing 'value'")
+	}
 	me.Value = val
 	if arms, ok := raw["arms"].([]interface{}); ok {
 		for _, a := range arms {
@@ -883,6 +892,9 @@ func parseSwitchStmt(raw map[string]interface{}, depth ...int) (*SwitchStmt, err
 	val, err := parseChildNode(raw, "value", depth...)
 	if err != nil {
 		return nil, err
+	}
+	if val == nil {
+		return nil, fmt.Errorf("XQL_E101: SwitchStmt missing 'value'")
 	}
 	ss.Value = val
 	if cases, ok := raw["cases"].([]interface{}); ok {
@@ -1031,10 +1043,16 @@ func parseIndexExpr(raw map[string]interface{}, depth ...int) (*IndexExpr, error
 	if err != nil {
 		return nil, err
 	}
+	if target == nil {
+		return nil, fmt.Errorf("XQL_E101: IndexExpr missing 'target'")
+	}
 	ie.Target = target
 	index, err := parseChildNode(raw, "index", depth...)
 	if err != nil {
 		return nil, err
+	}
+	if index == nil {
+		return nil, fmt.Errorf("XQL_E101: IndexExpr missing 'index'")
 	}
 	ie.Index = index
 	return ie, nil
@@ -1042,19 +1060,34 @@ func parseIndexExpr(raw map[string]interface{}, depth ...int) (*IndexExpr, error
 
 func parseIfExpr(raw map[string]interface{}, depth ...int) (*IfExpr, error) {
 	ie := &IfExpr{}
-	cond, err := parseChildNode(raw, "condition", depth...)
+	cond, err := parseChildNode(raw, "cond", depth...)
 	if err != nil {
 		return nil, err
+	}
+	if cond == nil {
+		cond, err = parseChildNode(raw, "condition", depth...)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if cond == nil {
+		return nil, fmt.Errorf("XQL_E101: IfExpr missing 'cond'")
 	}
 	ie.Cond = cond
 	thenNode, err := parseChildNode(raw, "then", depth...)
 	if err != nil {
 		return nil, err
 	}
+	if thenNode == nil {
+		return nil, fmt.Errorf("XQL_E101: IfExpr missing 'then'")
+	}
 	ie.Then = thenNode
 	elseNode, err := parseChildNode(raw, "else", depth...)
 	if err != nil {
 		return nil, err
+	}
+	if elseNode == nil {
+		return nil, fmt.Errorf("XQL_E101: IfExpr missing 'else'")
 	}
 	ie.Else = elseNode
 	return ie, nil
@@ -1104,10 +1137,16 @@ func parseBinaryExpr(raw map[string]interface{}, depth ...int) (*BinaryExpr, err
 	if err != nil {
 		return nil, err
 	}
+	if left == nil {
+		return nil, fmt.Errorf("XQL_E101: BinaryExpr missing 'left'")
+	}
 	be.Left = left
 	right, err := parseChildNode(raw, "right", depth...)
 	if err != nil {
 		return nil, err
+	}
+	if right == nil {
+		return nil, fmt.Errorf("XQL_E101: BinaryExpr missing 'right'")
 	}
 	be.Right = right
 	return be, nil
@@ -1119,6 +1158,9 @@ func parseUnaryExpr(raw map[string]interface{}, depth ...int) (*UnaryExpr, error
 	operand, err := parseChildNode(raw, "operand", depth...)
 	if err != nil {
 		return nil, err
+	}
+	if operand == nil {
+		return nil, fmt.Errorf("XQL_E101: UnaryExpr missing 'operand'")
 	}
 	ue.Operand = operand
 	return ue, nil
@@ -1167,6 +1209,9 @@ func parseMemberExpr(raw map[string]interface{}, depth ...int) (*MemberExpr, err
 	if err != nil {
 		return nil, err
 	}
+	if obj == nil {
+		return nil, fmt.Errorf("XQL_E101: MemberExpr missing 'object'")
+	}
 	me.Object = obj
 	return me, nil
 }
@@ -1199,6 +1244,9 @@ func parseAwaitExpr(raw map[string]interface{}, depth ...int) (*AwaitExpr, error
 	expr, err := parseChildNode(raw, "expr", depth...)
 	if err != nil {
 		return nil, err
+	}
+	if expr == nil {
+		return nil, fmt.Errorf("XQL_E101: AwaitExpr missing 'expr'")
 	}
 	ae.Expr = expr
 	return ae, nil

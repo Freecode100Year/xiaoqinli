@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"xiaoqinli/compiler"
@@ -16,7 +17,7 @@ func getUsage() string {
 	return fmt.Sprintf(`xiaoqinli - AST-First transpiler v%s
 
 Usage:
-  xiaoqinli compile --file <path.xql.json> --target <lang> [--out <output>]
+  xiaoqinli compile --file <path.xql.json> --target <lang> [--out <output>] [--no-strict-caps]
   xiaoqinli validate --file <path.xql.json>
   xiaoqinli targets                         List all supported target languages
   xiaoqinli stdio                           MCP stdio mode
@@ -99,7 +100,12 @@ func cmdValidate(args []string) {
 	}
 
 	strictCaps := flags["strict-caps"] == "true"
-	vr := compiler.Validate(compiler.ValidateRequest{AST: pr.AST, StrictCapabilities: strictCaps})
+	vr := compiler.Validate(compiler.ValidateRequest{
+		AST:                pr.AST,
+		WorkspacePath:      filepath.Dir(filePath),
+		EntryFile:          filePath,
+		StrictCapabilities: strictCaps,
+	})
 	if !vr.Success {
 		fmt.Fprintf(os.Stderr, "%s\n", vr.Error)
 		os.Exit(1)
@@ -120,7 +126,8 @@ func cmdCompile(args []string) {
 		target = "go"
 	}
 
-	result := compiler.CompileFromFile(filePath, target, outPath)
+	noStrictCaps := flags["no-strict-caps"] == "true"
+	result := compiler.CompileFromFileWithOptions(filePath, target, outPath, noStrictCaps)
 	if !result.Success {
 		handleCompileError(result)
 		os.Exit(2)

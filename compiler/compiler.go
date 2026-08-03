@@ -134,6 +134,19 @@ func determineStrictCapabilities(strictCaps, disableStrictCaps bool) bool {
 	return true
 }
 
+// resolveEntryFile returns the path imports should be resolved against.
+// Imports are resolved relative to the entry file's directory, so a bare
+// workspace root is turned into a placeholder path inside that root.
+func resolveEntryFile(entryFile, workspacePath string) string {
+	if entryFile != "" {
+		return entryFile
+	}
+	if workspacePath != "" {
+		return filepath.Join(workspacePath, "__entry__.xql")
+	}
+	return ""
+}
+
 // Validate runs all semantic checks without generating code.
 func Validate(req ValidateRequest) ValidateResult {
 	if req.AST == nil {
@@ -145,7 +158,8 @@ func Validate(req ValidateRequest) ValidateResult {
 		}
 	}
 	strictCaps := determineStrictCapabilities(req.StrictCapabilities, req.DisableStrictCapabilities)
-	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: strictCaps}); err != nil {
+	entry := resolveEntryFile(req.EntryFile, req.WorkspacePath)
+	if err := check.RunAllWithOptions(req.AST, entry, nil, check.CheckOptions{StrictCapabilities: strictCaps}); err != nil {
 		diags := wrapDiag(err)
 		return ValidateResult{
 			Error:       formatDiagError(err, diags),
@@ -174,7 +188,8 @@ func Compile(req CompileRequest) CompileResult {
 
 	// Phase 1: validate.
 	strictCaps := determineStrictCapabilities(req.StrictCapabilities, req.DisableStrictCapabilities)
-	if err := check.RunAllWithOptions(req.AST, "", nil, check.CheckOptions{StrictCapabilities: strictCaps}); err != nil {
+	entry := resolveEntryFile(req.EntryFile, req.WorkspacePath)
+	if err := check.RunAllWithOptions(req.AST, entry, nil, check.CheckOptions{StrictCapabilities: strictCaps}); err != nil {
 		diags := wrapDiag(err)
 		return CompileResult{
 			Error:       formatDiagError(err, diags),
@@ -233,6 +248,12 @@ func Compile(req CompileRequest) CompileResult {
 
 // CompileFromFile is a convenience wrapper: read file → parse → compile.
 func CompileFromFile(path, target, outputPath string) CompileResult {
+	return CompileFromFileWithOptions(path, target, outputPath, false)
+}
+
+// CompileFromFileWithOptions is CompileFromFile with control over strict
+// capability checking.
+func CompileFromFileWithOptions(path, target, outputPath string, disableStrictCaps bool) CompileResult {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		msg := fmt.Sprintf("XQL_E404: %v", err)
@@ -246,10 +267,12 @@ func CompileFromFile(path, target, outputPath string) CompileResult {
 		}
 	}
 	return Compile(CompileRequest{
-		AST:           pr.AST,
-		Target:        target,
-		OutputPath:    outputPath,
-		WorkspacePath: filepath.Dir(path),
+		AST:                       pr.AST,
+		Target:                    target,
+		OutputPath:                outputPath,
+		WorkspacePath:             filepath.Dir(path),
+		EntryFile:                 path,
+		DisableStrictCapabilities: disableStrictCaps,
 	})
 }
 

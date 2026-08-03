@@ -28,6 +28,10 @@ type CompileRequest struct {
 	// WorkspacePath is the project root for multi-file validation.
 	WorkspacePath string
 
+	// EntryFile is the path of the file the AST was parsed from. Imports are
+	// resolved relative to its directory. When empty, WorkspacePath is used.
+	EntryFile string
+
 	// ValidateOnly skips codegen when true.
 	ValidateOnly bool
 
@@ -90,6 +94,7 @@ type ParseResult struct {
 type ValidateRequest struct {
 	AST                       ast.Node
 	WorkspacePath             string
+	EntryFile                 string
 	StrictCapabilities        bool
 	DisableStrictCapabilities bool
 }
