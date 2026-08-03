@@ -45,6 +45,10 @@ type TypeChecker struct {
 	currentFile string
 	workspace   *vfs.Workspace
 	imports     map[string]*TypeChecker
+
+	// program retains this checker's own Program so later passes (notably the
+	// capability check) can walk imported modules, not just the entry file.
+	program *ast.Program
 	Diagnostics []Diagnostic
 }
 
@@ -943,6 +947,7 @@ func (tc *TypeChecker) loadImports(prog *ast.Program, visiting map[string]bool) 
 			depTC := NewTypeChecker()
 			depTC.currentFile = depPath
 			depTC.workspace = tc.workspace
+			depTC.program = depProg
 			nextVisiting := make(map[string]bool)
 			for k, v := range visiting {
 				nextVisiting[k] = v

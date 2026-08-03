@@ -84,6 +84,11 @@ func CheckCapabilitiesWithOptions(root ast.Node, tc *TypeChecker, opts CheckOpti
 	var errs []string
 	checkCaps(root, funcGrants, &errs, tc, opts)
 
+	// Imported modules are checked too: a grant violation is a violation
+	// wherever it lives, and without this it would only be caught when the
+	// module happens to be compiled as an entry file.
+	checkImportedCaps(tc, &errs, opts, map[*TypeChecker]bool{tc: true})
+
 	for _, e := range errs {
 		tc.addError(e)
 	}
@@ -96,6 +101,24 @@ func CheckCapabilitiesWithOptions(root ast.Node, tc *TypeChecker, opts CheckOpti
 		return fmt.Errorf("%s", msg)
 	}
 	return nil
+}
+
+// checkImportedCaps walks the import graph and capability-checks each module
+// against its own grants. visited keeps a diamond-shaped import graph from
+// reporting the same module twice.
+func checkImportedCaps(tc *TypeChecker, errs *[]string, opts CheckOptions, visited map[*TypeChecker]bool) {
+	for _, depTC := range tc.imports {
+		if visited[depTC] {
+			continue
+		}
+		visited[depTC] = true
+		if depTC.program != nil {
+			depGrants := make(map[string]Capability)
+			collectGrants(depTC.program, depGrants)
+			checkCaps(depTC.program, depGrants, errs, depTC, opts)
+		}
+		checkImportedCaps(depTC, errs, opts, visited)
+	}
 }
 
 func collectGrants(n ast.Node, out map[string]Capability) {
