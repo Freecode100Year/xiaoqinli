@@ -215,6 +215,16 @@ func checkCapExpr(n ast.Node, callerName string, callerCap Capability, funcGrant
 						found = true
 					}
 				}
+				// Result intrinsics are pure: they return the wrapped value or
+				// panic, never performing I/O. The type checker already accepts
+				// them on Result-typed receivers (see inferType), so treating
+				// them as capability-free keeps both checks consistent. Imports
+				// are resolved first, so a real imported function of the same
+				// name still uses its declared grant.
+				if !found && isResultIntrinsic(calleeName, funcName) {
+					calleeCap = Capability{}
+					found = true
+				}
 			}
 		} else {
 			if cap, ok := funcGrants[calleeName]; ok {
@@ -288,4 +298,15 @@ func checkCapExpr(n ast.Node, callerName string, callerCap Capability, funcGrant
 			checkCapExpr(entry.Value, callerName, callerCap, funcGrants, errs, tc, opts)
 		}
 	}
+}
+
+// isResultIntrinsic reports whether a call is a built-in Result operation.
+// These mirror exactly what TypeChecker.inferType recognises: the Result.ok
+// and Result.err constructors, and the unwrap/unwrapErr accessors on a
+// Result-typed receiver. All are pure and require no capability grant.
+func isResultIntrinsic(calleeName, funcName string) bool {
+	if calleeName == "Result.ok" || calleeName == "Result.err" {
+		return true
+	}
+	return funcName == "unwrap" || funcName == "unwrapErr"
 }
