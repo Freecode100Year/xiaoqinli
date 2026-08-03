@@ -201,8 +201,21 @@ func Compile(req CompileRequest) CompileResult {
 		return CompileResult{Success: true}
 	}
 
+	// Phase 1.5: link. Backends emit a single file and never emit an imported
+	// module's source, so a multi-file program is merged into one Program here
+	// rather than generating code that references declarations nobody wrote.
+	linked, err := FlattenImports(req.AST, entry)
+	if err != nil {
+		diags := wrapDiag(err)
+		return CompileResult{
+			Error:       formatDiagError(err, diags),
+			ErrorCode:   extractCode(err.Error()),
+			Diagnostics: diags,
+		}
+	}
+
 	// Phase 2: codegen.
-	proj, err := codegen.GenerateProject(req.AST, req.Target)
+	proj, err := codegen.GenerateProject(linked, req.Target)
 	if err != nil {
 		msg := fmt.Sprintf("XQL_E401: codegen error: %v", err)
 		return CompileResult{
