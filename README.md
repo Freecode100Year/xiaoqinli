@@ -1,8 +1,44 @@
-# Xiaoqinli (xql) 极简安全转译器 v3.41.4
+# Xiaoqinli (xql) 极简安全转译器 v3.41.5
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/Freecode100Year/xiaoqinli)](https://goreportcard.com/report/github.com/Freecode100Year/xiaoqinli)
 [![License](https://img.shields.io/github/license/Freecode100Year/xiaoqinli)](LICENSE)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
+
+---
+
+## 📢 最新更新 (2026-08-02 - v3.41.5 多文件链接落地、解析器空指针加固与能力检查越权漏洞修复)
+
+> 本轮缺陷由「9 个示例 × 45 个目标」的全量实跑矩阵挖出：仓库 HEAD 的 `go build` / `go vet` / `go test` 本就全绿，问题全部只在运行时暴露。
+
+### 🔗 新增链接阶段：被导入模块真正进入产物 (`compiler/link.go`)
+- **根因**：后端只输出单文件，且没有任何后端会输出被导入模块的源码。Go 直接丢弃 `ImportDecl`（注释写着 "share same package"），Python / PHP 则 emit `import models` / `require_once 'models.php'`，指向从未被生成的兄弟文件。
+- **现象**：`examples/e2e_workspace` 编出的 Go 代码报 `undefined: Config`、`undefined: fetchUsers`，**跨文件类型检查通过、产物却编不过**。
+- **修复**：在检查与 codegen 之间插入链接阶段，从入口文件解析导入图并把所有模块合并成单个 `Program`，随后剥离已失去意义的别名限定符。45 个后端看到的都是无 `ImportDecl` 的自足程序——正是它们已被充分测试的路径，**因此零后端代码改动**。
+- **安全性**：合并可行的前提是 `checkGlobalSymbolConflicts` 已拒绝跨文件重名。声明按依赖顺序排列，被多路径引用的模块只合并一次，成环报 `XQL_E402`。别名剥离只认已声明的别名，`res.unwrap` 与 `Result.ok` 不受影响。
+- **物理验证**：`e2e_workspace` 的 Go 与 Python 产物均实跑输出 `Alice` / `Bob`。
+
+### 🛡️ 解析器空指针加固：8 处崩溃转为规范诊断 (`ast/nodes.go`)
+- **根因**：`parseChildNode` 在字段缺失时静默返回 `(nil, nil)`，8 个节点解析器未加守卫就存下该 nil，codegen 解引用后**进程直接 panic**，而非输出诊断。
+- **覆盖**：`ExprStmt`、`AssignStmt`、`SwitchStmt`、`BinaryExpr`、`UnaryExpr`、`MemberExpr`、`IndexExpr`、`MatchExpr`、`AwaitExpr`、`IfExpr`，现统一返回 `XQL_E101`。
+- **附带修复**：`parseIfExpr` 此前只接受 `condition`，而 `parseIfStmt` / `parseWhileStmt` 同时接受 `cond` 与 `condition`。仓库自带的 `examples/lambda_ifexpr` 正好用 `cond`，**在 45 个目标中崩掉 42 个**，现已 45/45 全通过。
+
+### 🔐 能力检查越权漏洞：被导入模块此前完全绕过 grant 执行 (`check/capability.go`)
+- **A/B 对照实证**：模块内 `helper()`（无 grant）调用 `privileged()`（`grant: ["io"]`），作为入口文件直接编译报 `XQL_E301` 正确拦截；**同一份代码被 import 后编译通过、exit 0**。
+- **根因**：`CheckCapabilitiesWithOptions` 只遍历入口 `Program`。类型检查器会递归进导入（故未定义符号能抓到），但 grant 子集检查在文件边界处停止——把越权代码挪进模块即可完全绕过。这不只是漏报诊断，是**能力隔离本身失效**。
+- **修复**：`TypeChecker` 保留自身 `Program`，能力检查遍历整个导入图并按各模块自身 grants 校验，visited 集合避免菱形导入重复报错。
+
+### 🧩 能力检查器识别 Result 内置操作 (`check/capability.go`)
+- 类型检查器接受 `Result.ok` / `Result.err` / `unwrap` / `unwrapErr`，但 `checkCapExpr` 只解析导入别名调用与裸内置函数，导致**语言自带的错误处理惯用法在默认严格模式下必然报 `XQL_E303`**。四者均为纯操作，现按空能力处理；导入仍优先解析，其他无法解析的点号调用照常报错。
+
+### 🔧 导入解析与 CLI 缺口
+- `WorkspacePath` 是 `CompileRequest` / `ValidateRequest` 的公开字段、由 `CompileFromFile` 设置，却**全项目从未被读取**——导入按当前工作目录解析，多文件项目用绝对路径编译必然 `XQL_E404`。新增 `EntryFile` 字段（附加式、不破坏 API）并接入检查器。
+- `validate` 有 `--strict-caps` 但 `compile` 没有任何对应开关，而 `Compile` 默认严格。新增 `--no-strict-caps` 与 `CompileFromFileWithOptions`。
+- **`compiler.Version` 自 v3.41.1 起就没再同步**，一直停留在 `3.41.0`（`xql --help` 显示的即是此值），本轮一并校正。
+
+### ✅ 验证
+- `go vet ./...` 干净，`go test ./...` 全通过，新增 **30 个回归用例**（`ast/nil_guard_test.go`、`check/result_intrinsic_test.go`、`check/import_capability_test.go`、`compiler/import_resolution_test.go`、`compiler/link_test.go`）。
+- 单文件示例矩阵稳定在基线 **136/405 失败、0 崩溃**（崩溃此前为 8 处）。
+- 多文件 `e2e_workspace` 45 个目标中 13 个可构建；其余 32 个报 `XQL_E401/E402`，均为后端确实未实现的节点（cpp 缺 `ArrayLiteral`、lua 缺 `Result`）。这些目标此前"成功"仅因相关声明根本到不了 codegen——**静默产出残缺代码现已变为如实报错**。
 
 ---
 

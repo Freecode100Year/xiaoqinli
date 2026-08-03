@@ -17,7 +17,7 @@ import (
 
 const (
 	// Version is the current version of the xiaoqinli compiler package.
-	Version = "3.41.0"
+	Version = "3.41.5"
 
 	// MaxASTBytes is the maximum allowed size for an AST payload (mirrors ast.MaxASTBytes).
 	MaxASTBytes = 2 << 20 // 2 MB
