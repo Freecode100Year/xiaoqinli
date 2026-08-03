@@ -233,6 +233,36 @@ func TestParseUnaryAndMember(t *testing.T) {
 	}
 }
 
+// TestParseStripsUTF8BOM guards against a regression to the byte-order mark
+// that PowerShell's `-Encoding utf8` and other Windows tools prepend to text
+// files: encoding/json treats a leading BOM as invalid input rather than
+// stripping it, which used to reject an otherwise well-formed .xql.json file
+// with a misleading "invalid character 'ï'" error.
+func TestParseStripsUTF8BOM(t *testing.T) {
+	bom := []byte{0xEF, 0xBB, 0xBF}
+	input := append(bom, []byte(`{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl",
+			"name": "main",
+			"params": [],
+			"returnType": {"kind": "Void"},
+			"effects": [],
+			"grant": [],
+			"body": []
+		}]
+	}`)...)
+
+	node, err := Parse(input)
+	if err != nil {
+		t.Fatalf("Parse failed on BOM-prefixed input: %v", err)
+	}
+	prog, ok := node.(*Program)
+	if !ok || len(prog.Decls) != 1 {
+		t.Fatalf("expected a single-decl Program, got %#v", node)
+	}
+}
+
 func TestParseInvalidJSON(t *testing.T) {
 	_, err := Parse([]byte(`{invalid`))
 	if err == nil {

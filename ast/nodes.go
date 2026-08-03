@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 )
@@ -341,8 +342,14 @@ func (*Lambda) Kind() string { return "Lambda" }
 
 // ===================== JSON Parsing =====================
 
+// utf8BOM is the byte-order mark some editors and Windows tools (PowerShell's
+// `-Encoding utf8`, Notepad's "UTF-8" save option) prepend to text files.
+// encoding/json treats it as invalid input rather than stripping it.
+var utf8BOM = []byte{0xEF, 0xBB, 0xBF}
+
 // Parse parses .xql.json bytes into a typed AST tree.
 func Parse(data []byte) (Node, error) {
+	data = bytes.TrimPrefix(data, utf8BOM)
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("XQL_E101: invalid JSON: %w", err)
