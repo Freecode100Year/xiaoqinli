@@ -129,21 +129,6 @@ func scTextToken(s string) map[string]interface{} {
 	}
 }
 
-func scTextTokenVar(name string) map[string]interface{} {
-	return map[string]interface{}{
-		"WFSerializationType": "WFTextTokenString",
-		"Value": map[string]interface{}{
-			"string": "￼",
-			"attachmentsByRange": map[string]interface{}{
-				"{0, 1}": map[string]interface{}{
-					"Type":         "Variable",
-					"VariableName": name,
-				},
-			},
-		},
-	}
-}
-
 // --- statements ---
 
 func (g *scGen) emitStmt(n ast.Node) error {

@@ -66,15 +66,6 @@ const (
 	KindImportDecl
 )
 
-// computeNodeHash computes the SHA256 hash of a node's binary representation.
-func computeNodeHash(n Node) (NodeHash, error) {
-	data, err := Encode(n)
-	if err != nil {
-		return NodeHash{}, err
-	}
-	return sha256.Sum256(data), nil
-}
-
 // EncodeWithHash serializes an AST Node to a stable binary representation with a root hash.
 func EncodeWithHash(node Node) ([]byte, NodeHash, error) {
 	var buf bytes.Buffer

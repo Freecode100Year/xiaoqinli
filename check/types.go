@@ -865,10 +865,6 @@ func CheckEffects(root ast.Node) error {
 	return CheckEffectsWithTC(root, NewTypeChecker())
 }
 
-func CheckEffectsWithOptions(root ast.Node, tc *TypeChecker, opts CheckOptions) error {
-	return CheckEffectsWithTC(root, tc)
-}
-
 func CheckEffectsWithTC(root ast.Node, tc *TypeChecker) error {
 	if root == nil {
 		return fmt.Errorf("root node is nil")
