@@ -35,6 +35,43 @@ func TestRESTServer_HealthAndMetrics(t *testing.T) {
 	}
 }
 
+// TestRESTServer_RoutesRegistered asserts every documented endpoint is actually
+// wired into the route table. It drives RESTServer.Routes directly rather than
+// a locally rebuilt mux, so a handler that exists but was never registered
+// fails here instead of silently becoming dead code.
+func TestRESTServer_RoutesRegistered(t *testing.T) {
+	mux := NewRESTServer().Routes()
+
+	routes := []string{
+		"/compile",
+		"/validate",
+		"/specs",
+		"/codegen/strategy",
+		"/evolution/diagnostics",
+		"/api/v1/search",
+		"/api/v1/search/autoupdate",
+		"/skills/",
+		"/health",
+		"/metrics",
+	}
+
+	for _, route := range routes {
+		req := httptest.NewRequest(http.MethodGet, route, nil)
+		h, pattern := mux.Handler(req)
+		if h == nil || pattern == "" {
+			t.Errorf("route %q is not registered in Routes()", route)
+			continue
+		}
+		// An unregistered path falls through to the mux's 404 handler, which
+		// reports an empty pattern; a registered one echoes its own pattern.
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code == http.StatusNotFound {
+			t.Errorf("route %q resolved to a 404 handler (pattern %q)", route, pattern)
+		}
+	}
+}
+
 func TestRESTServer_CompileAndValidate(t *testing.T) {
 	s := NewRESTServer()
 	mux := http.NewServeMux()

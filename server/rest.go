@@ -21,11 +21,20 @@ func NewRESTServer() *RESTServer { return &RESTServer{} }
 
 // Serve starts the REST API on the given address.
 func (s *RESTServer) Serve(addr string) error {
+	fmt.Fprintf(os.Stderr, "REST API listening on %s\n", addr)
+	return http.ListenAndServe(addr, s.Routes())
+}
+
+// Routes builds the REST API route table. It is separate from Serve so tests
+// can exercise the real routing table instead of re-declaring their own mux,
+// which previously let a handler be written without ever being registered.
+func (s *RESTServer) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/compile", s.handleCompile)
 	mux.HandleFunc("/validate", s.handleValidate)
 	mux.HandleFunc("/specs", s.handleSpecs)
 	mux.HandleFunc("/codegen/strategy", s.handleCodegenStrategy)
+	mux.HandleFunc("/evolution/diagnostics", s.handleEvolutionDiagnostics)
 	mux.HandleFunc("/api/v1/search", s.handleSearch)
 	mux.HandleFunc("/api/v1/search/autoupdate", s.handleSearchAutoUpdate)
 	mux.HandleFunc("/skills/", handleSkillsREST)
@@ -37,8 +46,7 @@ func (s *RESTServer) Serve(addr string) error {
 	// Prometheus metrics endpoint
 	mux.Handle("/metrics", GlobalMetrics.PrometheusHandler())
 
-	fmt.Fprintf(os.Stderr, "REST API listening on %s\n", addr)
-	return http.ListenAndServe(addr, mux)
+	return mux
 }
 
 type compileRequest struct {
