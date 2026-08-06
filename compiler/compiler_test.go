@@ -5,7 +5,55 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"xiaoqinli/ast"
+	"xiaoqinli/codegen"
 )
+
+// TestAdvertisedTargetsAreGeneratable keeps allTargetInfos honest: every target
+// the CLI and the MCP "targets" tool advertise must reach a real codegen
+// backend. Without this, a backend can exist while never being advertised (as
+// happened with "js"), or a flag can be advertised with no backend behind it.
+func TestAdvertisedTargetsAreGeneratable(t *testing.T) {
+	prog := &ast.Program{Decls: []ast.Node{
+		&ast.FunctionDecl{
+			Name:       "main",
+			ReturnType: ast.TypeExpr{KindName: "Void"},
+			Body:       []ast.Node{},
+		},
+	}}
+
+	for _, info := range GetSupportedTargetInfos() {
+		if _, err := codegen.GenerateProject(prog, info.Flag); err != nil {
+			t.Errorf("advertised target %q (%s) has no working backend: %v", info.Flag, info.Name, err)
+		}
+	}
+
+	// Backends reachable through Generate must also be advertised, apart from
+	// the documented aliases that intentionally share another flag's entry.
+	aliases := map[string]bool{
+		"javascript":   true, // alias of js
+		"tencentcloud": true, // alias of tccli
+		"apk":          true, // alias of android
+		"swift-pkg":    true, // alias of ios
+	}
+	advertised := make(map[string]bool)
+	for _, f := range GetSupportedTargets() {
+		advertised[f] = true
+	}
+	for _, flag := range []string{
+		"go", "rust", "ts", "js", "javascript", "kotlin", "swift", "py", "java", "csharp",
+		"dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp", "mql4", "mql5", "c",
+		"scala", "haskell", "ocaml", "fsharp", "ada", "awk", "bash", "crystal", "d",
+		"fortran", "objc", "pascal", "perl", "powershell", "tcl", "v", "elixir", "clojure",
+		"vala", "groovy", "bat", "shortcut", "chrome", "tccli", "tencentcloud", "android",
+		"apk", "ios", "swift-pkg",
+	} {
+		if !advertised[flag] && !aliases[flag] {
+			t.Errorf("target %q has a codegen backend but is not advertised in allTargetInfos", flag)
+		}
+	}
+}
 
 // helloJSON is the minimal valid XQL AST for testing.
 const helloJSON = `{

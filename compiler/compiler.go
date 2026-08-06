@@ -35,6 +35,7 @@ var allTargetInfos = []TargetInfo{
 	{Flag: "go", Ext: ".go", Name: "Go"},
 	{Flag: "rust", Ext: ".rs", Name: "Rust"},
 	{Flag: "ts", Ext: ".ts", Name: "TypeScript"},
+	{Flag: "js", Ext: ".js", Name: "JavaScript"},
 	{Flag: "py", Ext: ".py", Name: "Python"},
 	{Flag: "cpp", Ext: ".cpp", Name: "C++"},
 	{Flag: "c", Ext: ".c", Name: "C"},
