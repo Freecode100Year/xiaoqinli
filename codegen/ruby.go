@@ -11,7 +11,7 @@ import (
 // The "main" function's body is emitted at top level.
 func GenerateRuby(root ast.Node) ([]byte, error) {
 	strat := InspectCodegenStrategy("ruby")
-	g := &rbGen{buf: &strings.Builder{}, strat: strat}
+	g := &rbGen{buf: &strings.Builder{}, strat: strat, imports: make(map[string]bool)}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -55,6 +55,23 @@ func GenerateRuby(root ast.Node) ([]byte, error) {
 	g.writeln("  end")
 	g.writeln("end")
 	g.writeln("")
+
+	// Collect imports upfront and emit require_relative for multi-file symbol
+	// resolution. require_relative pulls the imported file's classes and
+	// methods into the same top-level scope, so the alias prefix is dropped
+	// from call sites and struct literals (see stripImportAlias).
+	hasImport := false
+	for _, d := range prog.Decls {
+		if id, ok := d.(*ast.ImportDecl); ok {
+			if err := g.emitImportDecl(id); err != nil {
+				return nil, err
+			}
+			hasImport = true
+		}
+	}
+	if hasImport {
+		g.writeln("")
+	}
 
 	first := true
 	for _, d := range prog.Decls {
@@ -114,9 +131,26 @@ func GenerateRuby(root ast.Node) ([]byte, error) {
 }
 
 type rbGen struct {
-	buf    *strings.Builder
-	indent int
-	strat  *CodegenStrategyConfig
+	buf     *strings.Builder
+	indent  int
+	strat   *CodegenStrategyConfig
+	imports map[string]bool
+}
+
+// stripImportAlias removes a leading import-alias qualifier from a symbol
+// name. XQL writes cross-module references as "models.User"; require_relative
+// flattens everything into one top-level scope, so Ruby needs plain "User".
+// Names whose prefix is not a known import alias are returned unchanged, which
+// keeps ordinary method calls such as "res.unwrap" intact.
+func (g *rbGen) stripImportAlias(name string) string {
+	idx := strings.Index(name, ".")
+	if idx == -1 {
+		return name
+	}
+	if g.imports[name[:idx]] {
+		return name[idx+1:]
+	}
+	return name
 }
 
 func (g *rbGen) write(s string)   { g.buf.WriteString(s) }
@@ -169,6 +203,21 @@ func (g *rbGen) emitNode(n ast.Node) error {
 func (g *rbGen) emitImportDecl(id *ast.ImportDecl) error {
 	g.writeIndent()
 	path := id.Path
+	path = strings.TrimPrefix(path, "./")
+	path = strings.TrimPrefix(path, ".\\")
+
+	alias := id.As
+	if alias == "" {
+		base := path
+		if idx := strings.LastIndexAny(base, "/\\"); idx != -1 {
+			base = base[idx+1:]
+		}
+		alias = strings.TrimSuffix(base, ".xql")
+	}
+	if alias != "" {
+		g.imports[alias] = true
+	}
+
 	if strings.HasSuffix(path, ".xql") {
 		path = path[:len(path)-4] + ".rb"
 	}
@@ -545,7 +594,7 @@ func (g *rbGen) emitIndexExpr(ie *ast.IndexExpr) error {
 }
 
 func (g *rbGen) emitStructLit(sl *ast.StructLit) error {
-	g.write(sl.TypeName + ".new(")
+	g.write(g.stripImportAlias(sl.TypeName) + ".new(")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
@@ -616,7 +665,7 @@ func (g *rbGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	default:
-		g.write(ce.Callee + "(")
+		g.write(g.stripImportAlias(ce.Callee) + "(")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
