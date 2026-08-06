@@ -1,11 +1,14 @@
 # Stage 1: Build xiaoqinli Go binary
 FROM golang:1.23-bookworm AS builder
 WORKDIR /app
-COPY go.mod ./
+COPY go.mod go.sum ./
 COPY main.go ./
 COPY ast/ ./ast/
 COPY check/ ./check/
 COPY codegen/ ./codegen/
+COPY compiler/ ./compiler/
+COPY evolution/ ./evolution/
+COPY remedy/ ./remedy/
 COPY server/ ./server/
 COPY vfs/ ./vfs/
 COPY skills/ ./skills/
