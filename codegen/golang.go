@@ -471,19 +471,14 @@ func (g *goGen) emitUnaryExpr(ue *ast.UnaryExpr) error {
 func (g *goGen) emitCallExpr(ce *ast.CallExpr) error {
 	// Map xql built-in functions to Go equivalents.
 	callee := ce.Callee
-	if strings.Contains(callee, ".") && !strings.HasPrefix(callee, "fmt.") && !strings.HasPrefix(callee, "time.") && !strings.HasPrefix(callee, "os.") && !strings.HasPrefix(callee, "Result.") {
-		parts := strings.Split(callee, ".")
-		if len(parts) == 2 {
-			obj := parts[0]
-			method := parts[1]
-			if method == "unwrap" {
-				callee = obj + ".Unwrap"
-			} else if method == "unwrapErr" {
-				callee = obj + ".UnwrapErr"
-			} else {
-				callee = parts[1]
-			}
-		}
+	// Only the Result intrinsics are renamed. A qualified callee is otherwise
+	// emitted verbatim: module aliases have already been resolved by the
+	// linker, so anything still qualified here is a host name, and dropping
+	// its qualifier would silently emit a call to something else.
+	if strings.HasSuffix(callee, ".unwrap") {
+		callee = strings.TrimSuffix(callee, ".unwrap") + ".Unwrap"
+	} else if strings.HasSuffix(callee, ".unwrapErr") {
+		callee = strings.TrimSuffix(callee, ".unwrapErr") + ".UnwrapErr"
 	}
 	switch callee {
 	case "println":
