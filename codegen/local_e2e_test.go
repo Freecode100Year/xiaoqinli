@@ -39,10 +39,19 @@ func runLocalE2E(t *testing.T, checkCmd string, runCmd string, files map[string]
 		}
 	}
 
-	// 2. Write generated source files to a temporary directory
+	// 2. Write generated source files to a temporary directory.
+	// Project scaffolds name files inside directories (Sources/XqlApp/main.swift,
+	// app/src/main/java/...), so the parents have to exist first — without this
+	// those writes fail silently and the build sees an empty project.
 	tmpDir := t.TempDir()
 	for name, content := range files {
-		_ = os.WriteFile(filepath.Join(tmpDir, name), content, 0644)
+		full := filepath.Join(tmpDir, name)
+		if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+			t.Fatalf("mkdir for %s: %v", name, err)
+		}
+		if err := os.WriteFile(full, content, 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
 	}
 
 	// 3. Compile & run command steps
@@ -76,13 +85,21 @@ func runLocalE2E(t *testing.T, checkCmd string, runCmd string, files map[string]
 		if err != nil {
 			var fileDebug strings.Builder
 			fileDebug.WriteString("\n=== DEBUG: Generated Files Content ===\n")
-			entries, _ := os.ReadDir(tmpDir)
-			for _, entry := range entries {
-				if entry.Type().IsRegular() {
-					content, _ := os.ReadFile(filepath.Join(tmpDir, entry.Name()))
-					fileDebug.WriteString(fmt.Sprintf("--- File: %s ---\n%s\n", entry.Name(), string(content)))
+			// Walk rather than ReadDir: project scaffolds put their sources in
+			// subdirectories, and listing only the top level hides exactly the
+			// files a failing build is complaining about.
+			_ = filepath.Walk(tmpDir, func(path string, info os.FileInfo, err error) error {
+				if err != nil || info == nil || !info.Mode().IsRegular() {
+					return nil
 				}
-			}
+				rel, relErr := filepath.Rel(tmpDir, path)
+				if relErr != nil {
+					rel = path
+				}
+				content, _ := os.ReadFile(path)
+				fileDebug.WriteString(fmt.Sprintf("--- File: %s ---\n%s\n", rel, string(content)))
+				return nil
+			})
 			fileDebug.WriteString("======================================\n")
 			t.Fatalf("Step %q failed: %v\nOutput: %s\n%s", step, err, lastOutput, fileDebug.String())
 		}
