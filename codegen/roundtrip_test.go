@@ -105,8 +105,14 @@ func runRust(t *testing.T, path string) string {
 	cmd := exec.Command("rustc", path, "-o", bin)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		if strings.Contains(string(out), "linker `link.exe` not found") {
-			t.Skip("rustc linker link.exe not found, skipping test")
+		// A missing or unusable native linker is a toolchain gap, not a
+		// codegen defect: rustc got as far as linking, so the generated Rust
+		// compiled. On Windows this also covers a PATH where link.exe
+		// resolves to GNU coreutils' `link` instead of the MSVC linker.
+		msg := string(out)
+		if strings.Contains(msg, "linker `link.exe` not found") ||
+			strings.Contains(msg, "you may need to install Visual Studio build tools") {
+			t.Skip("no usable native linker for rustc, skipping test")
 		}
 		t.Fatalf("rustc failed: %v\n%s", err, out)
 	}
