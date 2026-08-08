@@ -195,7 +195,7 @@ extern 不按模块划分命名空间：把一个平台的接口面声明一次�
 | for-each 循环 | `fortran` `pascal` |
 | 结构体字面量 | `bat` |
 
-其余目标均携带真实的 `Result` 语义。
+其余目标均携带真实的 `Result` 语义，但有一个例外属于**缺陷**而非既定限制：**`android` 会把 `Result<T>` 编译错。** 脚手架生成的 Kotlin 引用了 `Result<T, E>`，自身却没有发出该类型，于是与标准库的 `kotlin.Result<out T>` 撞名，Gradle 构建报 "One type argument expected"。在此问题修复前，用到 `Result` 的程序不要以 `android` 为目标。
 
 ---
 

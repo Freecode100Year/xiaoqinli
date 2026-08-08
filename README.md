@@ -213,7 +213,12 @@ rather than silently degrading it:
 | for-each loops | `fortran` `pascal` |
 | struct literals | `bat` |
 
-All other targets carry real `Result` semantics.
+All other targets carry real `Result` semantics, with one exception that is a
+defect rather than a declared limit: **`android` mis-compiles `Result<T>`.**
+The scaffold's Kotlin refers to `Result<T, E>` without emitting such a type, so
+it collides with the standard library's `kotlin.Result<out T>` and the Gradle
+build fails with "One type argument expected". Do not target `android` with a
+program that uses `Result` until this is fixed.
 
 ---
 
