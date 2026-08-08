@@ -409,3 +409,21 @@ func TestCodecExternDeclRoundtrip(t *testing.T) {
 	}
 	assertJSONEquivalent(t, origJSON, decJSON, "Decoded JSON does not match original JSON for ExternDecl.")
 }
+
+// TestExternSignatureComparesTypeArguments: comparing only the outer kind name
+// would let two modules declare fetch as returning Array<Int> and Array<String>
+// and call it one host function.
+func TestExternSignatureComparesTypeArguments(t *testing.T) {
+	arrayOf := func(elem string) TypeExpr {
+		e := TypeExpr{KindName: elem}
+		return TypeExpr{KindName: "Array", Elem: &e}
+	}
+	a := &ExternDecl{Name: "fetch", ReturnType: arrayOf("Int")}
+	b := &ExternDecl{Name: "fetch", ReturnType: arrayOf("String")}
+	if a.SignatureEquals(b) {
+		t.Error("expected Array<Int> and Array<String> to be different signatures")
+	}
+	if !a.SignatureEquals(&ExternDecl{Name: "fetch", ReturnType: arrayOf("Int")}) {
+		t.Error("expected identical signatures to compare equal")
+	}
+}

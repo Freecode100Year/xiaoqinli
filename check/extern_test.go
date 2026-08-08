@@ -1,6 +1,8 @@
 package check
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -255,5 +257,106 @@ func TestLambdaBoundNameIsCallable(t *testing.T) {
 	root := mustParse(t, src)
 	if err := RunAllWithOptions(root, "", nil, CheckOptions{StrictCapabilities: true}); err != nil {
 		t.Fatalf("expected a lambda-bound name to be callable, got: %v", err)
+	}
+}
+
+// TestExternIsUsableFromAnImportedModule guards a hole the first version had:
+// externs were inherited only by the entry file, so a module calling a host
+// function it had imported was reported as an undefined function — and in
+// non-strict mode its grant was never checked at all.
+func TestExternIsUsableFromAnImportedModule(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, src string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(src), 0644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		return path
+	}
+
+	write("platform.xql.json", `{"kind":"Program","declarations":[
+		{"kind":"ExternDecl","name":"fetch",
+		 "params":[{"name":"url","type":{"kind":"String"}}],
+		 "returnType":{"kind":"String"},"effects":["network"],"grant":["network"]}
+	]}`)
+	write("service.xql.json", `{"kind":"Program","declarations":[
+		{"kind":"ImportDecl","path":"./platform.xql.json","as":"platform"},
+		{"kind":"FunctionDecl","name":"load","params":[],"returnType":{"kind":"String"},
+		 "effects":["network"],"grant":["network"],
+		 "body":[{"kind":"ReturnStmt","value":{"kind":"CallExpr","callee":"fetch",
+		   "args":[{"kind":"Literal","valueType":"String","value":"https://example.com"}]}}]}
+	]}`)
+	entry := write("main.xql.json", `{"kind":"Program","declarations":[
+		{"kind":"ImportDecl","path":"./service.xql.json","as":"svc"},
+		{"kind":"FunctionDecl","name":"main","params":[],"returnType":{"kind":"Void"},
+		 "effects":["network"],"grant":["network"],
+		 "body":[{"kind":"VarDecl","name":"r","type":{"kind":"String"},
+		   "value":{"kind":"CallExpr","callee":"svc.load","args":[]}}]}
+	]}`)
+
+	data, err := os.ReadFile(entry)
+	if err != nil {
+		t.Fatalf("read entry: %v", err)
+	}
+	root := mustParse(t, string(data))
+	if err := RunAllWithOptions(root, entry, nil, CheckOptions{StrictCapabilities: true}); err != nil {
+		t.Fatalf("expected an imported module to be able to call an imported extern, got: %v", err)
+	}
+}
+
+// TestLambdaArgumentDoesNotTripTypeCheck: XQL has no syntax for a function
+// type, so a lambda passed to a parameter the author named "Callback" must not
+// be reported as a mismatch.
+func TestLambdaArgumentDoesNotTripTypeCheck(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [
+			{
+				"kind": "FunctionDecl", "name": "apply",
+				"params": [{"name": "f", "type": {"kind": "Callback"}}],
+				"returnType": {"kind": "Void"}, "effects": [], "grant": [], "body": []
+			},
+			{
+				"kind": "FunctionDecl", "name": "main", "params": [],
+				"returnType": {"kind": "Void"}, "effects": [], "grant": [],
+				"body": [{"kind": "ExprStmt", "expr": {
+					"kind": "CallExpr", "callee": "apply",
+					"args": [{"kind": "Lambda", "params": [], "returnType": {"kind": "Void"}, "body": []}]
+				}}]
+			}
+		]
+	}`
+	root := mustParse(t, src)
+	if err := RunAllWithOptions(root, "", nil, CheckOptions{}); err != nil {
+		t.Fatalf("expected a lambda argument to be accepted, got: %v", err)
+	}
+}
+
+// TestLambdaInSwitchIsCallable: lambdaLocals has to walk into switch and match
+// bodies, or a lambda bound there is unresolvable under strict capabilities.
+func TestLambdaInSwitchIsCallable(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [{
+			"kind": "FunctionDecl", "name": "main", "params": [],
+			"returnType": {"kind": "Void"}, "effects": [], "grant": [],
+			"body": [{
+				"kind": "SwitchStmt",
+				"value": {"kind": "Literal", "valueType": "Int", "value": 1},
+				"cases": [{
+					"value": {"kind": "Literal", "valueType": "Int", "value": 1},
+					"body": [
+						{"kind": "VarDecl", "name": "handler", "value": {
+							"kind": "Lambda", "params": [], "returnType": {"kind": "Void"}, "body": []
+						}},
+						{"kind": "ExprStmt", "expr": {"kind": "CallExpr", "callee": "handler", "args": []}}
+					]
+				}]
+			}]
+		}]
+	}`
+	root := mustParse(t, src)
+	if err := RunAllWithOptions(root, "", nil, CheckOptions{StrictCapabilities: true}); err != nil {
+		t.Fatalf("expected a lambda bound inside a switch to resolve, got: %v", err)
 	}
 }

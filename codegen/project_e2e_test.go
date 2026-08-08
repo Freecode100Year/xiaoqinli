@@ -53,15 +53,10 @@ func TestLocalE2EProjectScaffolds(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			if _, err := exec.LookPath(tc.checkCmd); err != nil {
-				t.Skipf("Local toolchain %q not found in PATH. Skipping physical build verification.", tc.checkCmd)
-			}
-			if tc.checkCmd == "gradle" {
-				if os.Getenv("ANDROID_HOME") == "" && os.Getenv("ANDROID_SDK_ROOT") == "" {
-					t.Skip("Local Gradle found, but ANDROID_HOME / ANDROID_SDK_ROOT is not set. Skipping physical build verification.")
-				}
-			}
-
+			// Generate first, and only then decide whether a real build is
+			// possible: generation needs no toolchain, so skipping before it
+			// would leave these backends with no coverage at all on a machine
+			// that lacks the SDK.
 			tmpDir := t.TempDir()
 			result := compiler.CompileFromFile(entry, tc.target, tmpDir)
 			if !result.Success {
@@ -69,6 +64,15 @@ func TestLocalE2EProjectScaffolds(t *testing.T) {
 			}
 			if len(result.Files) == 0 {
 				t.Fatalf("target %q produced no project files", tc.target)
+			}
+
+			if _, err := exec.LookPath(tc.checkCmd); err != nil {
+				t.Skipf("Local toolchain %q not found in PATH. Skipping physical build verification.", tc.checkCmd)
+			}
+			if tc.checkCmd == "gradle" {
+				if os.Getenv("ANDROID_HOME") == "" && os.Getenv("ANDROID_SDK_ROOT") == "" {
+					t.Skip("Local Gradle found, but ANDROID_HOME / ANDROID_SDK_ROOT is not set. Skipping physical build verification.")
+				}
 			}
 
 			args := strings.Fields(tc.runCmd)
