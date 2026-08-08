@@ -192,6 +192,18 @@ func lambdaLocals(stmts []ast.Node) []string {
 			for _, s := range node.Body {
 				walk(s)
 			}
+		case *ast.SwitchStmt:
+			for _, c := range node.Cases {
+				for _, s := range c.Body {
+					walk(s)
+				}
+			}
+		case *ast.MatchExpr:
+			for _, arm := range node.Arms {
+				for _, s := range arm.Body {
+					walk(s)
+				}
+			}
 		}
 	}
 	for _, s := range stmts {
