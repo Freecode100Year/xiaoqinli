@@ -17,6 +17,7 @@ func GenerateAndroidProject(root ast.Node) (*ProjectOutput, error) {
 	files := map[string][]byte{
 		"build.gradle":                                  []byte(getAndroidRootBuildGradle()),
 		"settings.gradle":                               []byte(getAndroidSettingsGradle()),
+		"gradle.properties":                             []byte(getAndroidGradleProperties()),
 		"app/build.gradle":                              []byte(getAndroidAppBuildGradle()),
 		"app/src/main/AndroidManifest.xml":              []byte(getAndroidManifest()),
 		"app/src/main/res/layout/activity_main.xml":     []byte(getAndroidLayoutXml()),
@@ -577,6 +578,16 @@ allprojects {
 func getAndroidSettingsGradle() string {
 	return `rootProject.name = "XqlApp"
 include ':app'
+`
+}
+
+// getAndroidGradleProperties is required, not optional: app/build.gradle
+// depends on androidx.core and androidx.appcompat, and AGP refuses to resolve
+// AndroidX artifacts unless android.useAndroidX is set. Without this file the
+// build fails at checkDebugAarMetadata.
+func getAndroidGradleProperties() string {
+	return `android.useAndroidX=true
+org.gradle.jvmargs=-Xmx2048m
 `
 }
 
