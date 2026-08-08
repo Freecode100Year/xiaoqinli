@@ -10,7 +10,7 @@ import (
 // GenerateJulia produces Julia source code from the given typed AST.
 // A main() call is appended at the bottom if main is defined.
 func GenerateJulia(root ast.Node) ([]byte, error) {
-	g := &jlGen{buf: &strings.Builder{}}
+	g := &jlGen{buf: &strings.Builder{}, imports: make(map[string]bool)}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -34,6 +34,23 @@ func GenerateJulia(root ast.Node) ([]byte, error) {
 	g.writeln("xqlUnwrapErr(r::Result) = r.errVal")
 	g.writeln("")
 
+	// Emit every include up front so the alias table is complete before any
+	// declaration that might reference an imported symbol is generated.
+	// include() splices the imported file into this same scope, so the alias
+	// qualifier is then dropped everywhere (see stripImportAlias).
+	hasImport := false
+	for _, d := range prog.Decls {
+		if id, ok := d.(*ast.ImportDecl); ok {
+			if err := g.emitImportDecl(id); err != nil {
+				return nil, err
+			}
+			hasImport = true
+		}
+	}
+	if hasImport {
+		g.writeln("")
+	}
+
 	// Emit enum declarations first.
 	for _, d := range prog.Decls {
 		if ed, ok := d.(*ast.EnumDecl); ok {
@@ -46,7 +63,8 @@ func GenerateJulia(root ast.Node) ([]byte, error) {
 
 	hasMain := false
 	for i, d := range prog.Decls {
-		if _, ok := d.(*ast.EnumDecl); ok {
+		switch d.(type) {
+		case *ast.EnumDecl, *ast.ImportDecl:
 			continue
 		}
 		if i > 0 {
@@ -69,8 +87,26 @@ func GenerateJulia(root ast.Node) ([]byte, error) {
 }
 
 type jlGen struct {
-	buf    *strings.Builder
-	indent int
+	buf     *strings.Builder
+	indent  int
+	imports map[string]bool
+}
+
+// stripImportAlias removes a leading import-alias qualifier from a symbol name.
+// XQL writes cross-module references as "models.User", but include() splices
+// the imported file into the current scope rather than creating a module named
+// "models", so Julia needs plain "User". Names whose prefix is not a declared
+// alias are returned unchanged, leaving field access such as "config.retries"
+// intact.
+func (g *jlGen) stripImportAlias(name string) string {
+	idx := strings.Index(name, ".")
+	if idx <= 0 {
+		return name
+	}
+	if g.imports[name[:idx]] {
+		return name[idx+1:]
+	}
+	return name
 }
 
 func (g *jlGen) write(s string)   { g.buf.WriteString(s) }
@@ -81,7 +117,7 @@ func (g *jlGen) writeIndent() {
 	}
 }
 
-func typeToJulia(t ast.TypeExpr) string {
+func (g *jlGen) typeToJulia(t ast.TypeExpr) string {
 	switch t.KindName {
 	case "Int":
 		return "Int64"
@@ -95,18 +131,18 @@ func typeToJulia(t ast.TypeExpr) string {
 		return "Nothing"
 	case "Array":
 		if t.Elem != nil {
-			return "Vector{" + typeToJulia(*t.Elem) + "}"
+			return "Vector{" + g.typeToJulia(*t.Elem) + "}"
 		}
 		return "Vector{Any}"
 	case "Option":
 		if t.Elem != nil {
-			return "Union{" + typeToJulia(*t.Elem) + ", Nothing}"
+			return "Union{" + g.typeToJulia(*t.Elem) + ", Nothing}"
 		}
 		return "Union{Any, Nothing}"
 	case "Result":
 		return "Result"
 	default:
-		return t.KindName
+		return g.stripImportAlias(t.KindName)
 	}
 }
 
@@ -152,6 +188,19 @@ func (g *jlGen) emitNode(n ast.Node) error {
 func (g *jlGen) emitImportDecl(id *ast.ImportDecl) error {
 	g.writeIndent()
 	path := id.Path
+
+	alias := id.As
+	if alias == "" {
+		base := path
+		if idx := strings.LastIndexAny(base, "/\\"); idx != -1 {
+			base = base[idx+1:]
+		}
+		alias = strings.TrimSuffix(base, ".xql")
+	}
+	if alias != "" {
+		g.imports[alias] = true
+	}
+
 	if strings.HasSuffix(path, ".xql") {
 		path = path[:len(path)-4] + ".jl"
 	}
@@ -213,7 +262,7 @@ func (g *jlGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
-		g.writeln(f.Name + "::" + typeToJulia(f.Type))
+		g.writeln(f.Name + "::" + g.typeToJulia(f.Type))
 	}
 	g.indent--
 	g.writeIndent()
@@ -228,10 +277,10 @@ func (g *jlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name + "::" + typeToJulia(p.Type))
+		g.write(p.Name + "::" + g.typeToJulia(p.Type))
 	}
 	g.write(")")
-	rt := typeToJulia(fd.ReturnType)
+	rt := g.typeToJulia(fd.ReturnType)
 	if rt != "" && rt != "Nothing" {
 		g.write("::" + rt)
 	}
@@ -264,7 +313,7 @@ func (g *jlGen) emitReturn(rs *ast.ReturnStmt) error {
 
 func (g *jlGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.writeIndent()
-	g.write(vd.Name + "::" + typeToJulia(vd.Type))
+	g.write(vd.Name + "::" + g.typeToJulia(vd.Type))
 	if vd.Value != nil {
 		g.write(" = ")
 		if err := g.emitExpr(vd.Value); err != nil {
@@ -416,9 +465,9 @@ func (g *jlGen) emitExpr(n ast.Node) error {
 	case *ast.StructLit:
 		return g.emitStructLit(node)
 	case *ast.ArrayLit:
-		return g.emitArrayLit(typeToJulia(node.ElemType), node.Elements)
+		return g.emitArrayLit(g.typeToJulia(node.ElemType), node.Elements)
 	case *ast.ArrayLiteral:
-		return g.emitArrayLit(typeToJulia(node.ElemType), node.Elements)
+		return g.emitArrayLit(g.typeToJulia(node.ElemType), node.Elements)
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
@@ -504,7 +553,7 @@ func (g *jlGen) emitIndexExpr(ie *ast.IndexExpr) error {
 }
 
 func (g *jlGen) emitStructLit(sl *ast.StructLit) error {
-	g.write(sl.TypeName + "(")
+	g.write(g.stripImportAlias(sl.TypeName) + "(")
 	for i, f := range sl.Fields {
 		if i > 0 {
 			g.write(", ")
@@ -524,7 +573,7 @@ func (g *jlGen) emitCall(ce *ast.CallExpr) error {
 	// methods, so they can't use Julia's obj.field(...) call sugar either.
 	// Both need rewriting to plain function calls before the generic
 	// passthrough below.
-	callee := ce.Callee
+	callee := g.stripImportAlias(ce.Callee)
 	switch callee {
 	case "Result.ok":
 		callee = "resultOk"
