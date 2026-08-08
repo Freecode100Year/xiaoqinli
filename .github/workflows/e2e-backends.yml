@@ -48,5 +48,14 @@ jobs:
       with:
         version: '0.11.0'
 
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v4
+      with:
+        # The generated Android scaffold declares AGP 8.1.0, which only
+        # supports Gradle 8.x. Pinning it here keeps the build off whatever
+        # Gradle the runner image happens to ship, the same way the JDK,
+        # Swift and Zig versions are already pinned.
+        gradle-version: '8.7'
+
     - name: Run local E2E test without skips
       run: go test -v ./codegen -run TestLocalE2EWorkspaceDogfood -count=1

@@ -112,6 +112,15 @@ func runLocalE2E(t *testing.T, checkCmd string, runCmd string, files map[string]
 }
 
 func TestLocalE2EWorkspaceDogfood(t *testing.T) {
+	// This test drives real toolchains: it compiles Java, runs a full Gradle
+	// Android build, links Swift packages. That needs an environment prepared
+	// for it, which is what the E2E workflow does — it runs this test by name,
+	// without -short. A plain `go test -short ./...` is asking for the fast
+	// unit tests and should not be building an APK.
+	if testing.Short() {
+		t.Skip("skipping toolchain-driven E2E in -short mode")
+	}
+
 	modelsPath := filepath.Join("..", "examples", "e2e_workspace", "models.xql")
 	servicePath := filepath.Join("..", "examples", "e2e_workspace", "service.xql")
 	mainPath := filepath.Join("..", "examples", "e2e_workspace", "main.xql")
