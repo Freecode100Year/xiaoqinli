@@ -2,12 +2,30 @@
   "kind": "Program",
   "declarations": [
     {
+      "kind": "ExternDecl",
+      "name": "time.Now().Format",
+      "params": [{ "name": "layout", "type": { "kind": "String" } }],
+      "returnType": { "kind": "String" },
+      "effects": ["state"],
+      "grant": ["clock"],
+      "targets": ["go"]
+    },
+    {
+      "kind": "ExternDecl",
+      "name": "time.Sleep",
+      "params": [{ "name": "d", "type": { "kind": "Int" } }],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["clock"],
+      "targets": ["go"]
+    },
+    {
       "kind": "FunctionDecl",
       "name": "main",
       "params": [],
       "returnType": { "kind": "Void" },
       "effects": ["state"],
-      "grant": ["io"],
+      "grant": ["clock", "io"],
       "body": [
         {
           "kind": "ExprStmt",

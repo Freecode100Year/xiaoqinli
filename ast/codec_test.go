@@ -326,3 +326,86 @@ func TestCodecNewNodesRoundtrip(t *testing.T) {
 
 	assertJSONEquivalent(t, origJSON, decJSON, "Decoded JSON does not match original JSON for new nodes.")
 }
+
+// TestCodecExternDeclRoundtrip covers the fields that carry meaning to the
+// checker: an extern that loses its grant, its target list, or the difference
+// between a declared and an unchecked signature would be silently weakened.
+func TestCodecExternDeclRoundtrip(t *testing.T) {
+	src := `{
+		"kind": "Program",
+		"declarations": [
+			{
+				"kind": "ExternDecl",
+				"name": "time.Sleep",
+				"params": [{"name": "d", "type": {"kind": "Int"}}],
+				"returnType": {"kind": "Void"},
+				"effects": ["state"],
+				"grant": ["clock"],
+				"targets": ["go", "rust"]
+			},
+			{
+				"kind": "ExternDecl",
+				"name": "json",
+				"effects": ["network"],
+				"grant": ["network"],
+				"method": true
+			}
+		]
+	}`
+
+	original, err := Parse([]byte(src))
+	if err != nil {
+		t.Fatalf("Parse ExternDecl failed: %v", err)
+	}
+
+	binData, err := Encode(original)
+	if err != nil {
+		t.Fatalf("Encode ExternDecl failed: %v", err)
+	}
+	decoded, err := Decode(binData)
+	if err != nil {
+		t.Fatalf("Decode ExternDecl failed: %v", err)
+	}
+
+	prog, ok := decoded.(*Program)
+	if !ok || len(prog.Decls) != 2 {
+		t.Fatalf("expected 2 declarations, got %#v", decoded)
+	}
+	sleep, ok := prog.Decls[0].(*ExternDecl)
+	if !ok {
+		t.Fatalf("expected an ExternDecl, got %T", prog.Decls[0])
+	}
+	if !sleep.HasParams || len(sleep.Params) != 1 || sleep.Params[0].Type.KindName != "Int" {
+		t.Errorf("params did not survive the roundtrip: %#v", sleep.Params)
+	}
+	if len(sleep.Grant) != 1 || sleep.Grant[0] != "clock" {
+		t.Errorf("grant did not survive the roundtrip: %#v", sleep.Grant)
+	}
+	if len(sleep.Targets) != 2 {
+		t.Errorf("targets did not survive the roundtrip: %#v", sleep.Targets)
+	}
+	if sleep.Method {
+		t.Error("a global extern must not decode as a method")
+	}
+
+	jsonMethod, ok := prog.Decls[1].(*ExternDecl)
+	if !ok {
+		t.Fatalf("expected an ExternDecl, got %T", prog.Decls[1])
+	}
+	if !jsonMethod.Method {
+		t.Error("method flag did not survive the roundtrip")
+	}
+	if jsonMethod.HasParams {
+		t.Error("an omitted params field must decode as an unchecked signature")
+	}
+
+	origJSON, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("json.Marshal(original) failed: %v", err)
+	}
+	decJSON, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("json.Marshal(decoded) failed: %v", err)
+	}
+	assertJSONEquivalent(t, origJSON, decJSON, "Decoded JSON does not match original JSON for ExternDecl.")
+}

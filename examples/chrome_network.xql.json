@@ -2,6 +2,45 @@
   "kind": "Program",
   "declarations": [
     {
+      "kind": "ExternDecl",
+      "name": "fetch",
+      "effects": ["network"],
+      "grant": ["network"],
+      "targets": ["js", "ts", "chrome"]
+    },
+    {
+      "kind": "ExternDecl",
+      "name": "Date.now",
+      "params": [],
+      "returnType": { "kind": "Int" },
+      "effects": ["state"],
+      "grant": [],
+      "targets": ["js", "ts", "chrome"]
+    },
+    {
+      "kind": "ExternDecl",
+      "name": "chrome.tabs.query",
+      "effects": ["state"],
+      "grant": ["browser:tabs"],
+      "targets": ["chrome"]
+    },
+    {
+      "kind": "ExternDecl",
+      "name": "then",
+      "method": true,
+      "effects": ["network"],
+      "grant": ["network"],
+      "targets": ["js", "ts", "chrome"]
+    },
+    {
+      "kind": "ExternDecl",
+      "name": "json",
+      "method": true,
+      "effects": ["network"],
+      "grant": ["network"],
+      "targets": ["js", "ts", "chrome"]
+    },
+    {
       "kind": "StructDecl",
       "name": "QueryInfo",
       "fields": [
@@ -47,7 +86,7 @@
       ],
       "returnType": { "kind": "Void" },
       "effects": ["network"],
-      "grant": [],
+      "grant": ["network"],
       "body": [
         {
           "kind": "VarDecl",
@@ -247,7 +286,7 @@
       "params": [],
       "returnType": { "kind": "Void" },
       "effects": ["state", "network"],
-      "grant": [],
+      "grant": ["browser:tabs", "network"],
       "body": [
         {
           "kind": "ExprStmt",

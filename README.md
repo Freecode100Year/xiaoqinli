@@ -123,6 +123,72 @@ Strict capability checking is on by default for `compile`; pass `--no-strict-cap
 
 ---
 
+## Host functions
+
+A program that never leaves the process is not much of a program. Calls into the
+host platform — `fetch`, `time.Sleep`, `document.createElement` — are declared
+with `ExternDecl`:
+
+```json
+{
+  "kind": "ExternDecl",
+  "name": "fetch",
+  "params": [{ "name": "url", "type": { "kind": "String" } }],
+  "returnType": { "kind": "String" },
+  "effects": ["network"],
+  "grant": ["network"],
+  "targets": ["js", "ts", "chrome"]
+}
+```
+
+The name is matched verbatim against the callee, so dotted names like
+`time.Sleep` and `document.head.appendChild` are declared exactly as they are
+called. An extern has no body: the compiler emits the call and nothing else.
+
+This is where capability security earns its keep. A host call is the one edge
+that actually reaches the outside world, and every caller must hold the extern's
+grant:
+
+```console
+$ ./xql compile --file clock.xql.json --target go
+[
+  {
+    "code": "XQL_E301",
+    "message": "function 'main' calls 'time.Sleep' but lacks required capabilities: [clock]",
+    ...
+  }
+]
+```
+
+The declared `effects` also propagate: a function marked `pure` that calls a
+`network` extern is rejected with `XQL_E203`.
+
+**`targets`** restricts an extern to the backends whose host actually provides
+it. Compiling a program that calls a browser API to a target that has never
+heard of it is a compile error (`XQL_E402`) rather than output that only breaks
+when someone runs it. Omit the field to allow every target.
+
+**`params`** may be omitted entirely to declare an unchecked signature, for host
+functions that are variadic or overloaded. Declared params are checked for
+arity and argument types like any other call.
+
+**Methods.** When the receiver is a runtime value the compiler cannot type —
+`res.json()`, `hud.classList.add()` — declare the method instead, and it matches
+any receiver:
+
+```json
+{ "kind": "ExternDecl", "name": "json", "method": true, "effects": ["network"], "grant": ["network"] }
+```
+
+The receiver is not verified, but the grant is still enforced at every call site.
+
+Externs are not namespaced by their module: declare a platform's surface once
+and import it, and the names stay callable as-is. Modules that declare the same
+extern identically are merged; declarations that disagree are rejected
+(`XQL_E202`).
+
+---
+
 ## Supported targets (46)
 
 | Category | Targets |
@@ -138,7 +204,16 @@ Strict capability checking is on by default for `compile`; pass `--no-strict-cap
 
 `android` and `ios` emit multi-file project scaffolds (Gradle / Swift Package Manager) rather than a single source file.
 
-**Known limitation:** `js` and `nim` do not support the `Result<T>` type and will reject it with `XQL_E402` rather than silently degrade it. All other targets carry real `Result` semantics.
+**Known limitations.** A backend that cannot express a construct rejects it
+rather than silently degrading it:
+
+| Construct | Rejected by |
+|---|---|
+| `Result<T>` | `js` `c` `cpp` `nim` `mql4` `mql5` |
+| for-each loops | `fortran` `pascal` |
+| struct literals | `bat` |
+
+All other targets carry real `Result` semantics.
 
 ---
 
@@ -153,6 +228,10 @@ Split a program across files and wire them with `ImportDecl`:
 At compile time a linker resolves the import graph, merges every module into a single self-contained `Program`, and strips the now-meaningless alias qualifiers. Backends therefore only ever see a flat program — the path they are already well tested on.
 
 Import cycles are rejected with `XQL_E402`, and cross-file symbol collisions are rejected before merging. See `examples/e2e_workspace/` for a working three-file program.
+
+`ExternDecl` is the exception to alias stripping and to namespacing: a host name
+is one verbatim symbol, and every module that imports the declaring module can
+call it under that same name.
 
 ---
 

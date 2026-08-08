@@ -56,6 +56,13 @@ Every node has a `"kind"` field. The top-level node must be `"Program"` with a `
 
 - `Program` — `{ "kind": "Program", "declarations": [...] }`
 - `FunctionDecl` — `{ "kind": "FunctionDecl", "name": "...", "params": [...], "returnType": {...}, "effects": [...], "grant": [...], "body": [...] }`
+- `ExternDecl` — `{ "kind": "ExternDecl", "name": "fetch", "params": [...], "returnType": {...}, "effects": [...], "grant": [...], "targets": ["js"], "method": false }`
+  Declares a function the host provides. `name` is matched verbatim against the
+  callee, so declare dotted names (`time.Sleep`) exactly as they are called. No
+  `body`. Omit `params` for an unchecked signature; omit `targets` to allow every
+  target. Set `"method": true` to match any receiver by the method name alone
+  (`res.json` matches an extern named `json`). Callers must hold the declared
+  `grant`, and the declared `effects` propagate to them.
 - `StructDecl` — `{ "kind": "StructDecl", "name": "...", "fields": [{"name": "...", "type": {...}}] }`
 - `EnumDecl` — `{ "kind": "EnumDecl", "name": "...", "variants": ["A", "B", "C"] }`
 

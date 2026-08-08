@@ -64,6 +64,7 @@ const (
 	KindMapLiteral
 	KindArrayLiteral
 	KindImportDecl
+	KindExternDecl
 )
 
 // EncodeWithHash serializes an AST Node to a stable binary representation with a root hash.
@@ -492,6 +493,41 @@ func encodeNode(w io.Writer, n Node) error {
 			return err
 		}
 		return writeString(w, node.As)
+
+	case *ExternDecl:
+		if err := writeByte(w, byte(KindExternDecl)); err != nil {
+			return err
+		}
+		if err := writeString(w, node.Name); err != nil {
+			return err
+		}
+		if len(node.Params) > MaxChildCount {
+			return fmt.Errorf("XQL_E413: param count %d > %d", len(node.Params), MaxChildCount)
+		}
+		if err := writeBool(w, node.HasParams); err != nil {
+			return err
+		}
+		if err := writeBool(w, node.Method); err != nil {
+			return err
+		}
+		if err := binary.Write(w, binary.BigEndian, uint32(len(node.Params))); err != nil {
+			return err
+		}
+		for _, p := range node.Params {
+			if err := writeParam(w, p); err != nil {
+				return err
+			}
+		}
+		if err := writeTypeExpr(w, node.ReturnType); err != nil {
+			return err
+		}
+		if err := writeStringList(w, node.Effects); err != nil {
+			return err
+		}
+		if err := writeStringList(w, node.Grant); err != nil {
+			return err
+		}
+		return writeStringList(w, node.Targets)
 
 	default:
 		return fmt.Errorf("unknown node type for serialization: %T", n)
@@ -1090,6 +1126,56 @@ func decodeNode(r io.Reader, depth int) (Node, error) {
 			return nil, err
 		}
 		return &ImportDecl{Path: path, As: as}, nil
+
+	case KindExternDecl:
+		ed := &ExternDecl{}
+		name, err := readString(r)
+		if err != nil {
+			return nil, err
+		}
+		ed.Name = name
+		hasParams, err := readBool(r)
+		if err != nil {
+			return nil, err
+		}
+		ed.HasParams = hasParams
+		method, err := readBool(r)
+		if err != nil {
+			return nil, err
+		}
+		ed.Method = method
+		var numParams uint32
+		if err := binary.Read(r, binary.BigEndian, &numParams); err != nil {
+			return nil, err
+		}
+		if numParams > MaxChildCount {
+			return nil, fmt.Errorf("XQL_E413: param count %d > %d", numParams, MaxChildCount)
+		}
+		if numParams > 0 {
+			ed.Params = make([]Param, numParams)
+			for i := uint32(0); i < numParams; i++ {
+				p, err := readParam(r)
+				if err != nil {
+					return nil, err
+				}
+				ed.Params[i] = p
+			}
+		}
+		rt, err := readTypeExpr(r)
+		if err != nil {
+			return nil, err
+		}
+		ed.ReturnType = rt
+		if ed.Effects, err = readStringList(r); err != nil {
+			return nil, err
+		}
+		if ed.Grant, err = readStringList(r); err != nil {
+			return nil, err
+		}
+		if ed.Targets, err = readStringList(r); err != nil {
+			return nil, err
+		}
+		return ed, nil
 
 	default:
 		return nil, fmt.Errorf("unknown binary kind byte: %d", kindByte)

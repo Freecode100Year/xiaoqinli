@@ -1,13 +1,33 @@
 {
   "kind": "Program",
   "declarations": [
+    { "kind": "ExternDecl", "name": "document.createElement", "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "document.getElementById", "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "document.querySelectorAll", "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "document.addEventListener", "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "document.head.appendChild", "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "document.body.appendChild", "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "window.AudioContext", "effects": ["state"], "grant": ["audio"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "String", "params": [{ "name": "value" }], "returnType": { "kind": "String" }, "effects": [], "grant": [], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "Math.round", "effects": [], "grant": [], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "setTimeout", "effects": ["state"], "grant": ["timer"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "clearTimeout", "effects": ["state"], "grant": ["timer"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "appendChild", "method": true, "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "setProperty", "method": true, "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "add", "method": true, "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "remove", "method": true, "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "preventDefault", "method": true, "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "forEach", "method": true, "effects": ["state"], "grant": ["dom"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "createGain", "method": true, "effects": ["state"], "grant": ["audio"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "createMediaElementSource", "method": true, "effects": ["state"], "grant": ["audio"], "targets": ["js", "ts", "chrome"] },
+    { "kind": "ExternDecl", "name": "connect", "method": true, "effects": ["state"], "grant": ["audio"], "targets": ["js", "ts", "chrome"] },
     {
       "kind": "FunctionDecl",
       "name": "main",
       "params": [],
       "returnType": { "kind": "Void" },
       "effects": ["state"],
-      "grant": [],
+      "grant": ["audio", "dom", "timer"],
       "body": [
         {
           "kind": "IfStmt",
@@ -240,15 +260,21 @@
                           "kind": "BinaryExpr",
                           "op": "+",
                           "left": {
-                            "kind": "BinaryExpr",
-                            "op": "/",
-                            "left": {
-                              "kind": "BinaryExpr",
-                              "op": "-",
-                              "left": { "kind": "Ident", "name": "percent" },
-                              "right": { "kind": "Literal", "valueType": "Int", "value": 100 }
-                            },
-                            "right": { "kind": "Literal", "valueType": "Int", "value": 2 }
+                            "kind": "CallExpr",
+                            "callee": "String",
+                            "args": [
+                              {
+                                "kind": "BinaryExpr",
+                                "op": "/",
+                                "left": {
+                                  "kind": "BinaryExpr",
+                                  "op": "-",
+                                  "left": { "kind": "Ident", "name": "percent" },
+                                  "right": { "kind": "Literal", "valueType": "Int", "value": 100 }
+                                },
+                                "right": { "kind": "Literal", "valueType": "Int", "value": 2 }
+                              }
+                            ]
                           },
                           "right": { "kind": "Literal", "valueType": "String", "value": "%" }
                         }
@@ -277,7 +303,11 @@
                     "value": {
                       "kind": "BinaryExpr",
                       "op": "+",
-                      "left": { "kind": "Ident", "name": "percent" },
+                      "left": {
+                        "kind": "CallExpr",
+                        "callee": "String",
+                        "args": [{ "kind": "Ident", "name": "percent" }]
+                      },
                       "right": { "kind": "Literal", "valueType": "String", "value": "%" }
                     }
                   }

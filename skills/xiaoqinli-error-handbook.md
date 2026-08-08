@@ -26,6 +26,9 @@ All errors follow the `XQL_Exxx` pattern. Errors halt compilation — no partial
 - `XQL_E101: IfExpr missing 'cond'`
 - `XQL_E101: IfExpr missing 'then'`
 - `XQL_E101: Lambda param is not an object`
+- `XQL_E101: ExternDecl missing 'name'`
+- `XQL_E101: ExternDecl "fetch" must not have a body; the host provides the implementation`
+- `XQL_E101: extern method "res.json" must be named by the method alone; the receiver is not part of the name`
 - `XQL_E101: unknown node kind: FooBar`
 
 **Fix:** Ensure the `.xql.json` file is well-formed and every node has the correct `kind` field and required properties.
@@ -58,14 +61,35 @@ All errors follow the `XQL_Exxx` pattern. Errors halt compilation — no partial
 - **Missing struct field:** StructLit is missing a field declared in StructDecl.
 - **Array element type:** Array element type doesn't match declared `elemType`.
 - **Index type:** Array index must be `Int`.
+- **Undefined function:** The callee is not a declared function, a builtin, an
+  imported symbol, or a declared extern. Calls into the host platform (`fetch`,
+  `time.Sleep`, `document.createElement`) must be declared with `ExternDecl`.
+- **Extern argument count / type mismatch:** The call does not match the extern's
+  declared signature. Omit `params` entirely to declare a signature the compiler
+  does not police.
 - **For-range bounds:** `start` and `end` must be `Int`.
 - **For-each iterable:** Must be `Array` type.
 
 **Fix:** Align types across declarations, assignments, returns, and function calls.
 
+### XQL_E202: Conflicting global symbol
+
+**Cause:** One name is defined twice in a way the merged program cannot resolve.
+
+**Examples:**
+```
+XQL_E202: global symbol "load" is defined in multiple files: models.xql and service.xql
+extern 'fetch' is also declared as a function in the same program
+extern 'fetch' is declared with conflicting signatures across modules
+```
+
+**Fix:** Rename the colliding symbol; drop either the `ExternDecl` or the
+`FunctionDecl` (a name is provided by the host or by this program, not both);
+declare a shared extern once and import it, or make every declaration identical.
+
 ### XQL_E203: Effect check failed
 
-**Cause:** A function declares `@effects(["pure"])` but the compiler inferred side effects.
+**Cause:** A function declares `@effects(["pure"])` but the compiler inferred side effects. An `ExternDecl`'s declared `effects` propagate to its callers, so calling a `network` extern makes the caller impure.
 
 **Example:**
 ```
@@ -130,13 +154,16 @@ function 'main' calls 'writeFile' but lacks required capabilities: [io, filesyst
 **Cause:** The AST uses a type that the target language cannot cleanly map.
 
 **Examples:**
-- `XQL_E402: target "ts" does not support Result<T> type`
-- `XQL_E402: target "lua" does not support Result<T> type`
+- `XQL_E402: target "js" does not support Result<T> type`
 - `XQL_E402: C does not support Option type`
+- `XQL_E402: Fortran target does not support for-each loops`
+- `XQL_E402: extern "fetch" is declared only for targets [js ts chrome] and is not available in "go"`
 
-**Affected targets for Result<T>:** ts, dart, nim, julia, lua, ruby.
+**Affected targets for Result<T>:** js, c, cpp, nim, mql4, mql5.
 
 **Fix:** Remove or replace the unsupported type, or choose a different target.
+For the extern case, compile to a target the host actually provides, or widen
+the extern's `targets` list — but only if that host really does provide it.
 
 ### XQL_E403: MQL unsupported feature
 

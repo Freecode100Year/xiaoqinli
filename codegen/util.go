@@ -14,6 +14,10 @@ type ProjectOutput struct {
 
 // GenerateProject dispatches code generation to target, supporting both single-file and multi-file projects.
 func GenerateProject(root ast.Node, target string) (*ProjectOutput, error) {
+	root, err := prepareExterns(root, target)
+	if err != nil {
+		return nil, err
+	}
 	if target == "android" || target == "apk" {
 		return GenerateAndroidProject(root)
 	}
@@ -31,6 +35,10 @@ func GenerateProject(root ast.Node, target string) (*ProjectOutput, error) {
 
 // Generate dispatches code generation to the appropriate backend by target name.
 func Generate(root ast.Node, target string) ([]byte, error) {
+	root, err := prepareExterns(root, target)
+	if err != nil {
+		return nil, err
+	}
 	if err := validateNodesForTarget(root, target); err != nil {
 		return nil, err
 	}
@@ -359,6 +367,89 @@ func containsStringExpr(n ast.Node) bool {
 	return false
 }
 
+// prepareExterns enforces each extern's target restriction and then removes the
+// declarations from the tree.
+//
+// An extern is a promise about the host, not code: the backend emits the call
+// verbatim and nothing else. Removing the declarations centrally means no
+// backend has to know the node exists. Checking `targets` first turns the one
+// way an extern can go wrong — compiling a browser API to a target whose host
+// has never heard of it — into a compile error instead of output that only
+// fails when someone runs it.
+func prepareExterns(root ast.Node, target string) (ast.Node, error) {
+	prog, ok := root.(*ast.Program)
+	if !ok {
+		return root, nil
+	}
+	kept := make([]ast.Node, 0, len(prog.Decls))
+	stripped := false
+	var restricted []*ast.ExternDecl
+	for _, d := range prog.Decls {
+		ed, isExtern := d.(*ast.ExternDecl)
+		if !isExtern {
+			kept = append(kept, d)
+			continue
+		}
+		stripped = true
+		if !externSupportsTarget(ed, target) {
+			restricted = append(restricted, ed)
+		}
+	}
+	// Only a call actually reaches the host, so an unused declaration for some
+	// other platform is not this target's problem.
+	if len(restricted) > 0 {
+		called := calledNames(root)
+		for _, ed := range restricted {
+			if called[ed.Name] {
+				return nil, fmt.Errorf(
+					"XQL_E402: extern %q is declared only for targets %v and is not available in %q",
+					ed.Name, ed.Targets, target)
+			}
+		}
+	}
+	if !stripped {
+		return root, nil
+	}
+	return &ast.Program{Decls: kept}, nil
+}
+
+// calledNames returns every callee name invoked anywhere in the program.
+func calledNames(root ast.Node) map[string]bool {
+	out := make(map[string]bool)
+	walkNodes(root, func(n ast.Node) {
+		if call, ok := n.(*ast.CallExpr); ok {
+			out[call.Callee] = true
+		}
+	})
+	return out
+}
+
+func externSupportsTarget(ed *ast.ExternDecl, target string) bool {
+	if len(ed.Targets) == 0 {
+		return true
+	}
+	for _, t := range ed.Targets {
+		if t == target || targetAlias(t) == targetAlias(target) {
+			return true
+		}
+	}
+	return false
+}
+
+// targetAlias folds the spellings Generate accepts for one backend so an extern
+// declared for "js" is still available when compiling with "javascript".
+func targetAlias(target string) string {
+	switch target {
+	case "javascript":
+		return "js"
+	case "apk":
+		return "android"
+	case "swift-pkg":
+		return "ios"
+	}
+	return target
+}
+
 func validateNodesForTarget(root ast.Node, target string) error {
 	if target == "go" || target == "rust" || target == "ts" || target == "js" || target == "javascript" || target == "py" || target == "java" || target == "csharp" || target == "kotlin" || target == "swift" || target == "dart" || target == "zig" || target == "nim" || target == "julia" || target == "php" || target == "ruby" || target == "lua" {
 		return nil
@@ -395,6 +486,8 @@ func walkNodes(n ast.Node, fn func(ast.Node)) {
 		}
 	case *ast.ReturnStmt:
 		walkNodes(node.Value, fn)
+	case *ast.ExprStmt:
+		walkNodes(node.Expr, fn)
 	case *ast.VarDecl:
 		walkNodes(node.Value, fn)
 	case *ast.AssignStmt:

@@ -123,6 +123,55 @@ $ echo $?
 
 ---
 
+## 宿主函数
+
+完全不与外界交互的程序算不上程序。对宿主平台的调用——`fetch`、`time.Sleep`、`document.createElement`——用 `ExternDecl` 声明：
+
+```json
+{
+  "kind": "ExternDecl",
+  "name": "fetch",
+  "params": [{ "name": "url", "type": { "kind": "String" } }],
+  "returnType": { "kind": "String" },
+  "effects": ["network"],
+  "grant": ["network"],
+  "targets": ["js", "ts", "chrome"]
+}
+```
+
+名字与被调用方逐字匹配，所以 `time.Sleep`、`document.head.appendChild` 这类带点的名字就按调用时的写法声明。extern 没有函数体：编译器只生成调用本身，不生成任何别的东西。
+
+能力安全的价值正体现在这里。宿主调用是真正伸向外部世界的那一条边，任何调用方都必须持有该 extern 的授权：
+
+```console
+$ ./xql compile --file clock.xql.json --target go
+[
+  {
+    "code": "XQL_E301",
+    "message": "function 'main' calls 'time.Sleep' but lacks required capabilities: [clock]",
+    ...
+  }
+]
+```
+
+声明的 `effects` 同样会向上传播：标注为 `pure` 的函数若调用了带 `network` 效果的 extern，会被 `XQL_E203` 拒绝。
+
+**`targets`** 把 extern 限定在真正提供它的后端上。把调用浏览器 API 的程序编译到根本没听说过该 API 的目标，会直接报编译错误（`XQL_E402`），而不是产出运行时才崩的代码。省略该字段表示所有目标都可用。
+
+**`params`** 可以整个省略，表示签名不做检查，用于变参或重载的宿主函数。一旦声明了 params，参数个数与类型就与普通调用一样受检。
+
+**方法。** 当接收者是编译器无法定型的运行时值时——`res.json()`、`hud.classList.add()`——改为声明方法，它可匹配任意接收者：
+
+```json
+{ "kind": "ExternDecl", "name": "json", "method": true, "effects": ["network"], "grant": ["network"] }
+```
+
+接收者不受验证，但每个调用点仍会强制检查授权。
+
+extern 不按模块划分命名空间：把一个平台的接口面声明一次并导入即可，名字照样可直接调用。多个模块以完全相同的方式声明同一个 extern 时会被合并；声明不一致则被拒绝（`XQL_E202`）。
+
+---
+
 ## 支持的目标平台（46 种）
 
 | 分类 | 目标 |
@@ -138,7 +187,15 @@ $ echo $?
 
 `android` 与 `ios` 输出的是多文件工程脚手架（Gradle / Swift Package Manager），而非单个源文件。
 
-**已知限制：** `js` 与 `nim` 不支持 `Result<T>` 类型，遇到时会明确报 `XQL_E402` 而不是悄悄降级。其余目标均携带真实的 `Result` 语义。
+**已知限制。** 后端无法表达的构造会被明确拒绝，而不是悄悄降级：
+
+| 构造 | 拒绝它的目标 |
+|---|---|
+| `Result<T>` | `js` `c` `cpp` `nim` `mql4` `mql5` |
+| for-each 循环 | `fortran` `pascal` |
+| 结构体字面量 | `bat` |
+
+其余目标均携带真实的 `Result` 语义。
 
 ---
 
@@ -153,6 +210,8 @@ $ echo $?
 编译时链接器会解析导入图，把所有模块合并成一个自足的 `Program`，并剥离已失去意义的别名限定符。因此后端永远只看到一个扁平程序——正是它们已被充分测试的路径。
 
 导入成环会报 `XQL_E402`，跨文件符号冲突在合并前就被拒绝。可运行的三文件示例见 `examples/e2e_workspace/`。
+
+`ExternDecl` 是别名剥离与命名空间划分的例外：宿主名字是一个逐字的符号，导入了声明模块的任何模块都能以同一名字调用它。
 
 ---
 

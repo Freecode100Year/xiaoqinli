@@ -41,6 +41,7 @@ func FlattenImports(root ast.Node, entryFile string) (ast.Node, error) {
 	l := &linker{
 		loaded:  make(map[string]bool),
 		aliases: make(map[string]bool),
+		externs: make(map[string]bool),
 	}
 	imported, err := l.collect(prog, entryFile, map[string]bool{cleanPath(entryFile): true})
 	if err != nil {
@@ -56,10 +57,48 @@ func FlattenImports(root ast.Node, entryFile string) (ast.Node, error) {
 		merged.Decls = append(merged.Decls, d)
 	}
 
+	decls, err := l.dedupeExterns(merged.Decls)
+	if err != nil {
+		return nil, err
+	}
+	merged.Decls = decls
+
 	for _, d := range merged.Decls {
 		l.stripNode(d)
 	}
 	return merged, nil
+}
+
+// dedupeExterns collapses the same host function declared in several modules
+// into one declaration, and rejects declarations that disagree. It also records
+// every extern name so stripName leaves host calls alone: an extern called
+// "models.load" is one verbatim host name, not a reference into module "models".
+func (l *linker) dedupeExterns(decls []ast.Node) ([]ast.Node, error) {
+	seen := make(map[string]*ast.ExternDecl)
+	out := make([]ast.Node, 0, len(decls))
+	for _, d := range decls {
+		ed, ok := d.(*ast.ExternDecl)
+		if !ok {
+			out = append(out, d)
+			continue
+		}
+		if !ed.Method {
+			// Method externs are matched by their final segment, and the type
+			// checker resolves import aliases ahead of them, so alias
+			// stripping stays authoritative for those.
+			l.externs[ed.Name] = true
+		}
+		if prev, dup := seen[ed.Name]; dup {
+			if !prev.SignatureEquals(ed) {
+				return nil, fmt.Errorf(
+					"XQL_E202: extern %q is declared with conflicting signatures across modules", ed.Name)
+			}
+			continue
+		}
+		seen[ed.Name] = ed
+		out = append(out, d)
+	}
+	return out, nil
 }
 
 type linker struct {
@@ -69,6 +108,9 @@ type linker struct {
 	// references are stripped only when the prefix matches one of these, so a
 	// variable method call like res.unwrap is left alone.
 	aliases map[string]bool
+	// externs holds every declared host function name; these are matched
+	// verbatim and must survive alias stripping intact.
+	externs map[string]bool
 }
 
 // collect walks the import graph depth-first and returns the declarations of
@@ -149,6 +191,9 @@ func resolveImportPath(current, target string) string {
 
 // stripName removes a leading "alias." when alias is a known import alias.
 func (l *linker) stripName(name string) string {
+	if l.externs[name] {
+		return name
+	}
 	idx := strings.Index(name, ".")
 	if idx <= 0 {
 		return name
@@ -195,6 +240,10 @@ func (l *linker) stripNode(n ast.Node) {
 		l.stripParams(node.Params)
 		l.stripType(&node.ReturnType)
 		l.stripNodes(node.Body)
+	case *ast.ExternDecl:
+		// The name is a verbatim host symbol and is never rewritten.
+		l.stripParams(node.Params)
+		l.stripType(&node.ReturnType)
 	case *ast.StructDecl:
 		for i := range node.Fields {
 			l.stripType(&node.Fields[i].Type)

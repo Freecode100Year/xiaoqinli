@@ -146,10 +146,58 @@ func checkCaps(n ast.Node, funcGrants map[string]Capability, errs *[]string, tc 
 		}
 	case *ast.FunctionDecl:
 		callerCap := Capability(node.Grant)
+		// Lambdas bound to a local name are callable by that name. Their bodies
+		// are walked below under this same function's grant, so calling one
+		// needs no capability of its own — but it does need to resolve, or
+		// strict mode would report it as unverifiable.
+		scoped := funcGrants
+		if locals := lambdaLocals(node.Body); len(locals) > 0 {
+			scoped = make(map[string]Capability, len(funcGrants)+len(locals))
+			for k, v := range funcGrants {
+				scoped[k] = v
+			}
+			for _, name := range locals {
+				scoped[name] = Capability{}
+			}
+		}
 		for _, stmt := range node.Body {
-			checkCapStmt(stmt, node.Name, callerCap, funcGrants, errs, tc, opts)
+			checkCapStmt(stmt, node.Name, callerCap, scoped, errs, tc, opts)
 		}
 	}
+}
+
+// lambdaLocals returns the names of variables in stmts that are bound to a
+// lambda, including inside nested blocks.
+func lambdaLocals(stmts []ast.Node) []string {
+	var out []string
+	var walk func(n ast.Node)
+	walk = func(n ast.Node) {
+		switch node := n.(type) {
+		case *ast.VarDecl:
+			if _, isLambda := node.Value.(*ast.Lambda); isLambda {
+				out = append(out, node.Name)
+			}
+		case *ast.IfStmt:
+			for _, s := range node.Then {
+				walk(s)
+			}
+			for _, s := range node.Else {
+				walk(s)
+			}
+		case *ast.WhileStmt:
+			for _, s := range node.Body {
+				walk(s)
+			}
+		case *ast.ForStmt:
+			for _, s := range node.Body {
+				walk(s)
+			}
+		}
+	}
+	for _, s := range stmts {
+		walk(s)
+	}
+	return out
 }
 
 func checkCapStmt(n ast.Node, callerName string, callerCap Capability, funcGrants map[string]Capability, errs *[]string, tc *TypeChecker, opts CheckOptions) {
@@ -227,7 +275,14 @@ func checkCapExpr(n ast.Node, callerName string, callerCap Capability, funcGrant
 		calleeName := node.Callee
 		var calleeCap Capability
 		found := false
-		if strings.Contains(calleeName, ".") {
+		// Externs are matched verbatim and resolved first: they are the edge
+		// that actually reaches the host, so their declared grant is the one
+		// the caller must hold. A dotted name like "time.Sleep" would otherwise
+		// be mistaken for a module-qualified call.
+		if ed, ok := tc.externTable[calleeName]; ok {
+			calleeCap = Capability(ed.Grant)
+			found = true
+		} else if strings.Contains(calleeName, ".") {
 			parts := strings.Split(calleeName, ".")
 			if len(parts) == 2 {
 				alias := parts[0]
@@ -255,6 +310,14 @@ func checkCapExpr(n ast.Node, callerName string, callerCap Capability, funcGrant
 				found = true
 			} else if _, ok := builtinFuncs[calleeName]; ok {
 				calleeCap = Capability{}
+				found = true
+			}
+		}
+		if !found {
+			// Last resort, mirroring the type checker: a qualified call nobody
+			// else claims may be a declared host method.
+			if ed := tc.methodExtern(calleeName); ed != nil {
+				calleeCap = Capability(ed.Grant)
 				found = true
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Node is the interface all AST nodes implement.
@@ -50,6 +51,83 @@ type ImportDecl struct {
 }
 
 func (*ImportDecl) Kind() string { return "ImportDecl" }
+
+// ExternDecl declares a function the host platform provides and the compiler
+// therefore never emits: `fetch`, `time.Sleep`, `document.createElement`.
+//
+// Without it every call to a platform API is an unresolved symbol, so the type
+// checker rejects the program and the capability checker cannot say anything
+// about the one place that actually reaches the outside world. Declaring the
+// signature turns a host call into a checked, capability-carrying edge.
+//
+// Name is matched verbatim against CallExpr.Callee, so dotted and chained
+// names are declared exactly as they are called.
+type ExternDecl struct {
+	Name       string
+	Params     []Param
+	ReturnType TypeExpr
+	Effects    []string
+	// Grant lists the capabilities a caller must hold to call this extern.
+	Grant []string
+	// Targets restricts the extern to the backends whose host actually
+	// provides it. Empty means every target.
+	Targets []string
+	// Method declares a method on a host object rather than a global: it
+	// matches any call whose final dotted segment is Name, such as
+	// `res.json()` or `hud.classList.add()`. The receiver is a runtime value
+	// the compiler cannot type, so only the method name is matched — the
+	// declared grant is still enforced at every call site.
+	Method bool
+	// HasParams distinguishes `"params": []` (a checked zero-arity signature)
+	// from an omitted params field (arity and argument types unchecked).
+	HasParams bool
+}
+
+func (*ExternDecl) Kind() string { return "ExternDecl" }
+
+// SignatureEquals reports whether two extern declarations describe the same
+// host function. Declaring the same extern in several modules is normal — the
+// host provides one `fetch` no matter how many files mention it — so merging
+// only has to reject declarations that disagree.
+func (e *ExternDecl) SignatureEquals(o *ExternDecl) bool {
+	if e == nil || o == nil {
+		return e == o
+	}
+	if e.Name != o.Name || e.HasParams != o.HasParams || e.Method != o.Method {
+		return false
+	}
+	if e.ReturnType.KindName != o.ReturnType.KindName {
+		return false
+	}
+	if len(e.Params) != len(o.Params) {
+		return false
+	}
+	for i := range e.Params {
+		if e.Params[i].Type.KindName != o.Params[i].Type.KindName {
+			return false
+		}
+	}
+	return sameStringSet(e.Effects, o.Effects) &&
+		sameStringSet(e.Grant, o.Grant) &&
+		sameStringSet(e.Targets, o.Targets)
+}
+
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	seen := make(map[string]int, len(a))
+	for _, s := range a {
+		seen[s]++
+	}
+	for _, s := range b {
+		seen[s]--
+		if seen[s] < 0 {
+			return false
+		}
+	}
+	return true
+}
 
 // --- Declarations & Statements ---
 
@@ -374,6 +452,8 @@ func parseNode(raw map[string]interface{}, depth ...int) (Node, error) {
 		return parseProgram(raw, curDepth)
 	case "ImportDecl":
 		return parseImportDecl(raw)
+	case "ExternDecl":
+		return parseExternDecl(raw, curDepth)
 	case "FunctionDecl":
 		return parseFunctionDecl(raw, curDepth)
 	case "ReturnStmt":
@@ -561,6 +641,70 @@ func parseImportDecl(raw map[string]interface{}) (*ImportDecl, error) {
 	return id, nil
 }
 
+// parseParams decodes a "params" array. The second result reports whether the
+// field was present at all, which ExternDecl uses to tell a declared zero-arity
+// signature from an unchecked one.
+func parseParams(raw map[string]interface{}, depth ...int) ([]Param, bool, error) {
+	params, ok := raw["params"].([]interface{})
+	if !ok {
+		return nil, false, nil
+	}
+	out := make([]Param, 0, len(params))
+	for _, p := range params {
+		pm, ok := p.(map[string]interface{})
+		if !ok {
+			return nil, true, fmt.Errorf("XQL_E101: param is not an object")
+		}
+		param := Param{}
+		param.Name, _ = pm["name"].(string)
+		if t, ok := pm["type"]; ok {
+			te, err := parseTypeExpr(t, depth...)
+			if err != nil {
+				return nil, true, err
+			}
+			param.Type = te
+		}
+		out = append(out, param)
+	}
+	return out, true, nil
+}
+
+func parseExternDecl(raw map[string]interface{}, depth ...int) (*ExternDecl, error) {
+	ed := &ExternDecl{}
+	ed.Name, _ = raw["name"].(string)
+	if ed.Name == "" {
+		return nil, fmt.Errorf("XQL_E101: ExternDecl missing 'name'")
+	}
+
+	params, hasParams, err := parseParams(raw, depth...)
+	if err != nil {
+		return nil, err
+	}
+	ed.Params, ed.HasParams = params, hasParams
+
+	if rt, ok := raw["returnType"]; ok {
+		te, err := parseTypeExpr(rt, depth...)
+		if err != nil {
+			return nil, err
+		}
+		ed.ReturnType = te
+	}
+
+	ed.Effects = parseStringList(raw["effects"])
+	ed.Grant = parseStringList(raw["grant"])
+	ed.Targets = parseStringList(raw["targets"])
+	ed.Method, _ = raw["method"].(bool)
+
+	if ed.Method && strings.Contains(ed.Name, ".") {
+		return nil, fmt.Errorf(
+			"XQL_E101: extern method %q must be named by the method alone; the receiver is not part of the name", ed.Name)
+	}
+	if _, hasBody := raw["body"]; hasBody {
+		return nil, fmt.Errorf("XQL_E101: ExternDecl %q must not have a body; the host provides the implementation", ed.Name)
+	}
+	return ed, nil
+}
+
 func parseFunctionDecl(raw map[string]interface{}, depth ...int) (*FunctionDecl, error) {
 	fd := &FunctionDecl{}
 	fd.Name, _ = raw["name"].(string)
@@ -568,24 +712,11 @@ func parseFunctionDecl(raw map[string]interface{}, depth ...int) (*FunctionDecl,
 		return nil, fmt.Errorf("XQL_E101: FunctionDecl missing 'name'")
 	}
 
-	if params, ok := raw["params"].([]interface{}); ok {
-		for _, p := range params {
-			pm, ok := p.(map[string]interface{})
-			if !ok {
-				return nil, fmt.Errorf("XQL_E101: param is not an object")
-			}
-			param := Param{}
-			param.Name, _ = pm["name"].(string)
-			if t, ok := pm["type"]; ok {
-				te, err := parseTypeExpr(t, depth...)
-				if err != nil {
-					return nil, err
-				}
-				param.Type = te
-			}
-			fd.Params = append(fd.Params, param)
-		}
+	params, _, err := parseParams(raw, depth...)
+	if err != nil {
+		return nil, err
 	}
+	fd.Params = params
 
 	if rt, ok := raw["returnType"]; ok {
 		te, err := parseTypeExpr(rt, depth...)

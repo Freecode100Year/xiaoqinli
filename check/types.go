@@ -21,6 +21,11 @@ const (
 	EffectState      Effect = "state"
 )
 
+// FunctionTypeName is the type a lambda expression has. It exists so a variable
+// holding a lambda can be recognised at a call site; the lambda's own return
+// type is carried in TypeExpr.Elem.
+const FunctionTypeName = "Function"
+
 // builtinFuncs maps built-in function names to their return types and effects.
 var builtinFuncs = map[string]struct {
 	ReturnType string
@@ -34,6 +39,8 @@ var builtinFuncs = map[string]struct {
 // TypeChecker performs static type checking on a typed AST.
 type TypeChecker struct {
 	funcTable     map[string]*ast.FunctionDecl
+	externTable   map[string]*ast.ExternDecl
+	externMethods map[string]*ast.ExternDecl
 	structTable   map[string]*ast.StructDecl
 	enumTable     map[string]*ast.EnumDecl
 	classTable    map[string]*ast.ClassDecl
@@ -55,11 +62,13 @@ type TypeChecker struct {
 // NewTypeChecker creates a new TypeChecker.
 func NewTypeChecker() *TypeChecker {
 	return &TypeChecker{
-		funcTable:   make(map[string]*ast.FunctionDecl),
-		structTable: make(map[string]*ast.StructDecl),
-		enumTable:   make(map[string]*ast.EnumDecl),
-		classTable:  make(map[string]*ast.ClassDecl),
-		imports:     make(map[string]*TypeChecker),
+		funcTable:     make(map[string]*ast.FunctionDecl),
+		externTable:   make(map[string]*ast.ExternDecl),
+		externMethods: make(map[string]*ast.ExternDecl),
+		structTable:   make(map[string]*ast.StructDecl),
+		enumTable:     make(map[string]*ast.EnumDecl),
+		classTable:    make(map[string]*ast.ClassDecl),
+		imports:       make(map[string]*TypeChecker),
 	}
 }
 
@@ -83,6 +92,8 @@ func (tc *TypeChecker) Check(root ast.Node) error {
 
 	// First pass: collect all function declarations.
 	tc.collectFunctions(root)
+	tc.inheritExterns(map[*TypeChecker]bool{tc: true})
+	tc.checkExternShadowing()
 
 	// 跨模块全局符号命名冲突检测
 	if err := tc.checkGlobalSymbolConflicts(root); err != nil {
@@ -114,6 +125,12 @@ func (tc *TypeChecker) collectFunctions(n ast.Node) {
 		}
 	case *ast.FunctionDecl:
 		tc.funcTable[node.Name] = node
+	case *ast.ExternDecl:
+		if node.Method {
+			tc.externMethods[node.Name] = node
+		} else {
+			tc.externTable[node.Name] = node
+		}
 	case *ast.StructDecl:
 		tc.structTable[node.Name] = node
 	case *ast.ClassDecl:
@@ -121,6 +138,88 @@ func (tc *TypeChecker) collectFunctions(n ast.Node) {
 	case *ast.EnumDecl:
 		tc.enumTable[node.Name] = node
 	}
+}
+
+// methodExtern resolves a qualified callee against the declared host methods by
+// its final segment, so "res.json" matches an extern method named "json".
+// Returns nil when no method extern claims the call.
+func (tc *TypeChecker) methodExtern(callee string) *ast.ExternDecl {
+	idx := strings.LastIndex(callee, ".")
+	if idx < 0 {
+		return nil
+	}
+	return tc.externMethods[callee[idx+1:]]
+}
+
+// inheritExterns pulls extern declarations up from imported modules. Unlike
+// functions and types, an extern is not namespaced by its module: it names one
+// host function, so a module that declares `fetch` makes it callable by its
+// importers under that same name. Redeclarations that disagree are an error;
+// identical ones are simply the same host function seen twice.
+func (tc *TypeChecker) inheritExterns(visited map[*TypeChecker]bool) {
+	for _, depTC := range tc.imports {
+		if visited[depTC] {
+			continue
+		}
+		visited[depTC] = true
+		depTC.inheritExterns(visited)
+		tc.mergeExterns(tc.externTable, depTC.externTable)
+		tc.mergeExterns(tc.externMethods, depTC.externMethods)
+	}
+}
+
+func (tc *TypeChecker) mergeExterns(dst, src map[string]*ast.ExternDecl) {
+	for name, ed := range src {
+		existing, ok := dst[name]
+		if !ok {
+			dst[name] = ed
+			continue
+		}
+		if !existing.SignatureEquals(ed) {
+			tc.addError(fmt.Sprintf(
+				"extern '%s' is declared with conflicting signatures across modules", name))
+		}
+	}
+}
+
+// checkExternShadowing rejects a program that declares a name both as an extern
+// and as a real function: the two would disagree about who provides the body,
+// and call resolution would silently pick one of them.
+func (tc *TypeChecker) checkExternShadowing() {
+	for name := range tc.externTable {
+		if _, ok := tc.funcTable[name]; ok {
+			tc.addError(fmt.Sprintf(
+				"extern '%s' is also declared as a function in the same program", name))
+		}
+	}
+}
+
+// checkExternCall validates a call against an extern signature and yields its
+// declared return type. An extern that omits "params" declares an unchecked
+// signature, so arity and argument types are not enforced — the host owns them.
+func (tc *TypeChecker) checkExternCall(node *ast.CallExpr, ed *ast.ExternDecl, scope map[string]ast.TypeExpr) ast.TypeExpr {
+	if !ed.HasParams {
+		for _, arg := range node.Args {
+			tc.inferType(arg, scope)
+		}
+		return ed.ReturnType
+	}
+	if len(node.Args) != len(ed.Params) {
+		tc.addError(fmt.Sprintf(
+			"extern '%s' expects %d args, got %d",
+			ed.Name, len(ed.Params), len(node.Args)))
+		return ed.ReturnType
+	}
+	for i, arg := range node.Args {
+		argType := tc.inferType(arg, scope)
+		paramType := ed.Params[i].Type.KindName
+		if argType.KindName != "" && paramType != "" && argType.KindName != paramType {
+			tc.addError(fmt.Sprintf(
+				"extern '%s' arg %d: expected %s, got %s",
+				ed.Name, i, paramType, argType.KindName))
+		}
+	}
+	return ed.ReturnType
 }
 
 func (tc *TypeChecker) addError(msg string) {
@@ -147,6 +246,12 @@ func (tc *TypeChecker) addError(msg string) {
 	} else if strings.Contains(msg, "is defined in multiple files") {
 		code = "XQL_E202"
 		fix = "Rename one of the conflicting global symbols."
+	} else if strings.Contains(msg, "is also declared as a function") {
+		code = "XQL_E202"
+		fix = "Drop either the ExternDecl or the FunctionDecl; a name is provided by the host or by this program, not both."
+	} else if strings.Contains(msg, "conflicting signatures across modules") {
+		code = "XQL_E202"
+		fix = "Declare the extern once and import it, or make every declaration identical."
 	} else if strings.Contains(msg, "missing required capability") || strings.Contains(msg, "lacks required capabilities") {
 		code = "XQL_E301"
 		capName := "required capability"
@@ -419,6 +524,20 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 				}
 			}
 		}
+		// A local binding shadows every global name, so a variable holding a
+		// lambda is resolved before functions, externs, and builtins.
+		if t, ok := scope[node.Callee]; ok && t.KindName == FunctionTypeName {
+			for _, arg := range node.Args {
+				tc.inferType(arg, scope)
+			}
+			if t.Elem != nil {
+				return *t.Elem
+			}
+			return none
+		}
+		if ed, ok := tc.externTable[node.Callee]; ok {
+			return tc.checkExternCall(node, ed, scope)
+		}
 		if bi, ok := builtinFuncs[node.Callee]; ok {
 			return ast.TypeExpr{KindName: bi.ReturnType}
 		}
@@ -466,6 +585,12 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 					}
 				}
 			}
+		}
+		// Method externs are matched last: a qualified call is far more likely
+		// to be a module reference, and only when nothing else claims it does
+		// the final segment get read as a host method.
+		if ed := tc.methodExtern(node.Callee); ed != nil {
+			return tc.checkExternCall(node, ed, scope)
 		}
 		tc.addError(fmt.Sprintf("undefined function: %s", node.Callee))
 		return none
@@ -617,7 +742,11 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 		for _, s := range node.Body {
 			tc.checkStmt(s, tc.currentFunc, lambdaScope)
 		}
-		return none
+		// A lambda has a type, so a variable bound to one can be called by name
+		// instead of being reported as an undefined function. Elem carries the
+		// lambda's return type so the call site still types.
+		retType := node.ReturnType
+		return ast.TypeExpr{KindName: FunctionTypeName, Elem: &retType}
 	default:
 		return none
 	}
@@ -746,7 +875,15 @@ func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]as
 	}
 	switch node := n.(type) {
 	case *ast.CallExpr:
-		if bi, ok := builtinFuncs[node.Callee]; ok {
+		if ed, ok := tc.externTable[node.Callee]; ok {
+			// A host call's effects are whatever it declares; there is no body
+			// to infer them from, which is the whole point of declaring them.
+			for _, e := range ed.Effects {
+				if Effect(e) != EffectPure {
+					seen[Effect(e)] = true
+				}
+			}
+		} else if bi, ok := builtinFuncs[node.Callee]; ok {
 			for _, e := range bi.Effects {
 				seen[e] = true
 			}
@@ -772,6 +909,13 @@ func collectEffects(n ast.Node, seen map[Effect]bool, funcBodies map[string][]as
 						if !isPure {
 							seen[Effect("impure")] = true
 						}
+					}
+				}
+			}
+			if ed := tc.methodExtern(node.Callee); ed != nil {
+				for _, e := range ed.Effects {
+					if Effect(e) != EffectPure {
+						seen[Effect(e)] = true
 					}
 				}
 			}
