@@ -96,20 +96,40 @@ func (e *ExternDecl) SignatureEquals(o *ExternDecl) bool {
 	if e.Name != o.Name || e.HasParams != o.HasParams || e.Method != o.Method {
 		return false
 	}
-	if e.ReturnType.KindName != o.ReturnType.KindName {
+	if !sameTypeExpr(e.ReturnType, o.ReturnType) {
 		return false
 	}
 	if len(e.Params) != len(o.Params) {
 		return false
 	}
 	for i := range e.Params {
-		if e.Params[i].Type.KindName != o.Params[i].Type.KindName {
+		if !sameTypeExpr(e.Params[i].Type, o.Params[i].Type) {
 			return false
 		}
 	}
 	return sameStringSet(e.Effects, o.Effects) &&
 		sameStringSet(e.Grant, o.Grant) &&
 		sameStringSet(e.Targets, o.Targets)
+}
+
+// sameTypeExpr compares two type expressions in full. Comparing only KindName
+// would call Array<Int> and Array<String> the same type, letting two modules
+// declare incompatible versions of one host function without complaint.
+func sameTypeExpr(a, b TypeExpr) bool {
+	if a.KindName != b.KindName {
+		return false
+	}
+	return sameTypeExprPtr(a.Elem, b.Elem) &&
+		sameTypeExprPtr(a.KeyType, b.KeyType) &&
+		sameTypeExprPtr(a.OkType, b.OkType) &&
+		sameTypeExprPtr(a.ErrType, b.ErrType)
+}
+
+func sameTypeExprPtr(a, b *TypeExpr) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return sameTypeExpr(*a, *b)
 }
 
 func sameStringSet(a, b []string) bool {
