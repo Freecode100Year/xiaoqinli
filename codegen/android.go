@@ -612,6 +612,17 @@ android {
             minifyEnabled false
         }
     }
+    // Both toolchains have to agree on a bytecode target. AGP still defaults
+    // Java to 1.8 while the Kotlin plugin follows the JDK running the build,
+    // and Gradle fails the build outright when the two disagree. AGP 8 already
+    // requires JDK 17, so pinning both there costs nothing.
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
 }
 dependencies {
     implementation 'androidx.core:core-ktx:1.10.1'
