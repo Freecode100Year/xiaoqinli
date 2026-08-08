@@ -93,4 +93,4 @@ jobs:
           gradle-version: '8.7'
 
       - name: Run local E2E test
-        run: go test -v ./codegen -run TestLocalE2EWorkspaceDogfood -count=1
+        run: go test -v ./codegen -run 'TestLocalE2E' -count=1
