@@ -26,6 +26,12 @@ const (
 // type is carried in TypeExpr.Elem.
 const FunctionTypeName = "Function"
 
+// isFunctionValue reports whether an inferred type is a lambda. XQL has no
+// syntax for a function type, so a lambda can only ever be compared against
+// whatever name the author invented for the parameter holding it — "Callback",
+// "Handler" — and reporting a mismatch there is noise, not a check.
+func isFunctionValue(name string) bool { return name == FunctionTypeName }
+
 // builtinFuncs maps built-in function names to their return types and effects.
 var builtinFuncs = map[string]struct {
 	ReturnType string
@@ -213,7 +219,7 @@ func (tc *TypeChecker) checkExternCall(node *ast.CallExpr, ed *ast.ExternDecl, s
 	for i, arg := range node.Args {
 		argType := tc.inferType(arg, scope)
 		paramType := ed.Params[i].Type.KindName
-		if argType.KindName != "" && paramType != "" && argType.KindName != paramType {
+		if argType.KindName != "" && paramType != "" && argType.KindName != paramType && !isFunctionValue(argType.KindName) {
 			tc.addError(fmt.Sprintf(
 				"extern '%s' arg %d: expected %s, got %s",
 				ed.Name, i, paramType, argType.KindName))
@@ -338,7 +344,7 @@ func (tc *TypeChecker) checkStmt(n ast.Node, fn *ast.FunctionDecl, scope map[str
 	case *ast.VarDecl:
 		if node.Value != nil {
 			valType := tc.inferType(node.Value, scope)
-			if node.Type.KindName != "" && valType.KindName != "" && valType.KindName != node.Type.KindName {
+			if node.Type.KindName != "" && valType.KindName != "" && valType.KindName != node.Type.KindName && !isFunctionValue(valType.KindName) {
 				tc.addError(fmt.Sprintf(
 					"variable '%s': type mismatch, declared %s but assigned %s",
 					node.Name, node.Type.KindName, valType.KindName))
@@ -356,13 +362,13 @@ func (tc *TypeChecker) checkStmt(n ast.Node, fn *ast.FunctionDecl, scope map[str
 		valType := tc.inferType(node.Value, scope)
 		if ident, ok := node.Target.(*ast.Ident); ok {
 			if declaredType, exists := scope[ident.Name]; exists {
-				if valType.KindName != "" && declaredType.KindName != "" && valType.KindName != declaredType.KindName {
+				if valType.KindName != "" && declaredType.KindName != "" && valType.KindName != declaredType.KindName && !isFunctionValue(valType.KindName) {
 					tc.addError(fmt.Sprintf(
 						"assignment to '%s': type mismatch, expected %s but got %s",
 						ident.Name, declaredType.KindName, valType.KindName))
 				}
 			}
-		} else if targetType.KindName != "" && valType.KindName != "" && targetType.KindName != valType.KindName {
+		} else if targetType.KindName != "" && valType.KindName != "" && targetType.KindName != valType.KindName && !isFunctionValue(valType.KindName) {
 			tc.addError(fmt.Sprintf(
 				"assignment type mismatch, expected %s but got %s",
 				targetType.KindName, valType.KindName))
@@ -550,7 +556,7 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 				for i, arg := range node.Args {
 					argType := tc.inferType(arg, scope)
 					paramType := fd.Params[i].Type.KindName
-					if argType.KindName != "" && paramType != "" && argType.KindName != paramType {
+					if argType.KindName != "" && paramType != "" && argType.KindName != paramType && !isFunctionValue(argType.KindName) {
 						tc.addError(fmt.Sprintf(
 							"function '%s' arg %d: expected %s, got %s",
 							node.Callee, i, paramType, argType.KindName))
@@ -574,7 +580,7 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 							for i, arg := range node.Args {
 								argType := tc.inferType(arg, scope)
 								paramType := fd.Params[i].Type.KindName
-								if argType.KindName != "" && paramType != "" && !typesMatch(paramType, argType.KindName, alias) {
+								if argType.KindName != "" && paramType != "" && !typesMatch(paramType, argType.KindName, alias) && !isFunctionValue(argType.KindName) {
 									tc.addError(fmt.Sprintf(
 										"function '%s' arg %d: expected %s, got %s",
 										node.Callee, i, paramType, argType.KindName))
@@ -658,7 +664,7 @@ func (tc *TypeChecker) inferType(n ast.Node, scope map[string]ast.TypeExpr) ast.
 			}
 			if expectedType == "" {
 				tc.addError(fmt.Sprintf("struct '%s' has no field '%s'", node.TypeName, fi.Name))
-			} else if valType.KindName != "" && valType.KindName != expectedType {
+			} else if valType.KindName != "" && valType.KindName != expectedType && !isFunctionValue(valType.KindName) {
 				tc.addError(fmt.Sprintf("struct '%s' field '%s': expected %s, got %s",
 					node.TypeName, fi.Name, expectedType, valType.KindName))
 			}
@@ -1097,6 +1103,13 @@ func (tc *TypeChecker) loadImports(prog *ast.Program, visiting map[string]bool) 
 				return err
 			}
 			depTC.collectFunctions(depProg)
+			// A module gets the same extern visibility as the entry file: it
+			// can call what its own imports declare. Without this an extern is
+			// only usable from the file the compiler happens to be invoked on,
+			// and a module calling a host function it imported is reported as
+			// an undefined function.
+			depTC.inheritExterns(map[*TypeChecker]bool{depTC: true})
+			depTC.checkExternShadowing()
 			depTC.checkNode(depProg)
 			if len(depTC.errors) > 0 {
 				msg := fmt.Sprintf("XQL_E201: type check failed in import %q:\n", imp.Path)
