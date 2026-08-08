@@ -22,6 +22,7 @@ func GenerateAndroidProject(root ast.Node) (*ProjectOutput, error) {
 		"app/src/main/AndroidManifest.xml":              []byte(getAndroidManifest()),
 		"app/src/main/res/layout/activity_main.xml":     []byte(getAndroidLayoutXml()),
 		"app/src/main/res/values/strings.xml":           []byte(getAndroidStringsXml()),
+		"app/src/main/res/drawable/ic_launcher.xml":     []byte(getAndroidLauncherIcon()),
 		"app/src/main/java/com/xql/app/MainActivity.kt": ktCode,
 	}
 
@@ -624,7 +625,7 @@ func getAndroidManifest() string {
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher"
+        android:icon="@drawable/ic_launcher"
         android:label="@string/app_name"
         android:theme="@style/Theme.AppCompat.Light.NoActionBar">
         <activity
@@ -637,6 +638,28 @@ func getAndroidManifest() string {
         </activity>
     </application>
 </manifest>
+`
+}
+
+// getAndroidLauncherIcon supplies the icon the manifest references. It is a
+// vector drawable rather than the usual mipmap PNG set so the scaffold stays
+// text-only — a generator has no business emitting binary assets, and without
+// any icon at all aapt fails the build with "resource mipmap/ic_launcher not
+// found".
+func getAndroidLauncherIcon() string {
+	return `<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#3DDC84"
+        android:pathData="M0,0h108v108h-108z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,54h48v6h-48z" />
+</vector>
 `
 }
 

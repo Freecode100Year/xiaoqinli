@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -76,27 +77,33 @@ func TestLocalE2EProjectScaffolds(t *testing.T) {
 			out, err := cmd.CombinedOutput()
 			if err != nil {
 				t.Fatalf("Step %q failed: %v\nOutput: %s\n%s",
-					tc.runCmd, err, out, dumpTree(tmpDir))
+					tc.runCmd, err, out, dumpGenerated(tmpDir, result.Files))
 			}
 		})
 	}
 }
 
-func dumpTree(root string) string {
+// dumpGenerated prints the sources the compiler produced, and only those.
+// Walking the directory instead would sweep up whatever the build wrote into
+// build/ — dex files, packaged archives — and a few megabytes of binary noise
+// in the log truncates away the results of any test that ran afterwards.
+func dumpGenerated(root string, files map[string][]byte) string {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	var b strings.Builder
 	b.WriteString("\n=== DEBUG: Generated Files Content ===\n")
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info == nil || !info.Mode().IsRegular() {
-			return nil
+	for _, name := range names {
+		content, err := os.ReadFile(filepath.Join(root, name))
+		if err != nil {
+			b.WriteString(fmt.Sprintf("--- File: %s (unreadable: %v) ---\n", name, err))
+			continue
 		}
-		rel, relErr := filepath.Rel(root, path)
-		if relErr != nil {
-			rel = path
-		}
-		content, _ := os.ReadFile(path)
-		b.WriteString(fmt.Sprintf("--- File: %s ---\n%s\n", rel, string(content)))
-		return nil
-	})
+		b.WriteString(fmt.Sprintf("--- File: %s ---\n%s\n", name, string(content)))
+	}
 	b.WriteString("======================================\n")
 	return b.String()
 }
