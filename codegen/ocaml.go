@@ -131,11 +131,7 @@ func (g *ocamlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 				return err
 			}
 		}
-		// If body is empty or last stmt is not an expression, ensure unit
-		if len(fd.Body) == 0 {
-			g.writeIndent()
-			g.writeln("()")
-		}
+		g.closeBody(fd.Body)
 		g.indent--
 		g.writeln("")
 		g.writeln("let () = main ()")
@@ -159,12 +155,28 @@ func (g *ocamlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 			return err
 		}
 	}
-	if len(fd.Body) == 0 {
-		g.writeIndent()
-		g.writeln("()")
-	}
+	g.closeBody(fd.Body)
 	g.indent--
 	return nil
+}
+
+// closeBody finishes a function body so it is a complete OCaml expression.
+//
+// Every statement this backend emits ends in ";" except a return, and ";" in
+// OCaml separates expressions rather than terminating them. A body ending in
+// `print_endline x;` therefore promises another expression and never delivers
+// one, so the next top-level `let` is a syntax error — which is why no OCaml
+// this backend produced had ever compiled. Closing the sequence with unit
+// gives `print_endline x; ()`, which is both valid and the right type for a
+// procedure.
+func (g *ocamlGen) closeBody(body []ast.Node) {
+	if len(body) > 0 {
+		if _, isReturn := body[len(body)-1].(*ast.ReturnStmt); isReturn {
+			return
+		}
+	}
+	g.writeIndent()
+	g.writeln("()")
 }
 
 func (g *ocamlGen) emitStmt(n ast.Node) error {

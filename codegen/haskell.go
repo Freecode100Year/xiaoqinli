@@ -446,7 +446,10 @@ func (g *hsGen) emitForStmt(fs *ast.ForStmt) error {
 				return err
 			}
 		}
-		g.indent--
+		// The closing paren stays indented inside the lambda. Layout inserts a
+		// statement separator before any token at the enclosing do-block's
+		// column, so dedenting to it makes `)` look like a new statement and
+		// GHC reports "parse error on input ')'".
 		g.writeIndent()
 		g.write(") [")
 		if err := g.emitExpr(fs.Start); err != nil {
@@ -460,6 +463,7 @@ func (g *hsGen) emitForStmt(fs *ast.ForStmt) error {
 		}
 		g.write("-1)")
 		g.writeln("]")
+		g.indent--
 		return nil
 	}
 	// each form
@@ -473,13 +477,14 @@ func (g *hsGen) emitForStmt(fs *ast.ForStmt) error {
 			return err
 		}
 	}
-	g.indent--
+	// Kept indented for the same layout reason as the range form above.
 	g.writeIndent()
 	g.write(") ")
 	if err := g.emitExpr(fs.Iterable); err != nil {
 		return err
 	}
 	g.writeln("")
+	g.indent--
 	return nil
 }
 
