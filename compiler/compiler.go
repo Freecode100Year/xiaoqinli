@@ -218,11 +218,22 @@ func Compile(req CompileRequest) CompileResult {
 	// Phase 2: codegen.
 	proj, err := codegen.GenerateProject(linked, req.Target)
 	if err != nil {
-		msg := fmt.Sprintf("XQL_E401: codegen error: %v", err)
+		// A backend that refuses a construct reports its own code — XQL_E402 for
+		// "this target cannot express that". Reporting E401 for all of them
+		// leaves a caller unable to tell a declared limitation apart from a
+		// malformed AST, which is the one distinction the code exists to make.
+		detail := err.Error()
+		code := extractCode(detail)
+		if code == "XQL_E999" {
+			code = "XQL_E401"
+		} else {
+			detail = strings.TrimSpace(strings.TrimPrefix(detail, code+":"))
+		}
+		msg := fmt.Sprintf("%s: codegen error: %s", code, detail)
 		return CompileResult{
-			Error: msg, ErrorCode: "XQL_E401",
+			Error: msg, ErrorCode: code,
 			Diagnostics: []Diagnostic{{
-				Code: "XQL_E401", Message: msg, Level: "error",
+				Code: code, Message: msg, Level: "error",
 			}},
 		}
 	}
