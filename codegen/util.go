@@ -259,6 +259,15 @@ var unsupportedResultTargets = map[string]bool{
 	"js":         true,
 	"javascript": true,
 	"nim":        true,
+
+	// bash and perl were absent from this list, which read as support. Neither
+	// backend emits a Result runtime or rewrites the call sites, so they passed
+	// `Result.ok(x)` and `res.unwrap()` through verbatim: in bash a command
+	// substitution calling a program that does not exist, in perl a bareword
+	// that `use strict` refuses outright. Both produced output their own
+	// interpreter rejects, and codegen reported success.
+	"bash": true,
+	"perl": true,
 }
 
 // validateTypesForTarget walks the AST and returns an error if any type is

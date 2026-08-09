@@ -213,7 +213,8 @@ the tests actually enforce.
 | Evidence | Targets | What was checked |
 |---|---|---|
 | **executed** (14) | `csharp` `dart` `go` `java` `julia` `kotlin` `lua` `php` `py` `ruby` `rust` `swift` `ts` `zig` | compiled and run, stdout asserted |
-| **smoke** (32) | `ada` `android` `awk` `bash` `bat` `c` `chrome` `clojure` `cpp` `crystal` `d` `elixir` `fortran` `fsharp` `groovy` `haskell` `ios` `js` `mql4` `mql5` `nim` `objc` `ocaml` `pascal` `perl` `powershell` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
+| **compiled** (6) | `bash` `c` `cpp` `fortran` `js` `perl` | compiled by a real toolchain |
+| **smoke** (26) | `ada` `android` `awk` `bat` `chrome` `clojure` `crystal` `d` `elixir` `fsharp` `groovy` `haskell` `ios` `mql4` `mql5` `nim` `objc` `ocaml` `pascal` `powershell` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
 
 CI installs 14 toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,
 so a missing one fails the run instead of skipping quietly.
@@ -221,6 +222,7 @@ so a missing one fails the run instead of skipping quietly.
 Per-target caveats:
 
 - `android` — Gradle scaffold; structure checked, never assembled
+- `bash` — rejects Result<T>
 - `bat` — rejects struct literals
 - `c` — rejects Result<T>
 - `chrome` — emits an extension bundle
@@ -232,6 +234,7 @@ Per-target caveats:
 - `mql5` — rejects Result<T>, maps, Option, for-each
 - `nim` — rejects Result<T>
 - `pascal` — rejects for-each loops
+- `perl` — rejects Result<T>
 - `shortcut` — emits an Apple Shortcuts plist, not source
 <!-- verification:end -->
 
@@ -240,7 +243,7 @@ rather than silently degrading it:
 
 | Construct | Rejected by |
 |---|---|
-| `Result<T>` | `js` `c` `cpp` `nim` `mql4` `mql5` |
+| `Result<T>` | `js` `c` `cpp` `nim` `mql4` `mql5` `bash` `perl` |
 | for-each loops | `fortran` `pascal` |
 | struct literals | `bat` |
 

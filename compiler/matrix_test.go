@@ -33,6 +33,7 @@ var expectedRejections = map[string][]string{
 		"bat",                   // no struct literals
 		"c", "cpp", "js", "nim", // no Result<T>
 		"mql4", "mql5", // no Result<T>
+		"bash", "perl", // no Result<T> either, though they used to pretend
 		"fortran", "pascal", // no for-each
 	},
 

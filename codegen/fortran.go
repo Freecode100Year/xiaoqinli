@@ -202,10 +202,15 @@ func (g *fortranGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	isSubroutine := rt == ""
 
 	g.writeIndent()
+	// Fortran 90 and 95 require the RECURSIVE prefix before a procedure may
+	// call itself; without it gfortran refuses with "cannot be called
+	// recursively". The keyword needs a RESULT clause, which functions here
+	// always have, and costs nothing on a procedure that never recurses — so
+	// rather than analysing the call graph, declare it and be correct.
 	if isSubroutine {
-		g.write("subroutine " + fd.Name + "(")
+		g.write("recursive subroutine " + fd.Name + "(")
 	} else {
-		g.write("function " + fd.Name + "(")
+		g.write("recursive function " + fd.Name + "(")
 	}
 	for i, p := range fd.Params {
 		if i > 0 {
@@ -517,6 +522,30 @@ func (g *fortranGen) emitExpr(n ast.Node) error {
 }
 
 func (g *fortranGen) emitIfExpr(ie *ast.IfExpr) error {
+	// MERGE requires both arms to have the same type, kind and — for
+	// characters — the same length, so merge('big', 'small', c) is rejected
+	// outright. Fortran characters are fixed-length and blank-padded anyway, so
+	// padding the shorter literal to match is what the language would have done
+	// on assignment; it is not a change in meaning.
+	thenLit, thenOK := stringLiteralOf(ie.Then)
+	elseLit, elseOK := stringLiteralOf(ie.Else)
+	if thenOK && elseOK && len(thenLit) != len(elseLit) {
+		width := len(thenLit)
+		if len(elseLit) > width {
+			width = len(elseLit)
+		}
+		g.write("merge(")
+		g.write(fortranPaddedString(thenLit, width))
+		g.write(", ")
+		g.write(fortranPaddedString(elseLit, width))
+		g.write(", ")
+		if err := g.emitExpr(ie.Cond); err != nil {
+			return err
+		}
+		g.write(")")
+		return nil
+	}
+
 	g.write("merge(")
 	if err := g.emitExpr(ie.Then); err != nil {
 		return err
@@ -654,4 +683,21 @@ func (g *fortranGen) emitLiteral(lit *ast.Literal) error {
 		g.write(fmt.Sprintf("%v", lit.Value))
 	}
 	return nil
+}
+
+// stringLiteralOf reports the value of a string literal node.
+func stringLiteralOf(n ast.Node) (string, bool) {
+	lit, ok := n.(*ast.Literal)
+	if !ok || lit.ValueType != "String" {
+		return "", false
+	}
+	s, ok := lit.Value.(string)
+	return s, ok
+}
+
+// fortranPaddedString renders a string literal blank-padded to width, quoting
+// it the way the rest of this backend does.
+func fortranPaddedString(s string, width int) string {
+	padded := s + strings.Repeat(" ", width-len(s))
+	return "'" + strings.ReplaceAll(padded, "'", "''") + "'"
 }
