@@ -81,7 +81,10 @@ jobs:
           printf '%-10s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
         done
 
+    # TestCompiledTier needs gcc, g++, gfortran, node, perl and bash, all of
+    # which the runner image already provides — the tier was scoped to tools
+    # that cost nothing to add.
     - name: Build and run the generated programs
       env:
         XQL_E2E_REQUIRE: '1'
-      run: go test -v ./compiler ./codegen -run 'TestLinkedPipeline|TestLocalE2E' -count=1
+      run: go test -v ./compiler ./codegen -run 'TestLinkedPipeline|TestLocalE2E|TestCompiledTier' -count=1

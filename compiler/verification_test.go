@@ -39,15 +39,19 @@ func TestEveryAdvertisedTargetDeclaresVerification(t *testing.T) {
 }
 
 // TestExecutedTierNamesARealTest catches the registry claiming evidence from a
-// harness that was renamed or deleted. Without it, "executed" survives the test
-// that produced it.
+// harness that was renamed or deleted. Without it, a tier outlives the test
+// that produced it. Both tiers above smoke are checked: either can go stale.
 func TestExecutedTierNamesARealTest(t *testing.T) {
 	sources := readTestSources(t)
 
-	for _, flag := range TargetsAtTier(TierExecuted) {
+	var claimants []string
+	claimants = append(claimants, TargetsAtTier(TierExecuted)...)
+	claimants = append(claimants, TargetsAtTier(TierCompiled)...)
+
+	for _, flag := range claimants {
 		v, _ := VerificationFor(flag)
 		if v.Harness == "" {
-			t.Errorf("%s claims the executed tier but names no harness", flag)
+			t.Errorf("%s claims the %s tier but names no harness", flag, v.Tier)
 			continue
 		}
 		// "TestLinkedPipelineE2E/Go" -> the function, then the subtest name.
