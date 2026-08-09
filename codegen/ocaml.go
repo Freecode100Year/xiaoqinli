@@ -71,6 +71,20 @@ type ocamlGen struct {
 	// it the println emitter has to guess which of_string conversion to wrap
 	// an identifier in, and its guess was string_of_int.
 	varTypes map[string]string
+
+	// valuePosition is set while emitting the final statement of a function
+	// that returns something. There the statement is the function's value, not
+	// one more step in a sequence, so it must not be followed by ";".
+	valuePosition bool
+}
+
+// stmtEnd is the separator after a statement: absent in value position,
+// where a trailing ";" would promise another expression.
+func (g *ocamlGen) stmtEnd() string {
+	if g.valuePosition {
+		return ""
+	}
+	return ";"
 }
 
 func (g *ocamlGen) write(s string)   { g.buf.WriteString(s) }
@@ -142,7 +156,7 @@ func (g *ocamlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 				return err
 			}
 		}
-		g.closeBody(fd.Body)
+		g.closeBody(fd.Body, false)
 		g.indent--
 		g.writeln("")
 		g.writeln("let () = main ()")
@@ -164,13 +178,16 @@ func (g *ocamlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	rt := typeToOCaml(fd.ReturnType)
 	g.writeln(" : " + rt + " =")
 
+	returnsValue := rt != "unit"
 	g.indent++
-	for _, stmt := range fd.Body {
+	for i, stmt := range fd.Body {
+		g.valuePosition = returnsValue && i == len(fd.Body)-1
 		if err := g.emitStmt(stmt); err != nil {
 			return err
 		}
 	}
-	g.closeBody(fd.Body)
+	g.valuePosition = false
+	g.closeBody(fd.Body, returnsValue)
 	g.indent--
 	return nil
 }
@@ -184,7 +201,12 @@ func (g *ocamlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 // this backend produced had ever compiled. Closing the sequence with unit
 // gives `print_endline x; ()`, which is both valid and the right type for a
 // procedure.
-func (g *ocamlGen) closeBody(body []ast.Node) {
+func (g *ocamlGen) closeBody(body []ast.Node, returnsValue bool) {
+	if returnsValue {
+		// The last statement is the function's value. Nothing to add, and the
+		// separator after it was already suppressed.
+		return
+	}
 	if len(body) > 0 {
 		if _, isReturn := body[len(body)-1].(*ast.ReturnStmt); isReturn {
 			return
@@ -216,7 +238,7 @@ func (g *ocamlGen) emitStmt(n ast.Node) error {
 		if err := g.emitExpr(node.Expr); err != nil {
 			return err
 		}
-		g.writeln(";")
+		g.writeln(g.stmtEnd())
 		return nil
 	case *ast.IfStmt:
 		return g.emitIfStmt(node)
@@ -276,11 +298,14 @@ func (g *ocamlGen) emitAssignStmt(as *ast.AssignStmt) error {
 	if err := g.emitExpr(as.Value); err != nil {
 		return err
 	}
-	g.writeln(";")
+	g.writeln(g.stmtEnd())
 	return nil
 }
 
 func (g *ocamlGen) emitIfStmt(is *ast.IfStmt) error {
+	outer := g.valuePosition
+	g.valuePosition = false
+	defer func() { g.valuePosition = outer }()
 	g.writeIndent()
 	g.write("if ")
 	if err := g.emitExpr(is.Cond); err != nil {
@@ -310,11 +335,15 @@ func (g *ocamlGen) emitIfStmt(is *ast.IfStmt) error {
 		g.indent--
 	}
 	g.writeIndent()
-	g.writeln("end;")
+	g.valuePosition = outer
+	g.writeln("end" + g.stmtEnd())
 	return nil
 }
 
 func (g *ocamlGen) emitWhileStmt(ws *ast.WhileStmt) error {
+	outer := g.valuePosition
+	g.valuePosition = false
+	defer func() { g.valuePosition = outer }()
 	g.writeIndent()
 	g.write("while ")
 	if err := g.emitExpr(ws.Cond); err != nil {
@@ -329,11 +358,15 @@ func (g *ocamlGen) emitWhileStmt(ws *ast.WhileStmt) error {
 	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("done;")
+	g.valuePosition = outer
+	g.writeln("done" + g.stmtEnd())
 	return nil
 }
 
 func (g *ocamlGen) emitForStmt(fs *ast.ForStmt) error {
+	outer := g.valuePosition
+	g.valuePosition = false
+	defer func() { g.valuePosition = outer }()
 	if fs.Form == "range" {
 		g.writeIndent()
 		g.write("for " + fs.Var + " = ")
@@ -353,7 +386,7 @@ func (g *ocamlGen) emitForStmt(fs *ast.ForStmt) error {
 		}
 		g.indent--
 		g.writeIndent()
-		g.writeln("done;")
+		g.writeln("done" + g.stmtEnd())
 		return nil
 	}
 	// each form
@@ -372,7 +405,8 @@ func (g *ocamlGen) emitForStmt(fs *ast.ForStmt) error {
 	if err := g.emitExpr(fs.Iterable); err != nil {
 		return err
 	}
-	g.writeln(";")
+	g.valuePosition = outer
+	g.writeln(g.stmtEnd())
 	return nil
 }
 
