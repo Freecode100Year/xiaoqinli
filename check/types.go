@@ -61,7 +61,7 @@ type TypeChecker struct {
 
 	// program retains this checker's own Program so later passes (notably the
 	// capability check) can walk imported modules, not just the entry file.
-	program *ast.Program
+	program     *ast.Program
 	Diagnostics []Diagnostic
 }
 
