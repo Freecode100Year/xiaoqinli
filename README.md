@@ -213,29 +213,46 @@ the tests actually enforce.
 | Evidence | Targets | What was checked |
 |---|---|---|
 | **executed** (14) | `csharp` `dart` `go` `java` `julia` `kotlin` `lua` `php` `py` `ruby` `rust` `swift` `ts` `zig` | compiled and run, stdout asserted |
-| **compiled** (6) | `bash` `c` `cpp` `fortran` `js` `perl` | compiled by a real toolchain |
-| **smoke** (26) | `ada` `android` `awk` `bat` `chrome` `clojure` `crystal` `d` `elixir` `fsharp` `groovy` `haskell` `ios` `mql4` `mql5` `nim` `objc` `ocaml` `pascal` `powershell` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
+| **compiled** (8) | `awk` `bash` `c` `cpp` `fortran` `js` `perl` `powershell` | compiled by a real toolchain |
+| **smoke** (24) | `ada` `android` `bat` `chrome` `clojure` `crystal` `d` `elixir` `fsharp` `groovy` `haskell` `ios` `mql4` `mql5` `nim` `objc` `ocaml` `pascal` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
 
 CI installs 14 toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,
 so a missing one fails the run instead of skipping quietly.
 
 Per-target caveats:
 
+- `ada` — rejects Result<T>
 - `android` — Gradle scaffold; structure checked, never assembled
+- `awk` — rejects Result<T>
 - `bash` — rejects Result<T>
 - `bat` — rejects struct literals
 - `c` — rejects Result<T>
-- `chrome` — emits an extension bundle
+- `chrome` — emits an extension bundle; rejects Result<T>
+- `clojure` — rejects Result<T>
 - `cpp` — rejects Result<T>
+- `crystal` — rejects Result<T>
+- `d` — rejects Result<T>
+- `elixir` — rejects Result<T>
 - `fortran` — rejects for-each loops
+- `fsharp` — rejects Result<T>
+- `groovy` — rejects Result<T>
+- `haskell` — rejects Result<T>
 - `ios` — SwiftPM scaffold; built only when swift is present
 - `js` — rejects Result<T>
 - `mql4` — rejects Result<T>, maps, Option, for-each
 - `mql5` — rejects Result<T>, maps, Option, for-each
 - `nim` — rejects Result<T>
+- `objc` — rejects Result<T>
+- `ocaml` — rejects Result<T>
 - `pascal` — rejects for-each loops
 - `perl` — rejects Result<T>
-- `shortcut` — emits an Apple Shortcuts plist, not source
+- `powershell` — rejects Result<T>
+- `scala` — rejects Result<T>
+- `shortcut` — emits an Apple Shortcuts plist, not source; rejects Result<T>
+- `tccli` — rejects Result<T>
+- `tcl` — rejects Result<T>
+- `v` — rejects Result<T>
+- `vala` — rejects Result<T>
 <!-- verification:end -->
 
 **Known limitations.** A backend that cannot express a construct rejects it
@@ -243,9 +260,20 @@ rather than silently degrading it:
 
 | Construct | Rejected by |
 |---|---|
-| `Result<T>` | `js` `c` `cpp` `nim` `mql4` `mql5` `bash` `perl` |
+| `Result<T, E>` | every target except the 16 below |
 | for-each loops | `fortran` `pascal` |
 | struct literals | `bat` |
+
+`Result<T, E>` is the construct fewest backends implement. Sixteen do:
+
+`go` `rust` `ts` `py` `java` `csharp` `kotlin` `swift` `dart` `lua` `ruby` `php` `zig` `julia` `android` `ios`
+
+Twenty-seven of the others used to accept such a program and emit references to
+a `Result` they never defined — `Result.ok(users)` and `res.unwrap()` copied
+straight from the AST, naming a module that does not exist in Haskell, a command
+that does not exist in PowerShell. They decline now. That is not a capability
+being withdrawn; the output was never going to run. See
+[docs/breaking_changes.md](docs/breaking_changes.md).
 
 All other targets carry real `Result` semantics. The `kotlin` and `android`
 backends emit their own two-parameter `Result<T, E>` into the generated file's

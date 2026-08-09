@@ -194,38 +194,64 @@ extern 不按模块划分命名空间：把一个平台的接口面声明一次�
 | Evidence | Targets | What was checked |
 |---|---|---|
 | **executed** (14) | `csharp` `dart` `go` `java` `julia` `kotlin` `lua` `php` `py` `ruby` `rust` `swift` `ts` `zig` | compiled and run, stdout asserted |
-| **compiled** (6) | `bash` `c` `cpp` `fortran` `js` `perl` | compiled by a real toolchain |
-| **smoke** (26) | `ada` `android` `awk` `bat` `chrome` `clojure` `crystal` `d` `elixir` `fsharp` `groovy` `haskell` `ios` `mql4` `mql5` `nim` `objc` `ocaml` `pascal` `powershell` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
+| **compiled** (8) | `awk` `bash` `c` `cpp` `fortran` `js` `perl` `powershell` | compiled by a real toolchain |
+| **smoke** (24) | `ada` `android` `bat` `chrome` `clojure` `crystal` `d` `elixir` `fsharp` `groovy` `haskell` `ios` `mql4` `mql5` `nim` `objc` `ocaml` `pascal` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
 
 CI installs 14 toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,
 so a missing one fails the run instead of skipping quietly.
 
 Per-target caveats:
 
+- `ada` — rejects Result<T>
 - `android` — Gradle scaffold; structure checked, never assembled
+- `awk` — rejects Result<T>
 - `bash` — rejects Result<T>
 - `bat` — rejects struct literals
 - `c` — rejects Result<T>
-- `chrome` — emits an extension bundle
+- `chrome` — emits an extension bundle; rejects Result<T>
+- `clojure` — rejects Result<T>
 - `cpp` — rejects Result<T>
+- `crystal` — rejects Result<T>
+- `d` — rejects Result<T>
+- `elixir` — rejects Result<T>
 - `fortran` — rejects for-each loops
+- `fsharp` — rejects Result<T>
+- `groovy` — rejects Result<T>
+- `haskell` — rejects Result<T>
 - `ios` — SwiftPM scaffold; built only when swift is present
 - `js` — rejects Result<T>
 - `mql4` — rejects Result<T>, maps, Option, for-each
 - `mql5` — rejects Result<T>, maps, Option, for-each
 - `nim` — rejects Result<T>
+- `objc` — rejects Result<T>
+- `ocaml` — rejects Result<T>
 - `pascal` — rejects for-each loops
 - `perl` — rejects Result<T>
-- `shortcut` — emits an Apple Shortcuts plist, not source
+- `powershell` — rejects Result<T>
+- `scala` — rejects Result<T>
+- `shortcut` — emits an Apple Shortcuts plist, not source; rejects Result<T>
+- `tccli` — rejects Result<T>
+- `tcl` — rejects Result<T>
+- `v` — rejects Result<T>
+- `vala` — rejects Result<T>
 <!-- verification:end -->
 
 **已知限制。** 后端无法表达的构造会被明确拒绝，而不是悄悄降级：
 
 | 构造 | 拒绝它的目标 |
 |---|---|
-| `Result<T>` | `js` `c` `cpp` `nim` `mql4` `mql5` `bash` `perl` |
+| `Result<T, E>` | 除下列 16 个以外的全部目标 |
 | for-each 循环 | `fortran` `pascal` |
 | 结构体字面量 | `bat` |
+
+`Result<T, E>` 是实现率最低的构造，只有 16 个后端真正支持：
+
+`go` `rust` `ts` `py` `java` `csharp` `kotlin` `swift` `dart` `lua` `ruby` `php` `zig` `julia` `android` `ios`
+
+另外 27 个此前会「编译成功」，产出的却是引用了自己从未定义的 `Result` 的代码——`Result.ok(users)` 和
+`res.unwrap()` 原封不动照抄 AST，在 Haskell 里指向不存在的模块，在 PowerShell 里指向不存在的命令。它们现在
+直接拒绝。这不是收回能力，那些产物本来就跑不起来。详见
+[docs/breaking_changes.md](docs/breaking_changes.md)。
 
 其余目标均携带真实的 `Result` 语义。`kotlin` 与 `android` 后端会把自己的双参数 `Result<T, E>` 发到生成文件所在的包里，以遮蔽默认导入的 `kotlin.Result<out T>`；缺了它，Gradle 构建会报 "One type argument expected"。
 
