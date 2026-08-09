@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"xiaoqinli/ast"
+	"xiaoqinli/internal/e2e"
 )
 
 func runLocalE2E(t *testing.T, checkCmd string, runCmd string, files map[string][]byte) {
@@ -17,13 +18,13 @@ func runLocalE2E(t *testing.T, checkCmd string, runCmd string, files map[string]
 	if len(parts) > 0 {
 		_, err := exec.LookPath(parts[0])
 		if err != nil {
-			t.Skipf("Local compiler/runtime %q not found in PATH. Skipping physical execution verification.", parts[0])
+			e2e.Missing(t, "Local compiler/runtime %q not found in PATH. Skipping physical execution verification.", parts[0])
 			return
 		}
 		if parts[0] == "dotnet" {
 			out, err := exec.Command("dotnet", "--list-sdks").Output()
 			if err != nil || len(strings.TrimSpace(string(out))) == 0 {
-				t.Skip("Local .NET SDK not found. Skipping physical execution verification.")
+				e2e.Missing(t, "Local .NET SDK not found. Skipping physical execution verification.")
 				return
 			}
 		}
@@ -33,7 +34,7 @@ func runLocalE2E(t *testing.T, checkCmd string, runCmd string, files map[string]
 				sdkHome = os.Getenv("ANDROID_SDK_ROOT")
 			}
 			if sdkHome == "" {
-				t.Skip("Local Gradle found, but ANDROID_HOME / ANDROID_SDK_ROOT is not set. Skipping physical execution verification.")
+				e2e.Missing(t, "Local Gradle found, but ANDROID_HOME / ANDROID_SDK_ROOT is not set. Skipping physical execution verification.")
 				return
 			}
 		}
@@ -212,17 +213,12 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 				"result.zig":  "result.zig",
 			},
 		},
-		{
-			name:     "Nim",
-			target:   "nim",
-			checkCmd: "nim",
-			runCmd:   "nim c -r main.nim",
-			files: map[string]string{
-				"main.xql":    "main.nim",
-				"service.xql": "service.nim",
-				"models.xql":  "models.nim",
-			},
-		},
+		// Nim is deliberately absent. This example returns Result<T, E>, the nim
+		// backend has no Result, and `CompileFromFile` refuses the pair with
+		// XQL_E402. Calling GenerateNim directly, as this table does, walks past
+		// that check — so the case sat here looking like coverage while testing
+		// output the compiler will not produce. It never ran either way: nim is
+		// not installed in CI, so it skipped every time.
 		{
 			name:     "Julia",
 			target:   "julia",
@@ -308,8 +304,6 @@ func TestLocalE2EWorkspaceDogfood(t *testing.T) {
 					out, err = GenerateDart(node)
 				case "zig":
 					out, err = GenerateZig(node)
-				case "nim":
-					out, err = GenerateNim(node)
 				case "julia":
 					out, err = GenerateJulia(node)
 				case "php":

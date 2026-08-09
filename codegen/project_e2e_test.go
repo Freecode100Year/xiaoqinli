@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"xiaoqinli/compiler"
+	"xiaoqinli/internal/e2e"
 )
 
 // TestLocalE2EProjectScaffolds checks the targets that emit a whole project
@@ -64,7 +65,8 @@ func TestLocalE2EProjectScaffolds(t *testing.T) {
 			}
 
 			if _, err := exec.LookPath(tc.checkCmd); err != nil {
-				t.Skipf("Local toolchain %q not found in PATH. Skipping physical build verification.", tc.checkCmd)
+				e2e.Missing(t, "Local toolchain %q not found in PATH. Skipping physical build verification.", tc.checkCmd)
+				return
 			}
 
 			args := strings.Fields(tc.runCmd)
