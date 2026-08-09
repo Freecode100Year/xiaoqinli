@@ -22,7 +22,7 @@ import (
 // but running the output is not. Every one of these tools ships on the runner
 // image already, so the tier costs nothing in CI:
 //
-//	gcc  g++  gfortran  node  perl  bash
+//	gcc  g++  gfortran  node  perl  bash  gawk  pwsh
 //
 // The check is syntax and, where the tool offers it, types — never execution.
 // Saying so precisely is the point: this tier means the language accepted the
@@ -47,6 +47,19 @@ var compiledTierCases = []compiledTierCase{
 	{target: "js", ext: ".js", tools: []string{"node"}, args: []string{"--check"}},
 	{target: "perl", ext: ".pl", tools: []string{"perl"}, args: []string{"-c"}},
 	{target: "bash", ext: ".sh", tools: []string{"bash"}, args: []string{"-n"}},
+
+	// gawk --pretty-print parses the whole program and writes it back out
+	// without running it; plain `awk -f` would execute. Confirmed against
+	// gawk 5.4: a BEGIN block that prints does not print.
+	{target: "awk", ext: ".awk", tools: []string{"gawk"},
+		args: []string{"--pretty-print=/dev/null", "-f", "{file}"}},
+
+	// PowerShell has no -n, but it exposes its parser. ParseFile reports
+	// syntax errors without executing a line.
+	{target: "powershell", ext: ".ps1", tools: []string{"pwsh", "powershell"},
+		args: []string{"-NoProfile", "-NonInteractive", "-Command",
+			"$e=$null;[void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path '{file}'),[ref]$null,[ref]$e);" +
+				"if($e.Count){$e|ForEach-Object{Write-Output $_.Message};exit 1}"}},
 }
 
 // TestCompiledTier checks every example a target accepts, not a chosen one.
@@ -89,7 +102,7 @@ func TestCompiledTier(t *testing.T) {
 					t.Fatalf("write %s: %v", path, err)
 				}
 
-				cmd := exec.Command(tool, append(append([]string{}, tc.args...), "prog"+tc.ext)...)
+				cmd := exec.Command(tool, checkerArgs(tc.args, "prog"+tc.ext)...)
 				cmd.Dir = dir
 				if out, err := cmd.CombinedOutput(); err != nil {
 					t.Errorf("%s compiled %s, but %s rejects the result: %v\n%s\n--- generated ---\n%s",
@@ -104,6 +117,24 @@ func TestCompiledTier(t *testing.T) {
 			}
 		})
 	}
+}
+
+// checkerArgs substitutes {file} where a checker needs the path in the middle
+// of its arguments, and appends it when it does not.
+func checkerArgs(args []string, file string) []string {
+	out := make([]string, 0, len(args)+1)
+	substituted := false
+	for _, a := range args {
+		if strings.Contains(a, "{file}") {
+			substituted = true
+			a = strings.ReplaceAll(a, "{file}", file)
+		}
+		out = append(out, a)
+	}
+	if !substituted {
+		out = append(out, file)
+	}
+	return out
 }
 
 // TestCompiledTierMatchesRegistry keeps the table above and the published tier
@@ -143,6 +174,7 @@ func TestCompiledTierToolsAreDeclared(t *testing.T) {
 		"g++": true, "clang++": true,
 		"gfortran": true, "node": true,
 		"perl": true, "bash": true,
+		"gawk": true, "pwsh": true, "powershell": true,
 	}
 	for _, tc := range compiledTierCases {
 		for _, tool := range tc.tools {
@@ -173,6 +205,14 @@ func TestCompiledTierIsNotExecuted(t *testing.T) {
 		case "bash":
 			if !strings.Contains(joined, "-n") {
 				t.Errorf("%s: bash without -n runs the script", tc.target)
+			}
+		case "gawk":
+			if !strings.Contains(joined, "--pretty-print") {
+				t.Errorf("%s: gawk without --pretty-print executes the program", tc.target)
+			}
+		case "pwsh":
+			if !strings.Contains(joined, "Parser") {
+				t.Errorf("%s: powershell must go through the parser API, not execution", tc.target)
 			}
 		default:
 			if !strings.Contains(joined, "-fsyntax-only") {
