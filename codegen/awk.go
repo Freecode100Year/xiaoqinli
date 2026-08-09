@@ -459,9 +459,16 @@ func (g *awkGen) emitIndexExpr(ie *ast.IndexExpr) error {
 }
 
 func (g *awkGen) emitStructLit(sl *ast.StructLit) error {
-	// AWK has no struct literals; emit as 0 placeholder.
-	g.write("0")
-	return nil
+	// This used to emit 0 and call it a placeholder. The field values vanished
+	// and the following `print p["x"]` indexed a scalar, which awk refuses at
+	// run time — a program that compiled cleanly and could never work.
+	//
+	// Associative arrays could carry the simple case, but awk cannot pass an
+	// array by value or return one, so a struct could not cross a function
+	// boundary. Partial support would be a trap; declining is the honest
+	// answer, the same one bat and tccli give.
+	return fmt.Errorf("XQL_E402: awk cannot express struct literals; "+
+		"awk arrays cannot be passed by value or returned (struct %q)", sl.TypeName)
 }
 
 func (g *awkGen) emitCall(ce *ast.CallExpr) error {

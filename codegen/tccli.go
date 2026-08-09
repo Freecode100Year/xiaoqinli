@@ -59,6 +59,18 @@ func GenerateTCCLI(root ast.Node) ([]byte, error) {
 type tccliGen struct {
 	buf    *strings.Builder
 	indent int
+
+	// inFunction tracks scope: `local` is only legal inside a function body,
+	// and the main entry emitted it at the top level, where bash refuses it.
+	inFunction bool
+}
+
+// declare renders a binding, using local only where local is allowed.
+func (g *tccliGen) declare(name, val string) string {
+	if g.inFunction {
+		return fmt.Sprintf("local %s=%s", name, val)
+	}
+	return fmt.Sprintf("%s=%s", name, val)
 }
 
 func (g *tccliGen) writeln(s string) {
@@ -72,6 +84,8 @@ func (g *tccliGen) writeln(s string) {
 func (g *tccliGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.writeln(fmt.Sprintf("%s() {", fd.Name))
 	g.indent++
+	g.inFunction = true
+	defer func() { g.inFunction = false }()
 
 	// Assign parameters from positional arguments $1, $2, ...
 	for i, p := range fd.Params {
@@ -96,7 +110,7 @@ func (g *tccliGen) emitStmt(s ast.Node) error {
 		if err != nil {
 			return err
 		}
-		g.writeln(fmt.Sprintf("local %s=%s", stmt.Name, val))
+		g.writeln(g.declare(stmt.Name, val))
 		return nil
 	case *ast.AssignStmt:
 		val, err := g.emitExpr(stmt.Value)
@@ -118,7 +132,7 @@ func (g *tccliGen) emitStmt(s ast.Node) error {
 		g.writeln("return 0")
 		return nil
 	case *ast.ExprStmt:
-		val, err := g.emitExpr(stmt.Expr)
+		val, err := g.emitCommand(stmt.Expr)
 		if err != nil {
 			return err
 		}
@@ -150,10 +164,47 @@ func (g *tccliGen) emitStmt(s ast.Node) error {
 		g.writeln("fi")
 		return nil
 	default:
-		return nil
+		// Returning nil here dropped the statement and reported success. A
+		// backend that cannot express a construct is supposed to say so.
+		return fmt.Errorf("XQL_E402: tccli cannot express %s", s.Kind())
 	}
 }
 
+// emitCallExpr renders a call as the bare command, with no substitution around
+// it. Both positions share it so a call means the same thing in each.
+func (g *tccliGen) emitCallExpr(expr *ast.CallExpr) (string, error) {
+	args := make([]string, len(expr.Args))
+	for i, a := range expr.Args {
+		argStr, err := g.emitExpr(a)
+		if err != nil {
+			return "", err
+		}
+		args[i] = argStr
+	}
+	if expr.Callee == "println" {
+		return strings.TrimSpace("echo " + strings.Join(args, " ")), nil
+	}
+	if strings.HasPrefix(expr.Callee, "tccli_") {
+		// Translate tccli_cvm_DescribeInstances -> tccli cvm DescribeInstances ...
+		serviceCmd := strings.Replace(expr.Callee, "tccli_", "", 1)
+		parts := strings.Split(serviceCmd, "_")
+		return strings.TrimSpace(fmt.Sprintf("tccli %s %s", strings.Join(parts, " "), strings.Join(args, " "))), nil
+	}
+	return strings.TrimSpace(fmt.Sprintf("%s %s", expr.Callee, strings.Join(args, " "))), nil
+}
+
+// emitCommand renders an expression in statement position, where a call is the
+// command itself.
+func (g *tccliGen) emitCommand(e ast.Node) (string, error) {
+	if ce, ok := e.(*ast.CallExpr); ok {
+		return g.emitCallExpr(ce)
+	}
+	return g.emitExpr(e)
+}
+
+// emitExpr renders an expression in value position. A call has to be
+// substituted here: `echo greet "World"` printed the word greet rather than
+// calling it.
 func (g *tccliGen) emitExpr(e ast.Node) (string, error) {
 	if e == nil {
 		return "''", nil
@@ -167,24 +218,12 @@ func (g *tccliGen) emitExpr(e ast.Node) (string, error) {
 	case *ast.Ident:
 		return fmt.Sprintf("\"$%s\"", expr.Name), nil
 	case *ast.CallExpr:
-		args := make([]string, len(expr.Args))
-		for i, a := range expr.Args {
-			argStr, err := g.emitExpr(a)
-			if err != nil {
-				return "", err
-			}
-			args[i] = argStr
+		cmd, err := g.emitCallExpr(expr)
+		if err != nil {
+			return "", err
 		}
-		if expr.Callee == "println" {
-			return fmt.Sprintf("echo %s", strings.Join(args, " ")), nil
-		}
-		if strings.HasPrefix(expr.Callee, "tccli_") {
-			// Translate tccli_cvm_DescribeInstances -> tccli cvm DescribeInstances ...
-			serviceCmd := strings.Replace(expr.Callee, "tccli_", "", 1)
-			parts := strings.Split(serviceCmd, "_")
-			return fmt.Sprintf("tccli %s %s", strings.Join(parts, " "), strings.Join(args, " ")), nil
-		}
-		return fmt.Sprintf("%s %s", expr.Callee, strings.Join(args, " ")), nil
+		// Quoted: an unquoted substitution word-splits its result.
+		return "\"$(" + cmd + ")\"", nil
 	case *ast.BinaryExpr:
 		left, err := g.emitExpr(expr.Left)
 		if err != nil {
@@ -194,8 +233,27 @@ func (g *tccliGen) emitExpr(e ast.Node) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("%s %s %s", left, expr.Op, right), nil
+		if expr.Op == "+" {
+			// Shell concatenates by juxtaposition. Emitting `"a" + "b"` printed
+			// a literal plus sign between the operands.
+			return left + right, nil
+		}
+		// Everything else was emitted verbatim into the shell, which produced
+		// `[ "$n" <= 1 ]` — not a test operator — and `fibonacci "$n" - 1`,
+		// which passes a minus sign as an argument rather than subtracting.
+		// Getting these right needs to know whether the operands are numbers,
+		// and this backend carries no type information at all. It emits
+		// Tencent Cloud CLI invocations; a program that computes belongs on
+		// the bash target.
+		return "", fmt.Errorf("XQL_E402: tccli cannot express the %q operator; "+
+			"it emits Tencent Cloud CLI calls, not general shell arithmetic — use the bash target", expr.Op)
 	default:
-		return "''", nil
+		// This returned an empty string for anything unrecognised, so a struct
+		// literal became '' and `println(p.x)` became `echo ''`. An entire
+		// program could compile down to printing blank lines and still be
+		// reported as a success. tccli emits shell for Tencent Cloud CLI calls;
+		// it has no way to represent structs, arrays, lambdas or matches, and
+		// now says that instead of pretending.
+		return "", fmt.Errorf("XQL_E402: tccli cannot express %s", e.Kind())
 	}
 }

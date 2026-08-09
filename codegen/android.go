@@ -529,6 +529,22 @@ func (g *androidGen) emitExpr(n ast.Node) error {
 		}
 		g.write(")")
 		return nil
+	case *ast.IfExpr:
+		// Kotlin's if is an expression, so this needs no rewriting — the
+		// backend simply never handled the node and fell through to a comment.
+		g.write("if (")
+		if err := g.emitExpr(node.Cond); err != nil {
+			return err
+		}
+		g.write(") ")
+		if err := g.emitExpr(node.Then); err != nil {
+			return err
+		}
+		g.write(" else ")
+		if err := g.emitExpr(node.Else); err != nil {
+			return err
+		}
+		return nil
 	case *ast.CallExpr:
 		if node.Callee == "println" {
 			g.write("println(")
@@ -558,8 +574,10 @@ func (g *androidGen) emitExpr(n ast.Node) error {
 		}
 		return nil
 	default:
-		g.write(fmt.Sprintf("/* %s */", n.Kind()))
-		return nil
+		// This emitted the node's kind as a Kotlin comment, so an expression
+		// the backend did not handle became `/* MatchExpr */` sitting where a
+		// value belonged — output that cannot compile, reported as success.
+		return fmt.Errorf("XQL_E402: android cannot express %s", n.Kind())
 	}
 }
 
