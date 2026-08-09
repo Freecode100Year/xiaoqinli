@@ -187,6 +187,35 @@ extern 不按模块划分命名空间：把一个平台的接口面声明一次�
 
 `android` 与 `ios` 输出的是多文件工程脚手架（Gradle / Swift Package Manager），而非单个源文件。
 
+**每个目标各自的验证强度。** 宣称支持四十六个后端，并不说明其中任何一个的成色。
+下表由 `compiler/verification.go` 生成，一旦它与测试实际强制的等级脱节，测试就会失败。
+
+<!-- verification:begin -->
+| Evidence | Targets | What was checked |
+|---|---|---|
+| **executed** (14) | `csharp` `dart` `go` `java` `julia` `kotlin` `lua` `php` `py` `ruby` `rust` `swift` `ts` `zig` | compiled and run, stdout asserted |
+| **smoke** (32) | `ada` `android` `awk` `bash` `bat` `c` `chrome` `clojure` `cpp` `crystal` `d` `elixir` `fortran` `fsharp` `groovy` `haskell` `ios` `js` `mql4` `mql5` `nim` `objc` `ocaml` `pascal` `perl` `powershell` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
+
+CI installs 14 toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,
+so a missing one fails the run instead of skipping quietly.
+
+Per-target caveats:
+
+- `android` — Gradle scaffold; structure checked, never assembled
+- `bat` — rejects struct literals
+- `c` — rejects Result<T>
+- `chrome` — emits an extension bundle
+- `cpp` — rejects Result<T>
+- `fortran` — rejects for-each loops
+- `ios` — SwiftPM scaffold; built only when swift is present
+- `js` — rejects Result<T>
+- `mql4` — rejects Result<T>, maps, Option, for-each
+- `mql5` — rejects Result<T>, maps, Option, for-each
+- `nim` — rejects Result<T>
+- `pascal` — rejects for-each loops
+- `shortcut` — emits an Apple Shortcuts plist, not source
+<!-- verification:end -->
+
 **已知限制。** 后端无法表达的构造会被明确拒绝，而不是悄悄降级：
 
 | 构造 | 拒绝它的目标 |

@@ -204,6 +204,37 @@ extern identically are merged; declarations that disagree are rejected
 
 `android` and `ios` emit multi-file project scaffolds (Gradle / Swift Package Manager) rather than a single source file.
 
+**How each target is verified.** Advertising forty-six backends says nothing
+about how well any one of them works. This table is generated from
+`compiler/verification.go`, and the test suite fails if it drifts from the tier
+the tests actually enforce.
+
+<!-- verification:begin -->
+| Evidence | Targets | What was checked |
+|---|---|---|
+| **executed** (14) | `csharp` `dart` `go` `java` `julia` `kotlin` `lua` `php` `py` `ruby` `rust` `swift` `ts` `zig` | compiled and run, stdout asserted |
+| **smoke** (32) | `ada` `android` `awk` `bash` `bat` `c` `chrome` `clojure` `cpp` `crystal` `d` `elixir` `fortran` `fsharp` `groovy` `haskell` `ios` `js` `mql4` `mql5` `nim` `objc` `ocaml` `pascal` `perl` `powershell` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
+
+CI installs 14 toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,
+so a missing one fails the run instead of skipping quietly.
+
+Per-target caveats:
+
+- `android` — Gradle scaffold; structure checked, never assembled
+- `bat` — rejects struct literals
+- `c` — rejects Result<T>
+- `chrome` — emits an extension bundle
+- `cpp` — rejects Result<T>
+- `fortran` — rejects for-each loops
+- `ios` — SwiftPM scaffold; built only when swift is present
+- `js` — rejects Result<T>
+- `mql4` — rejects Result<T>, maps, Option, for-each
+- `mql5` — rejects Result<T>, maps, Option, for-each
+- `nim` — rejects Result<T>
+- `pascal` — rejects for-each loops
+- `shortcut` — emits an Apple Shortcuts plist, not source
+<!-- verification:end -->
+
 **Known limitations.** A backend that cannot express a construct rejects it
 rather than silently degrading it:
 
