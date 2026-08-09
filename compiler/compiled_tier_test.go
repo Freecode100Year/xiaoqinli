@@ -48,6 +48,10 @@ var compiledTierCases = []compiledTierCase{
 	{target: "perl", ext: ".pl", tools: []string{"perl"}, args: []string{"-c"}},
 	{target: "bash", ext: ".sh", tools: []string{"bash"}, args: []string{"-n"}},
 
+	// tccli emits shell, so bash checks it for free. It used to emit `local`
+	// at the top level and `[ "$n" <= 1 ]`, neither of which is valid.
+	{target: "tccli", ext: ".sh", tools: []string{"bash"}, args: []string{"-n"}},
+
 	// gawk --pretty-print parses the whole program and writes it back out
 	// without running it; plain `awk -f` would execute. Confirmed against
 	// gawk 5.4: a BEGIN block that prints does not print.

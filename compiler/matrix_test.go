@@ -28,7 +28,6 @@ import (
 // rejected lists, per example, the targets that decline to compile it. Empty
 // or absent means every target handles it.
 var expectedRejections = map[string][]string{
-	// Uses Result<T>, for-each over an array, and struct literals.
 	// This example returns Result<T, E>, which turns out to be the construct
 	// fewest backends actually implement. Only twelve do; the rest declined
 	// once a sweep established that they were emitting references to a Result
@@ -46,7 +45,20 @@ var expectedRejections = map[string][]string{
 	},
 
 	// A struct literal is the one thing the batch-file backend cannot fake.
-	"struct.xql.json": {"bat"},
+	// tccli emits Tencent Cloud CLI invocations and has no way to represent a
+	// struct; it used to compile one to an empty string.
+	// awk joins them: it lowered the literal to 0, losing the field values, and
+	// then indexed a scalar. Arrays cannot cross an awk function boundary, so
+	// partial support would only move the failure.
+	"struct.xql.json": {"awk", "bat", "tccli"},
+
+	// tccli has no arithmetic, no comparisons, no arrays, no lambdas. It was
+	// accepting all of them and emitting shell that either printed blank lines
+	// or passed a minus sign as a command-line argument.
+	"collections.xql.json":   {"tccli"},
+	"loop.xql.json":          {"tccli"},
+	"lambda_ifexpr.xql.json": {"tccli"},
+	"example.xql.json":       {"tccli"},
 
 	// The chrome examples declare host externs restricted to browser targets,
 	// so every backend that cannot provide them is refused by design. This is

@@ -213,8 +213,8 @@ the tests actually enforce.
 | Evidence | Targets | What was checked |
 |---|---|---|
 | **executed** (14) | `csharp` `dart` `go` `java` `julia` `kotlin` `lua` `php` `py` `ruby` `rust` `swift` `ts` `zig` | compiled and run, stdout asserted |
-| **compiled** (13) | `awk` `bash` `c` `cpp` `crystal` `elixir` `fortran` `haskell` `js` `nim` `ocaml` `perl` `powershell` | compiled by a real toolchain |
-| **smoke** (19) | `ada` `android` `bat` `chrome` `clojure` `d` `fsharp` `groovy` `ios` `mql4` `mql5` `objc` `pascal` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
+| **compiled** (14) | `awk` `bash` `c` `cpp` `crystal` `elixir` `fortran` `haskell` `js` `nim` `ocaml` `perl` `powershell` `tccli` | compiled by a real toolchain |
+| **smoke** (18) | `ada` `android` `bat` `chrome` `clojure` `d` `fsharp` `groovy` `ios` `mql4` `mql5` `objc` `pascal` `scala` `shortcut` `tcl` `v` `vala` | codegen returns output; never compiled |
 
 CI installs 14 toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,
 so a missing one fails the run instead of skipping quietly.
@@ -249,7 +249,7 @@ Per-target caveats:
 - `powershell` — rejects Result<T>
 - `scala` — rejects Result<T>
 - `shortcut` — emits an Apple Shortcuts plist, not source; rejects Result<T>
-- `tccli` — rejects Result<T>
+- `tccli` — emits Tencent Cloud CLI shell; no arithmetic, comparisons or structs
 - `tcl` — rejects Result<T>
 - `v` — rejects Result<T>
 - `vala` — rejects Result<T>
@@ -262,7 +262,8 @@ rather than silently degrading it:
 |---|---|
 | `Result<T, E>` | every target except the 16 below |
 | for-each loops | `fortran` `pascal` |
-| struct literals | `bat` |
+| struct literals | `bat` `awk` `tccli` |
+| arithmetic, comparisons, arrays | `tccli` |
 
 `Result<T, E>` is the construct fewest backends implement. Sixteen do:
 

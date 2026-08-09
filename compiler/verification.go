@@ -128,7 +128,7 @@ var targetVerification = map[string]TargetVerification{
 	"bat":        {TierSmoke, "TestExampleTargetMatrix", "", "rejects struct literals"},
 	"shortcut":   {TierSmoke, "TestExampleTargetMatrix", "", "emits an Apple Shortcuts plist, not source; rejects Result<T>"},
 	"chrome":     {TierSmoke, "TestExampleTargetMatrix", "", "emits an extension bundle; rejects Result<T>"},
-	"tccli":      {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
+	"tccli":      {TierCompiled, "TestCompiledTier/tccli", "bash", "emits Tencent Cloud CLI shell; no arithmetic, comparisons or structs"},
 
 	// Project scaffolds. Assembling these needs an SDK whose version triple
 	// drifts with the runner image, so CI checks their structure instead and
