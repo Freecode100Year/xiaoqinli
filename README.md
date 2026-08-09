@@ -213,12 +213,15 @@ rather than silently degrading it:
 | for-each loops | `fortran` `pascal` |
 | struct literals | `bat` |
 
-All other targets carry real `Result` semantics, with one exception that is a
-defect rather than a declared limit: **`android` mis-compiles `Result<T>`.**
-The scaffold's Kotlin refers to `Result<T, E>` without emitting such a type, so
-it collides with the standard library's `kotlin.Result<out T>` and the Gradle
-build fails with "One type argument expected". Do not target `android` with a
-program that uses `Result` until this is fixed.
+All other targets carry real `Result` semantics. The `kotlin` and `android`
+backends emit their own two-parameter `Result<T, E>` into the generated file's
+package, which shadows the default-imported `kotlin.Result<out T>`; without it
+the Gradle build fails with "One type argument expected".
+
+No CI job assembles an APK — that needs an Android SDK and an AGP/Gradle/Kotlin
+version triple that drifts with the runner image. The `android` scaffold is
+verified structurally, and the Kotlin it emits is verified by the `kotlin`
+end-to-end test, which compiles and runs the same generated constructs.
 
 ---
 

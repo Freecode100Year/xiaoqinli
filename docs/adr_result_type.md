@@ -76,3 +76,12 @@ xiaoqinli transpiler 需要支持健壮的错误处理语义。目前在 AST 中
 ## 后果
 - 保证了在所有主流目标语言后端上的**语义一致性**与**类型安全性**。
 - 极大地降低了生成端对 Exception 处理的负担，保留了 AST-First 中纯净的流分析树。
+
+## 后端约束：Kotlin / Android 的名字遮蔽
+
+Kotlin 标准库自带单参数的 `kotlin.Result<out T>`，且它在每个文件的默认导入里。
+XQL 的 `Result<T, E>` 是双参数的，名字撞上后编译器报 "One type argument expected"。
+
+因此 `kotlin` 与 `android` 后端必须把自己的 `Result` 声明发到生成文件所在的包
+的顶层——Kotlin 的解析顺序里，同包声明优先于默认导入，这样才能遮蔽掉标准库那个。
+两个后端共用 `codegen.kotlinResultClass` 一份定义，避免各写一份后漂移。
