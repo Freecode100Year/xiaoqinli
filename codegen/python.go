@@ -678,7 +678,14 @@ func (g *pyGen) emitCall(ce *ast.CallExpr) error {
 		}
 		return nil
 	default:
-		g.write(ce.Callee + "(")
+		callee := ce.Callee
+		// The emitted Result class names this method the Python way, the same
+		// reason MemberExpr rewrites isOk to is_ok. Leaving the call site alone
+		// makes every Err path an AttributeError, and only an Err path.
+		if strings.HasSuffix(callee, ".unwrapErr") {
+			callee = strings.TrimSuffix(callee, ".unwrapErr") + ".unwrap_err"
+		}
+		g.write(callee + "(")
 		for i, arg := range ce.Args {
 			if i > 0 {
 				g.write(", ")
