@@ -42,9 +42,10 @@ func GenerateAndroidKotlin(root ast.Node) ([]byte, error) {
 }
 
 type androidGen struct {
-	buf    *strings.Builder
-	indent int
-	muts   map[string]bool
+	buf        *strings.Builder
+	indent     int
+	muts       map[string]bool
+	needResult bool
 }
 
 func (g *androidGen) generate(root ast.Node) ([]byte, error) {
@@ -59,6 +60,20 @@ func (g *androidGen) generate(root ast.Node) ([]byte, error) {
 	g.writeln("import android.widget.TextView")
 	g.writeln("import androidx.appcompat.app.AppCompatActivity")
 	g.writeln("")
+
+	// XQL's Result<T, E> takes two type arguments; kotlin.Result<out T> takes
+	// one and is imported by default into every file. Declaring our own at the
+	// top level of com.xql.app shadows it, because same-package declarations
+	// outrank the default imports during resolution.
+	walkTypes(root, func(t ast.TypeExpr, context string) {
+		if t.KindName == "Result" {
+			g.needResult = true
+		}
+	})
+	if g.needResult {
+		g.writeln(kotlinResultClass)
+		g.writeln("")
+	}
 
 	// Emit top-level Structs / Classes / Enums outside MainActivity
 	for _, d := range prog.Decls {

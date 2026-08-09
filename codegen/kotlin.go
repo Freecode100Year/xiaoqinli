@@ -61,24 +61,7 @@ func GenerateKotlin(root ast.Node) ([]byte, error) {
 
 	// Inject custom Result class at main package top-level
 	if g.needResult && packageName == "main" {
-		g.writeln(`class Result<out T, out E> private constructor(
-    val val_: T?,
-    val err: E?,
-    val isOk: Boolean
-) {
-    companion object {
-        fun <T, E> ok(v: T): Result<T, E> = Result(v, null, true)
-        fun <T, E> err(e: E): Result<T, E> = Result(null, e, false)
-    }
-    fun unwrap(): T {
-        if (!isOk) throw RuntimeException("Called unwrap on Err Result")
-        return val_!!
-    }
-    fun unwrapErr(): E {
-        if (isOk) throw RuntimeException("Called unwrapErr on Ok Result")
-        return err!!
-    }
-}`)
+		g.writeln(kotlinResultClass)
 		g.writeln("")
 	}
 
@@ -131,6 +114,29 @@ func (g *ktGen) writeIndent() {
 		g.buf.WriteString("    ")
 	}
 }
+
+// kotlinResultClass is XQL's own Result, emitted by both the kotlin and the
+// android backends. Kotlin's stdlib ships a single-parameter kotlin.Result<out
+// T> in every file's default imports, so a two-parameter Result<T, E> only
+// resolves if the generated file declares one in its own package.
+const kotlinResultClass = `class Result<out T, out E> private constructor(
+    val val_: T?,
+    val err: E?,
+    val isOk: Boolean
+) {
+    companion object {
+        fun <T, E> ok(v: T): Result<T, E> = Result(v, null, true)
+        fun <T, E> err(e: E): Result<T, E> = Result(null, e, false)
+    }
+    fun unwrap(): T {
+        if (!isOk) throw RuntimeException("Called unwrap on Err Result")
+        return val_!!
+    }
+    fun unwrapErr(): E {
+        if (isOk) throw RuntimeException("Called unwrapErr on Ok Result")
+        return err!!
+    }
+}`
 
 func typeToKotlin(t ast.TypeExpr) string {
 	switch t.KindName {

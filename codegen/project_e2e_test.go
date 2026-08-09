@@ -90,12 +90,10 @@ func TestLocalE2EProjectScaffolds(t *testing.T) {
 // that the scaffold is internally consistent: every file present, and every
 // resource the manifest names actually generated.
 //
-// KNOWN GAP: because nothing compiles this Kotlin, the backend's broken
-// Result<T> handling is not caught here. androidGen emits no Result type of
-// its own, so `Result<List<User>, String>` resolves to kotlin.Result<out T>
-// and the build fails with "One type argument expected". This is recorded in
-// the README's limitations table; do not mistake a green run here for a
-// buildable app when the program uses Result.
+// Nothing here compiles the Kotlin, so type errors inside it still escape this
+// test. What it can check is that every type the file names is declared
+// somewhere in it — the failure mode that once shipped a Result<T, E> with no
+// Result declaration to resolve against.
 func TestAndroidScaffoldStructure(t *testing.T) {
 	entry := filepath.Join("..", "examples", "e2e_workspace", "main.xql")
 
@@ -157,6 +155,14 @@ func TestAndroidScaffoldStructure(t *testing.T) {
 		if strings.Contains(kotlin, alias) {
 			t.Errorf("MainActivity.kt still references unlinked %q:\n%s", alias, kotlin)
 		}
+	}
+
+	// XQL's Result takes two type arguments. Unless the file declares its own,
+	// the name resolves to the default-imported kotlin.Result<out T> and the
+	// build dies with "One type argument expected".
+	if strings.Contains(kotlin, "Result<") &&
+		!strings.Contains(kotlin, "class Result<out T, out E>") {
+		t.Errorf("MainActivity.kt uses Result<T, E> but declares no Result of its own, so it resolves to kotlin.Result:\n%s", kotlin)
 	}
 }
 
