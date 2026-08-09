@@ -194,8 +194,8 @@ extern 不按模块划分命名空间：把一个平台的接口面声明一次�
 | Evidence | Targets | What was checked |
 |---|---|---|
 | **executed** (14) | `csharp` `dart` `go` `java` `julia` `kotlin` `lua` `php` `py` `ruby` `rust` `swift` `ts` `zig` | compiled and run, stdout asserted |
-| **compiled** (8) | `awk` `bash` `c` `cpp` `fortran` `js` `perl` `powershell` | compiled by a real toolchain |
-| **smoke** (24) | `ada` `android` `bat` `chrome` `clojure` `crystal` `d` `elixir` `fsharp` `groovy` `haskell` `ios` `mql4` `mql5` `nim` `objc` `ocaml` `pascal` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
+| **compiled** (13) | `awk` `bash` `c` `cpp` `crystal` `elixir` `fortran` `haskell` `js` `nim` `ocaml` `perl` `powershell` | compiled by a real toolchain |
+| **smoke** (19) | `ada` `android` `bat` `chrome` `clojure` `d` `fsharp` `groovy` `ios` `mql4` `mql5` `objc` `pascal` `scala` `shortcut` `tccli` `tcl` `v` `vala` | codegen returns output; never compiled |
 
 CI installs 14 toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,
 so a missing one fails the run instead of skipping quietly.
