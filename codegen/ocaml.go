@@ -11,6 +11,7 @@ func GenerateOCaml(root ast.Node) ([]byte, error) {
 	g := &ocamlGen{
 		buf:      &strings.Builder{},
 		funcRets: make(map[string]string),
+		varTypes: make(map[string]string),
 	}
 
 	prog, ok := root.(*ast.Program)
@@ -65,6 +66,11 @@ type ocamlGen struct {
 	indent   int
 	funcRets map[string]string
 	muts     map[string]bool
+
+	// varTypes remembers the declared type of locals and parameters. Without
+	// it the println emitter has to guess which of_string conversion to wrap
+	// an identifier in, and its guess was string_of_int.
+	varTypes map[string]string
 }
 
 func (g *ocamlGen) write(s string)   { g.buf.WriteString(s) }
@@ -121,10 +127,15 @@ func (g *ocamlGen) emitEnumDecl(ed *ast.EnumDecl) error {
 
 func (g *ocamlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.muts = collectMutables(fd.Body)
+	for _, p := range fd.Params {
+		if p.Type.KindName != "" {
+			g.varTypes[p.Name] = p.Type.KindName
+		}
+	}
 
 	if fd.Name == "main" {
 		// Emit main body, then call at top level
-		g.writeln("let main () =")
+		g.writeln("let rec main () =")
 		g.indent++
 		for _, stmt := range fd.Body {
 			if err := g.emitStmt(stmt); err != nil {
@@ -139,7 +150,11 @@ func (g *ocamlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	}
 
 	g.writeIndent()
-	g.write("let " + fd.Name)
+	// OCaml scopes a plain `let f` so that f is not visible inside its own
+	// body, and a self-call fails with "Unbound value f" plus a hint to add
+	// rec. It is legal on a function that never recurses, so declare it rather
+	// than analyse the call graph — the same call made for Fortran RECURSIVE.
+	g.write("let rec " + fd.Name)
 	for _, p := range fd.Params {
 		g.write(" (" + p.Name + ": " + typeToOCaml(p.Type) + ")")
 	}
@@ -221,6 +236,9 @@ func (g *ocamlGen) emitStmt(n ast.Node) error {
 }
 
 func (g *ocamlGen) emitVarDecl(vd *ast.VarDecl) error {
+	if vd.Type.KindName != "" {
+		g.varTypes[vd.Name] = vd.Type.KindName
+	}
 	g.writeIndent()
 	if g.muts[vd.Name] {
 		g.write("let " + vd.Name + " = ref ")
@@ -625,6 +643,9 @@ func (g *ocamlGen) emitCall(ce *ast.CallExpr) error {
 }
 
 func (g *ocamlGen) isBoolExpr(n ast.Node) bool {
+	if g.declaredType(n) == "Bool" {
+		return true
+	}
 	switch node := n.(type) {
 	case *ast.Literal:
 		return node.ValueType == "Bool"
@@ -640,6 +661,9 @@ func (g *ocamlGen) isBoolExpr(n ast.Node) bool {
 }
 
 func (g *ocamlGen) isFloatExpr(n ast.Node) bool {
+	if g.declaredType(n) == "Float" {
+		return true
+	}
 	switch node := n.(type) {
 	case *ast.Literal:
 		return node.ValueType == "Float"
@@ -652,6 +676,9 @@ func (g *ocamlGen) isFloatExpr(n ast.Node) bool {
 }
 
 func (g *ocamlGen) isStringExpr(n ast.Node) bool {
+	if g.declaredType(n) == "String" {
+		return true
+	}
 	if containsStringExpr(n) {
 		return true
 	}
@@ -661,6 +688,16 @@ func (g *ocamlGen) isStringExpr(n ast.Node) bool {
 		}
 	}
 	return false
+}
+
+// declaredType reports the recorded type of an identifier, or "" when the node
+// is not one or was never declared with a type.
+func (g *ocamlGen) declaredType(n ast.Node) string {
+	id, ok := n.(*ast.Ident)
+	if !ok {
+		return ""
+	}
+	return g.varTypes[id.Name]
 }
 
 func (g *ocamlGen) needParens(n ast.Node) bool {
