@@ -29,12 +29,20 @@ import (
 // or absent means every target handles it.
 var expectedRejections = map[string][]string{
 	// Uses Result<T>, for-each over an array, and struct literals.
+	// This example returns Result<T, E>, which turns out to be the construct
+	// fewest backends actually implement. Only twelve do; the rest declined
+	// once a sweep established that they were emitting references to a Result
+	// they never defined. See TestNoBackendFakesResultSupport.
 	"e2e_workspace/main.xql": {
-		"bat",                   // no struct literals
-		"c", "cpp", "js", "nim", // no Result<T>
-		"mql4", "mql5", // no Result<T>
-		"bash", "perl", // no Result<T> either, though they used to pretend
+		"bat",               // no struct literals
 		"fortran", "pascal", // no for-each
+
+		// No Result<T>. Everything outside this list and the twelve that
+		// implement it should be treated as unexamined, not as working.
+		"ada", "awk", "bash", "c", "chrome", "clojure", "cpp", "crystal", "d",
+		"elixir", "fsharp", "groovy", "haskell", "js", "mql4", "mql5", "nim",
+		"objc", "ocaml", "perl", "powershell", "scala", "shortcut", "tccli",
+		"tcl", "v", "vala",
 	},
 
 	// A struct literal is the one thing the batch-file backend cannot fake.

@@ -268,6 +268,40 @@ var unsupportedResultTargets = map[string]bool{
 	// interpreter rejects, and codegen reported success.
 	"bash": true,
 	"perl": true,
+
+	// awk is the same story again, and the most clear-cut of the three:
+	// `res.unwrap()` is not merely wrong there, it does not parse.
+	"awk": true,
+
+	// Sweeping every backend for the same shape — does the output reference
+	// Result without defining one? — found it in eighteen more. Each emitted
+	// `Result.ok(users)` and `res.unwrap()` exactly as the AST spells them,
+	// with no runtime anywhere: a qualified name from a module that does not
+	// exist in Haskell and F#, a call to a missing command in PowerShell and
+	// Tcl, a reference to an undeclared symbol everywhere else.
+	//
+	// Only a handful of backends ever implemented Result. The rest inherited
+	// the appearance of support from the dispatcher, because nothing checked.
+	// A backend that cannot express a construct is supposed to reject it
+	// rather than degrade it silently, so they do that now.
+	"ada":        true,
+	"chrome":     true, // emits JavaScript, which is on this list already
+	"clojure":    true,
+	"crystal":    true,
+	"d":          true,
+	"elixir":     true,
+	"fsharp":     true,
+	"groovy":     true,
+	"haskell":    true,
+	"objc":       true,
+	"ocaml":      true,
+	"powershell": true,
+	"scala":      true,
+	"shortcut":   true,
+	"tccli":      true,
+	"tcl":        true,
+	"v":          true,
+	"vala":       true,
 }
 
 // validateTypesForTarget walks the AST and returns an error if any type is
