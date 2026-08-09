@@ -125,11 +125,11 @@ func validateMQLTypes(root ast.Node, dialect string) error {
 		}
 		switch t.KindName {
 		case "Map":
-			err = fmt.Errorf("XQL_E403: MQL does not support Map type (used in %s)", context)
+			err = fmt.Errorf("XQL_E402: MQL does not support Map type (used in %s)", context)
 		case "Option":
-			err = fmt.Errorf("XQL_E403: MQL does not support Option type (used in %s)", context)
+			err = fmt.Errorf("XQL_E402: MQL does not support Option type (used in %s)", context)
 		case "Result":
-			err = fmt.Errorf("XQL_E403: MQL does not support Result type (used in %s)", context)
+			err = fmt.Errorf("XQL_E402: MQL does not support Result type (used in %s)", context)
 		}
 	})
 	return err
@@ -155,7 +155,7 @@ func scanForEach(n ast.Node) error {
 		}
 	case *ast.ForStmt:
 		if node.Form == "each" {
-			return fmt.Errorf("XQL_E403: MQL does not support for-each loops")
+			return fmt.Errorf("XQL_E402: MQL does not support for-each loops")
 		}
 		for _, s := range node.Body {
 			if err := scanForEach(s); err != nil {
@@ -217,11 +217,11 @@ func (g *mqlGen) typeStr(t ast.TypeExpr) (string, error) {
 		}
 		return "long", nil // default element type
 	case "Map":
-		return "", fmt.Errorf("XQL_E403: MQL does not support Map type")
+		return "", fmt.Errorf("XQL_E402: MQL does not support Map type")
 	case "Option":
-		return "", fmt.Errorf("XQL_E403: MQL does not support Option type")
+		return "", fmt.Errorf("XQL_E402: MQL does not support Option type")
 	case "Result":
-		return "", fmt.Errorf("XQL_E403: MQL does not support Result type")
+		return "", fmt.Errorf("XQL_E402: MQL does not support Result type")
 	default:
 		// User-defined struct type.
 		return t.KindName, nil
@@ -509,7 +509,7 @@ func (g *mqlGen) emitWhile(ws *ast.WhileStmt) error {
 
 func (g *mqlGen) emitForStmt(fs *ast.ForStmt) error {
 	if fs.Form == "each" {
-		return fmt.Errorf("XQL_E403: MQL does not support for-each loops")
+		return fmt.Errorf("XQL_E402: MQL does not support for-each loops")
 	}
 
 	g.writeIndent()

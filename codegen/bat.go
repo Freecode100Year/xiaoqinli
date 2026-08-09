@@ -635,11 +635,11 @@ func (g *batGen) emitValExpr(n ast.Node) error {
 	case *ast.IndexExpr:
 		return g.emitIndexExpr(node)
 	case *ast.IfExpr:
-		return fmt.Errorf("XQL_E401: bat does not support IfExpr in expression context")
+		return fmt.Errorf("XQL_E402: bat does not support IfExpr in expression context")
 	case *ast.Lambda:
-		return fmt.Errorf("XQL_E401: bat does not support Lambda")
+		return fmt.Errorf("XQL_E402: bat does not support Lambda")
 	default:
-		return fmt.Errorf("XQL_E401: unsupported expression %s in bat", n.Kind())
+		return fmt.Errorf("XQL_E402: bat cannot express %s", n.Kind())
 	}
 }
 

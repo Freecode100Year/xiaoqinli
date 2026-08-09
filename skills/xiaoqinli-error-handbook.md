@@ -149,33 +149,46 @@ function 'main' calls 'writeFile' but lacks required capabilities: [io, filesyst
 
 **Fix:** Avoid using unsupported nodes for that target, or choose a different target language.
 
-### XQL_E402: Unsupported type for target
+### XQL_E402: The target cannot express this program
 
-**Cause:** The AST uses a type that the target language cannot cleanly map.
+**Cause:** The program is well-formed, but the chosen backend has no way to
+represent something in it — a type, a loop form, an extern it does not host.
+This is a decision the backend makes, not a failure: it is the compiler
+refusing to emit code that would only break later.
 
 **Examples:**
 - `XQL_E402: target "js" does not support Result<T> type`
 - `XQL_E402: C does not support Option type`
 - `XQL_E402: Fortran target does not support for-each loops`
 - `XQL_E402: extern "fetch" is declared only for targets [js ts chrome] and is not available in "go"`
+- `XQL_E402: MQL does not support Map type`
+- `XQL_E402: bat cannot express StructLit`
 
 **Affected targets for Result<T>:** js, c, cpp, nim, mql4, mql5.
+
+Every backend reports capability limits with this one code. MQL used to raise
+XQL_E403 for the identical condition, which meant a caller could not switch on
+the code to tell "pick another target" from anything else, and which collided
+with the unrelated bundle-path error that still owns E403.
 
 **Fix:** Remove or replace the unsupported type, or choose a different target.
 For the extern case, compile to a target the host actually provides, or widen
 the extern's `targets` list — but only if that host really does provide it.
 
-### XQL_E403: MQL unsupported feature
+### XQL_E403: Path escape in output bundle
 
-**Cause:** The AST uses a feature that MQL4/MQL5 does not support. MQL targets only generate script-mode skeletons (`OnStart` entry point, `Print` for output).
+**Cause:** A project scaffold tried to write a file outside the output
+directory. Refused before anything reaches disk.
 
 **Examples:**
-- `XQL_E403: MQL does not support Map type`
-- `XQL_E403: MQL does not support Option type`
-- `XQL_E403: MQL does not support Result type`
-- `XQL_E403: MQL does not support for-each loops`
+- `XQL_E403: path escape in bundle: ../../etc/profile`
 
-**Fix:** Remove the unsupported type or feature from the AST before targeting MQL. Use `Array<T>` with index-based for-range loops instead of for-each.
+**Fix:** This is a compiler bug, not a program bug — a backend built a file
+path from untrusted input. Report it with the target and the AST that
+triggered it.
+
+> MQL feature limits used to live under this code. They are XQL_E402 now, with
+> every other backend's capability limits.
 
 ---
 

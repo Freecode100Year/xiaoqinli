@@ -1690,8 +1690,8 @@ func TestGenerateMQLMapRejection(t *testing.T) {
 		_, err := Generate(root, dialect)
 		if err == nil {
 			t.Errorf("MQL %s should reject Map type", dialect)
-		} else if !strings.Contains(err.Error(), "XQL_E403") {
-			t.Errorf("expected XQL_E403 for %s, got: %v", dialect, err)
+		} else if !strings.Contains(err.Error(), "XQL_E402") {
+			t.Errorf("expected XQL_E402 for %s, got: %v", dialect, err)
 		}
 	}
 }
@@ -1714,8 +1714,8 @@ func TestGenerateMQLOptionRejection(t *testing.T) {
 		_, err := Generate(root, dialect)
 		if err == nil {
 			t.Errorf("MQL %s should reject Option type", dialect)
-		} else if !strings.Contains(err.Error(), "XQL_E403") {
-			t.Errorf("expected XQL_E403 for %s, got: %v", dialect, err)
+		} else if !strings.Contains(err.Error(), "XQL_E402") {
+			t.Errorf("expected XQL_E402 for %s, got: %v", dialect, err)
 		}
 	}
 }
@@ -1742,8 +1742,8 @@ func TestGenerateMQLForEachRejection(t *testing.T) {
 		_, err := Generate(root, dialect)
 		if err == nil {
 			t.Errorf("MQL %s should reject for-each loops", dialect)
-		} else if !strings.Contains(err.Error(), "XQL_E403") {
-			t.Errorf("expected XQL_E403 for %s for-each, got: %v", dialect, err)
+		} else if !strings.Contains(err.Error(), "XQL_E402") {
+			t.Errorf("expected XQL_E402 for %s for-each, got: %v", dialect, err)
 		}
 	}
 }
