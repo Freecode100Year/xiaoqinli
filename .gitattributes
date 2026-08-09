@@ -1,0 +1,23 @@
+# Go sources are stored and checked out with LF everywhere.
+#
+# Without this, a Windows checkout with core.autocrlf=true gets CRLF working
+# copies while the blobs stay LF. gofmt emits LF, so it reports every one of
+# those files as unformatted — fifteen of them, eleven thousand lines of
+# phantom diff — and the one real formatting problem is invisible in the noise.
+# Running `gofmt -w` to "fix" it rewrites line endings that Git then converts
+# back on the next checkout.
+*.go text eol=lf
+go.mod text eol=lf
+go.sum text eol=lf
+
+# The CI gate compares these byte for byte.
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Program inputs and generated goldens.
+*.xql text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+*.sh text eol=lf
+*.bat text eol=crlf

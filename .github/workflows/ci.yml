@@ -1,5 +1,10 @@
 name: CI
 
+# Fast checks. Anything that needs a language toolchain lives in
+# e2e-backends.yml — this file used to carry a second copy of that job, pinned
+# to a different Zig version, so the two could disagree about whether master was
+# green.
+
 on:
   push:
     branches: [ master ]
@@ -23,6 +28,36 @@ jobs:
       - name: Run unit tests (short)
         run: go test -short ./...
 
+  format:
+    name: gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.25'
+          cache: true
+
+      # .gitattributes normalises Go sources to LF so this comparison means the
+      # same thing on a Windows checkout, where CRLF otherwise makes gofmt
+      # report every file as unformatted.
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"
+            echo "$unformatted"
+            echo
+            gofmt -d $unformatted
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
   vulncheck:
     name: Govulncheck (CVE scan)
     runs-on: ubuntu-latest
@@ -41,48 +76,3 @@ jobs:
 
       - name: Run govulncheck
         run: govulncheck ./...
-
-  e2e-verify:
-    name: E2E Backends Verification
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.25'
-          cache: true
-
-      - name: Setup Java JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '17'
-
-      - name: Setup .NET SDK 7.0
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '7.0.x'
-
-      - name: Setup Kotlin compiler
-        uses: fwilhe2/setup-kotlin@v1
-
-      - name: Setup Swift toolchain
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: '5.10'
-
-      - name: Setup Dart SDK
-        uses: dart-lang/setup-dart@v1
-
-      - name: Setup Zig toolchain
-        uses: goto-bus-stop/setup-zig@v2
-        with:
-          version: '0.13.0'
-
-
-      - name: Run local E2E test
-        run: go test -v ./codegen -run 'TestLocalE2E' -count=1

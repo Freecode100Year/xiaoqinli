@@ -1,5 +1,14 @@
 name: E2E Backends Verification
 
+# Builds and runs the programs this compiler generates, in every language whose
+# targets claim the "executed" tier in compiler/verification.go.
+#
+# XQL_E2E_REQUIRE=1 is the point of this job. Without it a toolchain that failed
+# to install turns its subtests into skips, Go reports skips as passes, and the
+# run goes green having verified nothing. TestCIInstallsEveryRequiredToolchain
+# checks that every toolchain the registry demands is installed below, so this
+# file and the registry cannot drift apart.
+
 on:
   push:
     branches: [ master ]
@@ -13,22 +22,22 @@ jobs:
 
     steps:
     - name: Checkout Code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Setup Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
         go-version: '1.25'
         cache: true
 
     - name: Setup Java JDK 17
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
     - name: Setup .NET SDK 7.0
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '7.0.x'
 
@@ -46,7 +55,33 @@ jobs:
     - name: Setup Zig toolchain
       uses: goto-bus-stop/setup-zig@v2
       with:
-        version: '0.11.0'
+        version: '0.13.0'
 
-    - name: Run local E2E test without skips
-      run: go test -v ./codegen -run 'TestLocalE2E' -count=1
+    - name: Setup Julia
+      uses: julia-actions/setup-julia@v2
+      with:
+        version: '1.10'
+
+    # The runner image has php, ruby, python3 and rustc already. Lua it does
+    # not, and the package installs as lua5.4, which is not the name the test
+    # looks for.
+    - name: Setup Lua
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y lua5.4
+        sudo ln -sf /usr/bin/lua5.4 /usr/local/bin/lua
+        lua -v
+
+    - name: Setup tsx (TypeScript runner)
+      run: npm install -g tsx
+
+    - name: Report the toolchains this run will use
+      run: |
+        for t in go python3 rustc tsx javac dotnet kotlinc swiftc dart zig php ruby lua julia; do
+          printf '%-10s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
+        done
+
+    - name: Build and run the generated programs
+      env:
+        XQL_E2E_REQUIRE: '1'
+      run: go test -v ./compiler ./codegen -run 'TestLinkedPipeline|TestLocalE2E' -count=1
