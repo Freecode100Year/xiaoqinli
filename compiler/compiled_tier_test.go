@@ -60,6 +60,21 @@ var compiledTierCases = []compiledTierCase{
 		args: []string{"-NoProfile", "-NonInteractive", "-Command",
 			"$e=$null;[void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path '{file}'),[ref]$null,[ref]$e);" +
 				"if($e.Count){$e|ForEach-Object{Write-Output $_.Message};exit 1}"}},
+
+	// The tier below this line needs an apt install, so unlike the tools above
+	// it is not free. Each is still check-only: nim check does not link, ghc
+	// -fno-code type-checks and emits nothing, ocamlc -stop-after typing stops
+	// before code generation, and crystal build --no-codegen does the semantic
+	// pass alone. Elixir is parse-only; see its note below.
+	{target: "nim", ext: ".nim", tools: []string{"nim"}, args: []string{"check", "--hints:off", "--verbosity:0"}},
+	{target: "haskell", ext: ".hs", tools: []string{"ghc"}, args: []string{"-fno-code", "-v0"}},
+	{target: "ocaml", ext: ".ml", tools: []string{"ocamlc"}, args: []string{"-stop-after", "typing"}},
+	// Not elixirc: the generated file ends in a top-level Main.main() call, and
+	// Elixir evaluates top-level expressions while compiling, so elixirc would
+	// run the program. Code.string_to_quoted! only parses.
+	{target: "elixir", ext: ".ex", tools: []string{"elixir"},
+		args: []string{"-e", `Code.string_to_quoted!(File.read!("{file}"))`}},
+	{target: "crystal", ext: ".cr", tools: []string{"crystal"}, args: []string{"build", "--no-codegen", "{file}"}},
 }
 
 // TestCompiledTier checks every example a target accepts, not a chosen one.
@@ -176,9 +191,14 @@ func TestCompiledTierToolsAreDeclared(t *testing.T) {
 		"perl": true, "bash": true,
 		"gawk": true, "pwsh": true, "powershell": true,
 	}
+	// Installed by an explicit step in e2e-backends.yml rather than shipped
+	// with the image. TestCompiledTierAptToolsAreInstalled checks the step.
+	aptInstalled := map[string]bool{
+		"nim": true, "ghc": true, "ocamlc": true, "elixir": true, "crystal": true,
+	}
 	for _, tc := range compiledTierCases {
 		for _, tool := range tc.tools {
-			if !preinstalled[tool] {
+			if !preinstalled[tool] && !aptInstalled[tool] {
 				t.Errorf("%s wants %q, which is not known to ship on the runner image — "+
 					"add an install step to e2e-backends.yml and list it here", tc.target, tool)
 			}
@@ -214,9 +234,56 @@ func TestCompiledTierIsNotExecuted(t *testing.T) {
 			if !strings.Contains(joined, "Parser") {
 				t.Errorf("%s: powershell must go through the parser API, not execution", tc.target)
 			}
+		case "nim":
+			if !strings.Contains(joined, "check") {
+				t.Errorf("%s: nim needs the check subcommand; `nim c -r` would run it", tc.target)
+			}
+		case "ghc":
+			if !strings.Contains(joined, "-fno-code") {
+				t.Errorf("%s: ghc without -fno-code links a binary", tc.target)
+			}
+		case "ocamlc":
+			if !strings.Contains(joined, "typing") {
+				t.Errorf("%s: ocamlc must stop after typing", tc.target)
+			}
+		case "crystal":
+			if !strings.Contains(joined, "--no-codegen") {
+				t.Errorf("%s: crystal build without --no-codegen produces a binary", tc.target)
+			}
+		case "elixir":
+			if !strings.Contains(joined, "string_to_quoted") {
+				t.Errorf("%s: elixir must only parse — compiling evaluates the top-level call", tc.target)
+			}
 		default:
 			if !strings.Contains(joined, "-fsyntax-only") {
 				t.Errorf("%s: %v should check syntax only, got args %v", tc.target, tc.tools, tc.args)
+			}
+		}
+	}
+}
+
+// TestCompiledTierAptToolsAreInstalled holds the workflow to the same standard
+// the executed tier is held to: a tier CI cannot run is a claim, not evidence.
+func TestCompiledTierAptToolsAreInstalled(t *testing.T) {
+	workflow := readFile(t, filepath.Join("..", ".github", "workflows", "e2e-backends.yml"))
+
+	// The package or install step that provides each executable.
+	providedBy := map[string]string{
+		"nim":     "nim",
+		"ghc":     "ghc",
+		"ocamlc":  "ocaml-nox",
+		"elixir":  "elixir",
+		"crystal": "crystal-lang.org/install.sh",
+	}
+	for _, tc := range compiledTierCases {
+		for _, tool := range tc.tools {
+			needle, needsInstall := providedBy[tool]
+			if !needsInstall {
+				continue
+			}
+			if !strings.Contains(workflow, needle) {
+				t.Errorf("the compiled tier needs %q for %s, but e2e-backends.yml never installs it (looked for %q)",
+					tool, tc.target, needle)
 			}
 		}
 	}

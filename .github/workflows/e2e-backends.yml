@@ -75,6 +75,22 @@ jobs:
     - name: Setup tsx (TypeScript runner)
       run: npm install -g tsx
 
+    # Check-only compilers for the compiled tier. These are the only tools in
+    # that tier the runner image does not already provide, which is why the
+    # tier stopped where it did until now.
+    - name: Setup check-only compilers (nim, ghc, ocaml, elixir)
+      run: |
+        sudo apt-get install -y nim ghc ocaml-nox elixir
+        nim --version | head -1
+        ghc --version
+        ocamlc -version
+        elixirc --version | tail -1
+
+    - name: Setup Crystal
+      run: |
+        curl -fsSL https://crystal-lang.org/install.sh | sudo bash
+        crystal --version
+
     - name: Report the toolchains this run will use
       run: |
         for t in go python3 rustc tsx javac dotnet kotlinc swiftc dart zig php ruby lua julia; do
