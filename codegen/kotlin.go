@@ -481,7 +481,10 @@ func (g *ktGen) emitForStmt(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write(" <= ")
+		// `a until b` is Kotlin's half-open range. The `a <= b` that stood here
+		// was not a range at all — it built a Boolean and asked `for` to iterate
+		// over it, which kotlinc rejects outright.
+		g.write(" until ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}

@@ -510,7 +510,7 @@ func (g *csGen) emitForStmt(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("; " + fs.Var + " <= ")
+		g.write("; " + fs.Var + " < ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}

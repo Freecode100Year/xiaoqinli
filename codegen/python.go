@@ -399,11 +399,11 @@ func (g *pyGen) emitForStmt(fs *ast.ForStmt) error {
 					if err := g.emitExpr(fs.Start); err != nil {
 						return err
 					}
-					g.write(", (")
+					g.write(", ")
 					if err := g.emitExpr(fs.End); err != nil {
 						return err
 					}
-					g.write(") + 1)")
+					g.write(")")
 				} else {
 					if err := g.emitExpr(fs.Iterable); err != nil {
 						return err
@@ -422,11 +422,11 @@ func (g *pyGen) emitForStmt(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write(", (")
+		g.write(", ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
-		g.write(") + 1)")
+		g.write(")")
 	case "each":
 		g.write("for " + fs.Var + " in ")
 		if err := g.emitExpr(fs.Iterable); err != nil {

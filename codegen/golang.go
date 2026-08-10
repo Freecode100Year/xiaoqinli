@@ -372,12 +372,12 @@ func (g *goGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		// for i := start; i <= end; i++ {
+		// for i := start; i < end; i++ {
 		g.write("for " + fs.Var + " := ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("; " + fs.Var + " <= ")
+		g.write("; " + fs.Var + " < ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}

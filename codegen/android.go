@@ -359,7 +359,8 @@ func (g *androidGen) emitFor(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("..")
+		// Kotlin's `..` includes its upper bound; ForStmt's range does not.
+		g.write(" until ")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
