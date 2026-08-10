@@ -103,6 +103,7 @@ func TestCIInstallsEveryRequiredToolchain(t *testing.T) {
 		"perl": true,
 		"bash": true,
 		"gawk": true,
+		"pwsh": true,
 	}
 	// What the workflow calls the thing it installs, when that differs from the
 	// executable name the test looks for.

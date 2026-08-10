@@ -100,6 +100,12 @@ var conformanceRunners = []conformanceRunner{
 	{target: "awk", ext: ".awk", tools: []string{"gawk"},
 		steps: [][]string{{"{tool}", "-f", "{file}"}}},
 
+	// Windows PowerShell answers neither `--version` nor `version`, so
+	// FirstWorking will not pick it up and this skips on Windows; ubuntu-latest
+	// ships pwsh, which does, so CI runs it.
+	{target: "powershell", ext: ".ps1", tools: []string{"pwsh", "powershell"},
+		steps: [][]string{{"{tool}", "-NoProfile", "-NonInteractive", "-File", "{file}"}}},
+
 	{target: "c", ext: ".c", tools: []string{"gcc", "clang"},
 		steps: [][]string{{"{tool}", "-o", "{bin}", "{file}"}, {"{bin}"}}},
 	{target: "cpp", ext: ".cpp", tools: []string{"g++", "clang++"},

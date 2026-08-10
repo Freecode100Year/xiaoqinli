@@ -387,7 +387,11 @@ func (g *psGen) emitExpr(n ast.Node) error {
 		// would round half to even (7/2 -> 4). Truncate is the one that agrees
 		// with the other targets.
 		if g.types.isIntDivision(node) {
-			g.write("[long][math]::Truncate(")
+			// The outer parens are not cosmetic. `Write-Output [long][math]::…`
+			// parses in argument mode, where PowerShell hands the cast along as
+			// a literal and prints "[long][math]::Truncate" followed by 3.5.
+			// Wrapped, it is an expression and prints 3.
+			g.write("([long][math]::Truncate(")
 			if err := g.emitExpr(node.Left); err != nil {
 				return err
 			}
@@ -395,7 +399,7 @@ func (g *psGen) emitExpr(n ast.Node) error {
 			if err := g.emitExpr(node.Right); err != nil {
 				return err
 			}
-			g.write(")")
+			g.write("))")
 			return nil
 		}
 		g.write("(")
