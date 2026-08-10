@@ -147,7 +147,7 @@ func (g *adaGen) emitNode(n ast.Node) error {
 		g.writeln("exit;")
 		return nil
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: Ada does not natively support continue")
+		return fmt.Errorf("XQL_E402: Ada does not natively support continue")
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:

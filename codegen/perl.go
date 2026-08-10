@@ -349,6 +349,23 @@ func (g *perlGen) emitExprStmt(es *ast.ExprStmt) error {
 	return nil
 }
 
+// perlStringOps maps each numeric comparison operator to the string operator
+// Perl uses for the same question. Perl is the language where these are
+// genuinely different operators, not different overloads.
+var perlStringOps = map[string]string{
+	"==": "eq",
+	"!=": "ne",
+	"<":  "lt",
+	">":  "gt",
+	"<=": "le",
+	">=": "ge",
+}
+
+// isStringComparison reports whether a comparison has a String on either side.
+func (g *perlGen) isStringComparison(be *ast.BinaryExpr) bool {
+	return g.types.kindOf(be.Left) == "String" || g.types.kindOf(be.Right) == "String"
+}
+
 func (g *perlGen) emitExpr(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.Literal:
@@ -377,6 +394,12 @@ func (g *perlGen) emitExpr(n ast.Node) error {
 		op := node.Op
 		if op == "+" && containsStringExpr(node) {
 			op = "."
+		}
+		if s, ok := perlStringOps[op]; ok && g.isStringComparison(node) {
+			// Perl's `==` is numeric. Comparing two strings with it numifies
+			// both to 0, so `"abc" == "xyz"` is true and every string equality
+			// in a generated program answered yes.
+			op = s
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {

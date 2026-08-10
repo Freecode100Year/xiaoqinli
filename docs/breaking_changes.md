@@ -113,6 +113,7 @@ range 循环由闭区间改为半开区间。`kotlin` 之前生成的 `for (i in
 | `pascal` | `a / b` → Real，赋给 Integer 都不合法 | `a div b` |
 | `haskell` | `a / b` → **不通过类型检查**（`/` 属于 Fractional） | `` a `quot` b `` |
 | `zig` | `a / b` → **编译错误**（有符号整数不许用 `/`） | `@divTrunc(a, b)` |
+| `nim` | `a / b` → **编译错误**（`type mismatch: got <int64, int64>`） | `a div b` |
 
 **为什么：** `/` 的含义此前完全取决于目标语言碰巧怎么定义它。同一份 AST，`7 / 2` 在 Go、C、Rust、Java、Ruby、Tcl 里是 3，在上表那些语言里是 3.5，在 Haskell 和 Zig 里根本编译不过。这是一个转译器最不该含糊的地方。
 
@@ -123,3 +124,42 @@ range 循环由闭区间改为半开区间。`kotlin` 之前生成的 `for (i in
 **已知残留：** 向零截断与向下取整只在「恰好一个操作数为负」时不同。`py`、`lua`（`//`）和 `ruby`（`/` 原生）是向下取整，其余是截断。conformance 语料只用非负操作数，所以这一段应当视为**未规定**，不要当成已验证。
 
 **未变：** `Float / Float`、`%`、其余算符，以及错误码与退出码。
+
+---
+
+## 字符串比较此前在 perl 和 c 上是坏的
+
+**改成什么：** 涉及 String 的比较运算符，`perl` 改用 `eq`/`ne`/`lt`/`gt`/`le`/`ge`，`c` 改走 `strcmp(a, b) <op> 0`。
+`cpp` 的两个字符串**字面量**相加改为 `std::string("ab") + "c"`。
+
+**为什么：**
+
+- **perl** 的 `==` 是数值比较。两个非数字字符串都会 numify 成 0，于是 `"abc" == "xyz"` 为**真**——
+  生成的程序里每一次字符串相等判断都回答「相等」。
+- **c** 里 String 是 `const char *`，`a == b` 比的是地址。运行期拼出来的 `"ab" + "c"` 与字面量 `"abc"`
+  比出来是**不等**；反过来，两个相同的字面量又可能因为编译器做了池化而比出「相等」。两种方向都错。
+- **cpp** 的 `"ab" + "c"` 是两个 `const char[]` 做指针算术，**根本编译不过**。之前没暴露是因为语料里没有
+  「两个字符串字面量相加」这种写法。
+
+**需要你做什么：** 不需要。之前的行为在这三个目标上都是错的，没有可依赖的语义。
+
+`examples/string_compare.xql.json` 现在把这三件事都钉在 conformance 语料里。
+
+---
+
+## `break` / `continue` 的拒绝码由 `XQL_E401` 改为 `XQL_E402`
+
+**改成什么：** `ada` `bat` `clojure` `elixir` `fsharp` `haskell` `lua` `ocaml` 在遇到自己表达不了的
+`break` / `continue` 时，错误码由 `XQL_E401` 改为 `XQL_E402`，共 14 处。
+
+**为什么：** 这违反了本文件开头那条不变式——`XQL_E402` 是「目标表达不了」，`XQL_E401` 是「编译器有 bug，请上报」。
+把能力边界报成编译器 bug，会让按 `ErrorCode` 分流的调用方把「该换个目标」误判成「该提 issue」。
+
+之前没被 `TestExampleTargetMatrix` 抓到，只是因为语料里没有任何一个示例用到 `break`。
+`examples/control_flow.xql.json` 补上了这个洞。
+
+**需要你做什么：** 如果你匹配 `XQL_E401` 来处理这些拒绝，改成 `XQL_E402`。
+
+**已知残留：** codegen 里还有约 100 处 `XQL_E401: ... does not support ...`，其中一部分同样应该是
+`XQL_E402`。它们目前没有任何示例覆盖，因此**未经检验**，这次没有一并改——照着分类扫一遍而不跑一遍，
+正是这个项目一直在拆掉的那种做法。

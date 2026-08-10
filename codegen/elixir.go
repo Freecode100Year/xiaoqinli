@@ -121,9 +121,9 @@ func (g *exGen) emitNode(n ast.Node) error {
 	case *ast.ForStmt:
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
-		return fmt.Errorf("XQL_E401: Elixir does not support BreakStmt")
+		return fmt.Errorf("XQL_E402: Elixir does not support BreakStmt")
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: Elixir does not support ContinueStmt")
+		return fmt.Errorf("XQL_E402: Elixir does not support ContinueStmt")
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:

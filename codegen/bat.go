@@ -98,9 +98,9 @@ func (g *batGen) emitNode(n ast.Node) error {
 	case *ast.ForStmt:
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
-		return fmt.Errorf("XQL_E401: bat does not support break in this context")
+		return fmt.Errorf("XQL_E402: bat does not support break in this context")
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: bat does not support continue")
+		return fmt.Errorf("XQL_E402: bat does not support continue")
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.MatchExpr:

@@ -104,9 +104,9 @@ func (g *cljGen) emitNode(n ast.Node) error {
 	case *ast.ForStmt:
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
-		return fmt.Errorf("XQL_E401: Clojure does not support break")
+		return fmt.Errorf("XQL_E402: Clojure does not support break")
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: Clojure does not support continue")
+		return fmt.Errorf("XQL_E402: Clojure does not support continue")
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:

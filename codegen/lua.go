@@ -138,7 +138,7 @@ func (g *luaGen) emitNode(n ast.Node) error {
 		g.writeln("break")
 		return nil
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: Lua does not support continue")
+		return fmt.Errorf("XQL_E402: Lua does not support continue")
 	case *ast.ExprStmt:
 		return g.emitExprStmt(node)
 	case *ast.StructDecl:
