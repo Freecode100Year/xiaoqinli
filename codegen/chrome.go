@@ -13,6 +13,7 @@ import (
 // The output is a JSON file containing manifest.json, popup.html, and popup.js.
 func GenerateChrome(root ast.Node) ([]byte, error) {
 	g := &chromeGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -194,6 +195,7 @@ func findMain(prog *ast.Program) *ast.FunctionDecl {
 }
 
 type chromeGen struct {
+	types  *typeKinds
 	buf    *strings.Builder
 	indent int
 	muts   map[string]bool
@@ -255,6 +257,7 @@ func (g *chromeGen) emitStructDecl(sd *ast.StructDecl) {
 }
 
 func (g *chromeGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.muts = collectMutables(fd.Body)
 	g.writeIndent()
 	g.write("function " + fd.Name + "(")
@@ -331,6 +334,7 @@ func (g *chromeGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *chromeGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	if g.muts[vd.Name] {
 		g.write("let ")
@@ -493,6 +497,20 @@ func (g *chromeGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// The extension bundle is JavaScript, so it has JavaScript's one number
+		// type and needs the same Math.trunc the js backend does.
+		if g.types.isIntDivision(node) {
+			g.write("Math.trunc(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(" / ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted at top level (like Ruby).
 func GenerateCrystal(root ast.Node) ([]byte, error) {
 	g := &crystalGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -72,6 +73,7 @@ func GenerateCrystal(root ast.Node) ([]byte, error) {
 }
 
 type crystalGen struct {
+	types  *typeKinds
 	buf    *strings.Builder
 	indent int
 }
@@ -220,6 +222,7 @@ func (g *crystalGen) emitMatchExpr(me *ast.MatchExpr) error {
 }
 
 func (g *crystalGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	g.write("def " + fd.Name)
 	if len(fd.Params) > 0 {
@@ -264,6 +267,7 @@ func (g *crystalGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *crystalGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write(vd.Name)
 	if vd.Value != nil {
@@ -390,11 +394,18 @@ func (g *crystalGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		op := node.Op
+		// Crystal's Int#/ has returned a Float64 since 0.36 — `7 / 2` is 3.5,
+		// and it typechecks, so the compiled tier could never have caught it.
+		// `//` is the integer division.
+		if g.types.isIntDivision(node) {
+			op = "//"
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err
 		}
-		g.write(" " + node.Op + " ")
+		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {
 			return err
 		}
