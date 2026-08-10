@@ -38,6 +38,19 @@ type compiledTierCase struct {
 	tools []string
 	// args are passed before the filename.
 	args []string
+	// base overrides the "prog" stem. gnat derives the unit name from the file
+	// name and rejects `procedure Main` in prog.adb outright, so for Ada the
+	// stem is part of the contract rather than a scratch detail.
+	base string
+}
+
+// fileName is the stem plus extension the checker will be handed.
+func (tc compiledTierCase) fileName() string {
+	base := tc.base
+	if base == "" {
+		base = "prog"
+	}
+	return base + tc.ext
 }
 
 var compiledTierCases = []compiledTierCase{
@@ -79,6 +92,28 @@ var compiledTierCases = []compiledTierCase{
 	{target: "elixir", ext: ".ex", tools: []string{"elixir"},
 		args: []string{"-e", `Code.string_to_quoted!(File.read!("{file}"))`}},
 	{target: "crystal", ext: ".cr", tools: []string{"crystal"}, args: []string{"build", "--no-codegen", "{file}"}},
+
+	// The five below were smoke-only for one reason: nobody had installed a
+	// compiler for them. Each is check-only in the same sense as the group
+	// above — gnat -gnatc stops after semantic analysis, gdc and valac have
+	// -fsyntax-only and --ccode respectively, fpc -s stops before the
+	// assembler, and groovyc writes classes to a scratch directory.
+	//
+	// Running them found real defects that codegen had been shipping: Ada put
+	// `function greet` beside `procedure Main` in one file, which is two
+	// library units and not a legal compilation unit at all, and wrapped a
+	// String in `Long_Integer'Image`; Pascal assigned to `Result` without the
+	// mode directive that makes `Result` exist.
+	{target: "ada", ext: ".adb", base: "main", tools: []string{"gnatmake"},
+		args: []string{"-gnatc", "-c", "{file}"}},
+	{target: "d", ext: ".d", tools: []string{"gdc"},
+		args: []string{"-fsyntax-only"}},
+	{target: "pascal", ext: ".pas", tools: []string{"fpc"},
+		args: []string{"-s", "-vw", "{file}"}},
+	{target: "vala", ext: ".vala", tools: []string{"valac"},
+		args: []string{"--ccode", "-d", ".", "{file}"}},
+	{target: "groovy", ext: ".groovy", tools: []string{"groovyc"},
+		args: []string{"-d", ".", "{file}"}},
 }
 
 // TestCompiledTier checks every example a target accepts, not a chosen one.
@@ -116,12 +151,12 @@ func TestCompiledTier(t *testing.T) {
 				}
 
 				dir := t.TempDir()
-				path := filepath.Join(dir, "prog"+tc.ext)
+				path := filepath.Join(dir, tc.fileName())
 				if err := os.WriteFile(path, res.Code, 0o644); err != nil {
 					t.Fatalf("write %s: %v", path, err)
 				}
 
-				cmd := exec.Command(tool, checkerArgs(tc.args, "prog"+tc.ext)...)
+				cmd := exec.Command(tool, checkerArgs(tc.args, tc.fileName())...)
 				cmd.Dir = dir
 				if out, err := cmd.CombinedOutput(); err != nil {
 					t.Errorf("%s compiled %s, but %s rejects the result: %v\n%s\n--- generated ---\n%s",
@@ -203,6 +238,7 @@ func TestCompiledTierToolsAreDeclared(t *testing.T) {
 	// with the image. TestCompiledTierAptToolsAreInstalled checks the step.
 	aptInstalled := map[string]bool{
 		"nim": true, "ghc": true, "ocamlc": true, "elixir": true, "crystal": true,
+		"gnatmake": true, "gdc": true, "fpc": true, "valac": true, "groovyc": true,
 	}
 	for _, tc := range compiledTierCases {
 		for _, tool := range tc.tools {
@@ -262,6 +298,29 @@ func TestCompiledTierIsNotExecuted(t *testing.T) {
 			if !strings.Contains(joined, "string_to_quoted") {
 				t.Errorf("%s: elixir must only parse — compiling evaluates the top-level call", tc.target)
 			}
+		case "gnatmake":
+			// -gnatc stops gnat after semantic analysis: no object code, no
+			// binder, no linker, and therefore nothing that could run.
+			if !strings.Contains(joined, "-gnatc") {
+				t.Errorf("%s: gnatmake without -gnatc builds and binds an executable", tc.target)
+			}
+		case "fpc":
+			// -s writes the assembly and stops; nothing is assembled or linked.
+			if !strings.Contains(joined, "-s") {
+				t.Errorf("%s: fpc without -s links a binary", tc.target)
+			}
+		case "valac":
+			// --ccode stops at the generated C rather than invoking the C
+			// compiler on it.
+			if !strings.Contains(joined, "--ccode") {
+				t.Errorf("%s: valac without --ccode compiles and links", tc.target)
+			}
+		case "groovyc":
+			// groovyc only ever writes .class files; `groovy` would run them,
+			// which is why the case names the compiler and not the launcher.
+			if strings.Contains(joined, "-e") {
+				t.Errorf("%s: groovyc with -e evaluates a script", tc.target)
+			}
 		default:
 			if !strings.Contains(joined, "-fsyntax-only") {
 				t.Errorf("%s: %v should check syntax only, got args %v", tc.target, tc.tools, tc.args)
@@ -277,11 +336,16 @@ func TestCompiledTierAptToolsAreInstalled(t *testing.T) {
 
 	// The package or install step that provides each executable.
 	providedBy := map[string]string{
-		"nim":     "nim",
-		"ghc":     "ghc",
-		"ocamlc":  "ocaml-nox",
-		"elixir":  "elixir",
-		"crystal": "crystal-lang.org/install.sh",
+		"nim":      "nim",
+		"ghc":      "ghc",
+		"ocamlc":   "ocaml-nox",
+		"elixir":   "elixir",
+		"crystal":  "crystal-lang.org/install.sh",
+		"gnatmake": "gnat",
+		"gdc":      "gdc",
+		"fpc":      "fp-compiler",
+		"valac":    "valac",
+		"groovyc":  "groovy",
 	}
 	for _, tc := range compiledTierCases {
 		for _, tool := range tc.tools {
