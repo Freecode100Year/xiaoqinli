@@ -212,18 +212,19 @@ the tests actually enforce.
 <!-- verification:begin -->
 | Evidence | Targets | What was checked |
 |---|---|---|
-| **executed** (14) | `csharp` `dart` `go` `java` `julia` `kotlin` `lua` `php` `py` `ruby` `rust` `swift` `ts` `zig` | compiled and run, stdout asserted |
-| **compiled** (14) | `awk` `bash` `c` `cpp` `crystal` `elixir` `fortran` `haskell` `js` `nim` `ocaml` `perl` `powershell` `tccli` | compiled by a real toolchain |
-| **smoke** (18) | `ada` `android` `bat` `chrome` `clojure` `d` `fsharp` `groovy` `ios` `mql4` `mql5` `objc` `pascal` `scala` `shortcut` `tcl` `v` `vala` | codegen returns output; never compiled |
+| **executed** (21) | `awk` `bash` `c` `cpp` `csharp` `dart` `go` `java` `js` `julia` `kotlin` `lua` `perl` `php` `py` `ruby` `rust` `swift` `tcl` `ts` `zig` | compiled and run, stdout asserted |
+| **compiled** (8) | `crystal` `elixir` `fortran` `haskell` `nim` `ocaml` `powershell` `tccli` | compiled by a real toolchain |
+| **smoke** (17) | `ada` `android` `bat` `chrome` `clojure` `d` `fsharp` `groovy` `ios` `mql4` `mql5` `objc` `pascal` `scala` `shortcut` `v` `vala` | codegen returns output; never compiled |
 
-CI installs 14 toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,
-so a missing one fails the run instead of skipping quietly.
+The executed tier needs 21 toolchains, which CI installs or inherits from the
+runner image, and it sets `XQL_E2E_REQUIRE=1` so a missing one fails the run
+instead of skipping quietly.
 
 Per-target caveats:
 
 - `ada` — rejects Result<T>
 - `android` — Gradle scaffold; structure checked, never assembled
-- `awk` — rejects Result<T>
+- `awk` — rejects Result<T> and struct literals
 - `bash` — rejects Result<T>
 - `bat` — rejects struct literals
 - `c` — rejects Result<T>
@@ -387,6 +388,8 @@ go test -tags metrics ./...   # with Prometheus metrics enabled
 ```
 
 The end-to-end suite in `codegen/local_e2e_test.go` compiles the sample workspace and *executes* the result with real toolchains (Ruby, Lua, PHP, Java, …). Each language is skipped automatically when its toolchain is absent, so a partial local environment still yields a green run.
+
+`compiler/conformance_test.go` asks the harder question: not whether each backend produced *a* program, but whether they all produced the *same* one. It runs a corpus of examples with known output in every language a toolchain here can run, and compares stdout line by line. That is what one AST across forty-six targets has to mean, and it is how a range loop that iterated one step too far in eight backends — panicking in Go, `IndexError` in Python, `NaN` in JavaScript, while C and Lua printed the right answer — was finally visible.
 
 Importing the compiler as a library:
 

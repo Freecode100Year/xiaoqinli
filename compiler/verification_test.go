@@ -94,6 +94,15 @@ func TestCIInstallsEveryRequiredToolchain(t *testing.T) {
 		"rustc":   true,
 		"php":     true,
 		"ruby":    true,
+
+		// The conformance corpus runs in these too. All of them ship on
+		// ubuntu-latest, which is why that corpus costs one apt package.
+		"node": true,
+		"gcc":  true,
+		"g++":  true,
+		"perl": true,
+		"bash": true,
+		"gawk": true,
 	}
 	// What the workflow calls the thing it installs, when that differs from the
 	// executable name the test looks for.
@@ -108,6 +117,7 @@ func TestCIInstallsEveryRequiredToolchain(t *testing.T) {
 		"go":      "setup-go",
 		"lua":     "lua5.4",
 		"tsx":     "tsx",
+		"tclsh":   "tcl",
 	}
 
 	for _, tool := range RequiredToolchains() {
