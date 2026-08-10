@@ -15,6 +15,7 @@ func GenerateTcl(root ast.Node) ([]byte, error) {
 		varTypes: make(map[string]string),
 		funcRets: make(map[string]string),
 	}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -88,7 +89,21 @@ func GenerateTcl(root ast.Node) ([]byte, error) {
 		}
 	}
 
-	return []byte(g.buf.String()), nil
+	preamble := ""
+	if g.needIntDiv {
+		preamble = `proc _xql_idiv {a b} {
+    set q [expr {$a / $b}]
+    if {$q < 0 && $q * $b != $a} { incr q }
+    return $q
+}
+
+proc _xql_irem {a b} {
+    return [expr {$a - $b * [_xql_idiv $a $b]}]
+}
+
+`
+	}
+	return []byte(preamble + g.buf.String()), nil
 }
 
 type tclGen struct {
@@ -102,6 +117,12 @@ type tclGen struct {
 	// apart.
 	varTypes map[string]string
 	funcRets map[string]string
+
+	types *typeKinds
+
+	// needIntDiv records that the program divides or takes a remainder of two
+	// Ints, so the preamble has to define the helpers.
+	needIntDiv bool
 }
 
 // inferTypeKind reports the AST type kind of an expression. Int is the default
@@ -319,6 +340,7 @@ func (g *tclGen) emitMatchExpr(me *ast.MatchExpr) error {
 
 func (g *tclGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.writeIndent()
+	g.types.noteParams(fd)
 	g.write("proc " + fd.Name + " {")
 	for i, p := range fd.Params {
 		g.varTypes[p.Name] = p.Type.KindName
@@ -356,6 +378,7 @@ func (g *tclGen) emitReturn(rs *ast.ReturnStmt) error {
 
 func (g *tclGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.varTypes[vd.Name] = vd.Type.KindName
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write("set " + vd.Name + " ")
 	if vd.Value != nil {
@@ -538,6 +561,26 @@ func (g *tclGen) emitExprInline(n ast.Node) error {
 	case *ast.BinaryExpr:
 		if g.isStringConcat(node) {
 			return g.emitStringConcat(node)
+		}
+		// Tcl's `expr` floors its integer division and gives `%` the sign of
+		// the divisor: -7 / 2 is -4 and -7 % 2 is 1, where C and Go say -3
+		// and -1.
+		if g.types.isIntDivision(node) || g.types.isIntRemainder(node) {
+			g.needIntDiv = true
+			if node.Op == "%" {
+				g.write("[_xql_irem ")
+			} else {
+				g.write("[_xql_idiv ")
+			}
+			if err := g.emitExprInline(node.Left); err != nil {
+				return err
+			}
+			g.write(" ")
+			if err := g.emitExprInline(node.Right); err != nil {
+				return err
+			}
+			g.write("]")
+			return nil
 		}
 		g.write("[expr {")
 		if err := g.emitCondExpr(node); err != nil {

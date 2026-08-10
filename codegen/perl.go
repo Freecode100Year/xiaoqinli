@@ -67,13 +67,18 @@ func GeneratePerl(root ast.Node) ([]byte, error) {
 		}
 	}
 
-	return []byte(g.buf.String()), nil
+	preamble := ""
+	if g.needIntRem {
+		preamble = "sub _xql_irem { my ($x, $y) = @_; return $x - $y * int($x / $y); }\n\n"
+	}
+	return []byte(preamble + g.buf.String()), nil
 }
 
 type perlGen struct {
-	types  *typeKinds
-	buf    *strings.Builder
-	indent int
+	needIntRem bool
+	types      *typeKinds
+	buf        *strings.Builder
+	indent     int
 }
 
 func (g *perlGen) write(s string)   { g.buf.WriteString(s) }
@@ -374,6 +379,21 @@ func (g *perlGen) emitExpr(n ast.Node) error {
 		g.write("$" + node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Perl's `%` gives the sign of the right operand: -7 % 2 is 1, where C
+		// and Go say -1.
+		if g.types.isIntRemainder(node) {
+			g.needIntRem = true
+			g.write("_xql_irem(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(", ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		// Perl numbers are floats, so `int()` is what gives `7 / 2` the value 3.
 		if g.types.isIntDivision(node) {
 			g.write("int(")

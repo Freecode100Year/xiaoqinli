@@ -55,12 +55,13 @@ var expectedRejections = map[string][]string{
 	// tccli has no arithmetic, no comparisons, no arrays, no lambdas. It was
 	// accepting all of them and emitting shell that either printed blank lines
 	// or passed a minus sign as a command-line argument.
-	"collections.xql.json":    {"tccli"},
-	"loop.xql.json":           {"tccli"},
-	"int_arithmetic.xql.json": {"tccli"},
-	"string_compare.xql.json": {"tccli"},
-	"lambda_ifexpr.xql.json":  {"tccli"},
-	"example.xql.json":        {"tccli"},
+	"collections.xql.json":         {"tccli"},
+	"loop.xql.json":                {"tccli"},
+	"int_arithmetic.xql.json":      {"tccli"},
+	"negative_arithmetic.xql.json": {"tccli"},
+	"string_compare.xql.json":      {"tccli"},
+	"lambda_ifexpr.xql.json":       {"tccli"},
+	"example.xql.json":             {"tccli"},
 
 	// `break` is the construct that splits the matrix along a different line
 	// than Result does: a language without an early loop exit cannot fake one.

@@ -65,6 +65,14 @@ var conformanceExpect = map[string][]string{
 	// `"ab" + "c"` at all, that being pointer arithmetic on two char arrays.
 	"control_flow.xql.json":   {"21"},
 	"string_compare.xql.json": {"differ", "eq", "ne-ok"},
+
+	// -7/2, -7%2, 7/-2, 7%-2. The sign rules are a second divergence hiding
+	// behind the first: the languages that floor their division also give `%`
+	// the sign of the divisor, so Python, Ruby, Lua, Tcl and Perl answered -4
+	// and 1 where C, Go, Java, Rust, JavaScript, awk and bash answer -3 and
+	// -1. Truncation is the majority and now the rule; those five emit a
+	// helper rather than their native operator.
+	"negative_arithmetic.xql.json": {"-3", "-1", "-3", "1"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

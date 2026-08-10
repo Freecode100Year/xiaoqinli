@@ -12,6 +12,7 @@ import (
 func GenerateRuby(root ast.Node) ([]byte, error) {
 	strat := InspectCodegenStrategy("ruby")
 	g := &rbGen{buf: &strings.Builder{}, strat: strat, imports: make(map[string]bool)}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -127,14 +128,30 @@ func GenerateRuby(root ast.Node) ([]byte, error) {
 		}
 	}
 
-	return []byte(g.buf.String()), nil
+	preamble := ""
+	if g.needIntDiv {
+		preamble = `def _xql_idiv(a, b)
+  q = a / b
+  q += 1 if q < 0 && q * b != a
+  q
+end
+
+def _xql_irem(a, b)
+  a - b * _xql_idiv(a, b)
+end
+
+`
+	}
+	return []byte(preamble + g.buf.String()), nil
 }
 
 type rbGen struct {
-	buf     *strings.Builder
-	indent  int
-	strat   *CodegenStrategyConfig
-	imports map[string]bool
+	types      *typeKinds
+	needIntDiv bool
+	buf        *strings.Builder
+	indent     int
+	strat      *CodegenStrategyConfig
+	imports    map[string]bool
 }
 
 // stripImportAlias removes a leading import-alias qualifier from a symbol
@@ -284,6 +301,7 @@ func (g *rbGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *rbGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	g.write("def " + fd.Name)
 	if len(fd.Params) > 0 {
@@ -324,6 +342,7 @@ func (g *rbGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *rbGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write(vd.Name)
 	if vd.Value != nil {
@@ -471,6 +490,25 @@ func (g *rbGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Ruby's Integer#/ floors and its % takes the sign of the divisor, so
+		// -7 / 2 is -4 and -7 % 2 is 1 where C and Go say -3 and -1.
+		if g.types.isIntDivision(node) || g.types.isIntRemainder(node) {
+			g.needIntDiv = true
+			if node.Op == "%" {
+				g.write("_xql_irem(")
+			} else {
+				g.write("_xql_idiv(")
+			}
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(", ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err
