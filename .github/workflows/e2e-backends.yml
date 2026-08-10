@@ -75,6 +75,13 @@ jobs:
     - name: Setup tsx (TypeScript runner)
       run: npm install -g tsx
 
+    # The conformance corpus runs its programs in gcc, g++, node, perl, bash and
+    # gawk, all of which the image already has. tclsh is the one exception.
+    - name: Setup Tcl
+      run: |
+        sudo apt-get install -y tcl
+        echo 'puts [info patchlevel]' | tclsh
+
     # Check-only compilers for the compiled tier. These are the only tools in
     # that tier the runner image does not already provide, which is why the
     # tier stopped where it did until now.
@@ -93,7 +100,8 @@ jobs:
 
     - name: Report the toolchains this run will use
       run: |
-        for t in go python3 rustc tsx javac dotnet kotlinc swiftc dart zig php ruby lua julia; do
+        for t in go python3 rustc tsx javac dotnet kotlinc swiftc dart zig php ruby lua julia \
+                 node gcc g++ perl bash gawk tclsh; do
           printf '%-10s %s\n' "$t" "$(command -v "$t" || echo MISSING)"
         done
 
@@ -103,4 +111,4 @@ jobs:
     - name: Build and run the generated programs
       env:
         XQL_E2E_REQUIRE: '1'
-      run: go test -v ./compiler ./codegen -run 'TestLinkedPipeline|TestLocalE2E|TestCompiledTier' -count=1
+      run: go test -v ./compiler ./codegen -run 'TestLinkedPipeline|TestLocalE2E|TestCompiledTier|TestCrossTargetConformance' -count=1

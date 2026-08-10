@@ -157,8 +157,12 @@ func checkerArgs(args []string, file string) []string {
 }
 
 // TestCompiledTierMatchesRegistry keeps the table above and the published tier
-// in step, in both directions — a case added here without a registry change
-// would advertise less than it verifies, and the reverse would advertise more.
+// in step. A case here is a floor, not an equality: several targets are also
+// run by TestCrossTargetConformance and so are published as executed, while
+// their syntax check stays useful — it covers every example in the corpus,
+// including the ones with no assertable stdout. What must never happen is the
+// registry claiming *less* than this table checks, or claiming the compiled
+// tier with nothing here to produce it.
 func TestCompiledTierMatchesRegistry(t *testing.T) {
 	inTable := map[string]bool{}
 	for _, tc := range compiledTierCases {
@@ -168,8 +172,8 @@ func TestCompiledTierMatchesRegistry(t *testing.T) {
 			t.Errorf("compiledTierCases covers %q, which declares no verification at all", tc.target)
 			continue
 		}
-		if v.Tier != TierCompiled {
-			t.Errorf("compiledTierCases covers %q but the registry calls it %q; "+
+		if v.Tier < TierCompiled {
+			t.Errorf("compiledTierCases compiles %q with a real toolchain but the registry calls it %q; "+
 				"one of the two is out of date", tc.target, v.Tier)
 		}
 	}

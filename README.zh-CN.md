@@ -193,18 +193,19 @@ extern 不按模块划分命名空间：把一个平台的接口面声明一次�
 <!-- verification:begin -->
 | Evidence | Targets | What was checked |
 |---|---|---|
-| **executed** (14) | `csharp` `dart` `go` `java` `julia` `kotlin` `lua` `php` `py` `ruby` `rust` `swift` `ts` `zig` | compiled and run, stdout asserted |
-| **compiled** (14) | `awk` `bash` `c` `cpp` `crystal` `elixir` `fortran` `haskell` `js` `nim` `ocaml` `perl` `powershell` `tccli` | compiled by a real toolchain |
-| **smoke** (18) | `ada` `android` `bat` `chrome` `clojure` `d` `fsharp` `groovy` `ios` `mql4` `mql5` `objc` `pascal` `scala` `shortcut` `tcl` `v` `vala` | codegen returns output; never compiled |
+| **executed** (21) | `awk` `bash` `c` `cpp` `csharp` `dart` `go` `java` `js` `julia` `kotlin` `lua` `perl` `php` `py` `ruby` `rust` `swift` `tcl` `ts` `zig` | compiled and run, stdout asserted |
+| **compiled** (8) | `crystal` `elixir` `fortran` `haskell` `nim` `ocaml` `powershell` `tccli` | compiled by a real toolchain |
+| **smoke** (17) | `ada` `android` `bat` `chrome` `clojure` `d` `fsharp` `groovy` `ios` `mql4` `mql5` `objc` `pascal` `scala` `shortcut` `v` `vala` | codegen returns output; never compiled |
 
-CI installs 14 toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,
-so a missing one fails the run instead of skipping quietly.
+The executed tier needs 21 toolchains, which CI installs or inherits from the
+runner image, and it sets `XQL_E2E_REQUIRE=1` so a missing one fails the run
+instead of skipping quietly.
 
 Per-target caveats:
 
 - `ada` — rejects Result<T>
 - `android` — Gradle scaffold; structure checked, never assembled
-- `awk` — rejects Result<T>
+- `awk` — rejects Result<T> and struct literals
 - `bash` — rejects Result<T>
 - `bat` — rejects struct literals
 - `c` — rejects Result<T>
@@ -357,6 +358,8 @@ go test -tags metrics ./...   # 启用 Prometheus 指标
 ```
 
 `codegen/local_e2e_test.go` 中的端到端套件会编译示例工程并用**真实工具链实际运行**产物（Ruby、Lua、PHP、Java……）。缺少某语言工具链时会自动跳过，因此本地环境不全也能跑出全绿。
+
+`compiler/conformance_test.go` 问的是更难的那个问题：不是每个后端有没有生成**一个**程序，而是它们生成的是不是**同一个**程序。它拿一批输出已知的示例，在本机能跑的每种语言里实际运行，逐行比对 stdout。「一份 AST，46 个目标」只能是这个意思。八个后端的 range 循环多跑一轮——Go 里 panic、Python 里 `IndexError`、JavaScript 里 `NaN`，而 C 和 Lua 打印的是对的——正是靠它才终于暴露出来。
 
 以库的形式引入编译器：
 

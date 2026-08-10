@@ -95,13 +95,23 @@ var targetVerification = map[string]TargetVerification{
 	"lua":    {TierExecuted, "TestLocalE2EWorkspaceDogfood/Lua", "lua", ""},
 	"julia":  {TierExecuted, "TestLocalE2EWorkspaceDogfood/Julia", "julia", ""},
 
-	// Smoke only. Every one of these passes TestExampleTargetMatrix, so its
-	// codegen runs over the full example corpus without erroring or panicking
-	// — but no compiler for the language has ever seen the result.
+	// Executed by the conformance corpus rather than the workspace dogfood.
+	// None of these backends implements Result<T>, so the workspace refuses
+	// them, and until the corpus existed that left them unrun. Every one was
+	// wrong about something the moment its output was executed — see the header
+	// of conformance_test.go.
+	"js":   {TierExecuted, "TestCrossTargetConformance/js", "node", "rejects Result<T>"},
+	"c":    {TierExecuted, "TestCrossTargetConformance/c", "gcc", "rejects Result<T>"},
+	"cpp":  {TierExecuted, "TestCrossTargetConformance/cpp", "g++", "rejects Result<T>"},
+	"perl": {TierExecuted, "TestCrossTargetConformance/perl", "perl", "rejects Result<T>"},
+	"bash": {TierExecuted, "TestCrossTargetConformance/bash", "bash", "rejects Result<T>"},
+	"tcl":  {TierExecuted, "TestCrossTargetConformance/tcl", "tclsh", "rejects Result<T>"},
+	"awk":  {TierExecuted, "TestCrossTargetConformance/awk", "gawk", "rejects Result<T> and struct literals"},
 
-	"js":         {TierCompiled, "TestCompiledTier/js", "node", "rejects Result<T>"},
-	"cpp":        {TierCompiled, "TestCompiledTier/cpp", "g++", "rejects Result<T>"},
-	"c":          {TierCompiled, "TestCompiledTier/c", "gcc", "rejects Result<T>"},
+	// Compiled where a check-only toolchain exists, smoke where none does.
+	// A smoke entry means codegen ran over the full example corpus without
+	// erroring or panicking — and that no compiler for the language has ever
+	// seen the result.
 	"nim":        {TierCompiled, "TestCompiledTier/nim", "nim", "rejects Result<T>"},
 	"mql4":       {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>, maps, Option, for-each"},
 	"mql5":       {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>, maps, Option, for-each"},
@@ -110,16 +120,12 @@ var targetVerification = map[string]TargetVerification{
 	"ocaml":      {TierCompiled, "TestCompiledTier/ocaml", "ocamlc", "rejects Result<T>"},
 	"fsharp":     {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
 	"ada":        {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"awk":        {TierCompiled, "TestCompiledTier/awk", "gawk", "rejects Result<T>"},
-	"bash":       {TierCompiled, "TestCompiledTier/bash", "bash", "rejects Result<T>"},
 	"crystal":    {TierCompiled, "TestCompiledTier/crystal", "crystal", "rejects Result<T>"},
 	"d":          {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
 	"fortran":    {TierCompiled, "TestCompiledTier/fortran", "gfortran", "rejects for-each loops"},
 	"objc":       {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
 	"pascal":     {TierSmoke, "TestExampleTargetMatrix", "", "rejects for-each loops"},
-	"perl":       {TierCompiled, "TestCompiledTier/perl", "perl", "rejects Result<T>"},
 	"powershell": {TierCompiled, "TestCompiledTier/powershell", "pwsh", "rejects Result<T>"},
-	"tcl":        {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
 	"v":          {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
 	"elixir":     {TierCompiled, "TestCompiledTier/elixir", "elixir", "rejects Result<T>"},
 	"clojure":    {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
@@ -160,9 +166,10 @@ func RenderVerificationTable() string {
 	row(TierCompiled, compiled)
 	row(TierSmoke, smoke)
 
-	fmt.Fprintf(&b, "\nCI installs %d toolchains for the executed tier and sets `XQL_E2E_REQUIRE=1`,\n",
+	fmt.Fprintf(&b, "\nThe executed tier needs %d toolchains, which CI installs or inherits from the\n",
 		len(RequiredToolchains()))
-	b.WriteString("so a missing one fails the run instead of skipping quietly.\n\n")
+	b.WriteString("runner image, and it sets `XQL_E2E_REQUIRE=1` so a missing one fails the run\n")
+	b.WriteString("instead of skipping quietly.\n\n")
 
 	// Anything with a caveat is worth naming, whatever its tier.
 	var noted []string
