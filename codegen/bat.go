@@ -568,10 +568,51 @@ func (g *batGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	return nil
 }
 
+// precomputeArith writes a `set /a` for an argument that needs evaluating and
+// returns the delayed-expansion reference to read it back with. It returns ""
+// for anything `echo` can already print as-is — a literal, a variable, a
+// string concatenation — so the simple cases keep their simple output.
+func (g *batGen) precomputeArith(arg ast.Node) (string, error) {
+	// Only an operator expression needs this, and only a numeric one: a call
+	// already leaves its result in !_return!, which may well be a string, and
+	// `set /a` over a string yields 0. `println(greet("World"))` printed 0 the
+	// one time this was written the other way round.
+	be, ok := arg.(*ast.BinaryExpr)
+	if !ok || containsStringExpr(be) || containsCall(be) {
+		return "", nil
+	}
+	g.tmpID++
+	tmpVar := fmt.Sprintf("_out_%d", g.tmpID)
+	g.writeIndent()
+	g.write(fmt.Sprintf("set /a \"%s=", tmpVar))
+	if err := g.emitArithExpr(arg); err != nil {
+		return "", err
+	}
+	g.writeln("\"")
+	return "!" + tmpVar + "!", nil
+}
+
 func (g *batGen) emitCallStmt(ce *ast.CallExpr) error {
 	// Pre-emit any nested function calls.
 	if err := g.emitNestedCalls(ce); err != nil {
 		return err
+	}
+
+	// `echo` does not evaluate anything. An arithmetic argument has to be
+	// computed by `set /a` first, or the script prints the expression itself —
+	// `echo (a / b)` put the literal text "(a / b)" on stdout.
+	if len(ce.Args) > 0 && (ce.Callee == "println" || ce.Callee == "printf") {
+		if ref, err := g.precomputeArith(ce.Args[0]); err != nil {
+			return err
+		} else if ref != "" {
+			g.writeIndent()
+			if ce.Callee == "println" {
+				g.writeln("echo " + ref)
+			} else {
+				g.writeln("<nul set /p \"=" + ref + "\"")
+			}
+			return nil
+		}
 	}
 
 	g.writeIndent()
@@ -775,6 +816,11 @@ func (g *batGen) emitArithExpr(n ast.Node) error {
 			op = "&"
 		case "||":
 			op = "|"
+		case "%":
+			// Inside a batch file `%` starts a variable reference, so `set /a`
+			// needs it doubled. Undoubled, cmd swallowed the operator and the
+			// right operand with it.
+			op = "%%"
 		}
 		g.write(" " + op + " ")
 		if err := g.emitArithExpr(node.Right); err != nil {

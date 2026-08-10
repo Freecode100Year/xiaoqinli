@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -74,6 +75,13 @@ type conformanceRunner struct {
 	ext    string
 	tools  []string
 	steps  [][]string
+
+	// onlyOS restricts a runner to one GOOS. cmd.exe exists nowhere but
+	// Windows and CI is Linux, so such a runner can never be the evidence
+	// behind a published tier — it is a check for whoever develops on that
+	// platform, and TestConformanceRunnersAreExecutedTier exempts it from the
+	// executed-tier rule for exactly that reason.
+	onlyOS string
 }
 
 // conformanceRunners holds only targets whose stdout has been compared against
@@ -110,6 +118,13 @@ var conformanceRunners = []conformanceRunner{
 		steps: [][]string{{"{tool}", "-o", "{bin}", "{file}"}, {"{bin}"}}},
 	{target: "cpp", ext: ".cpp", tools: []string{"g++", "clang++"},
 		steps: [][]string{{"{tool}", "-o", "{bin}", "{file}"}, {"{bin}"}}},
+
+	// Windows only, and therefore never CI evidence — bat stays at the smoke
+	// tier. It is here because it is the only place the batch backend can be
+	// run at all, and running it found `echo (a / b)` putting that text on
+	// stdout: echo evaluates nothing, so arithmetic needs `set /a` first.
+	{target: "bat", ext: ".bat", tools: []string{"cmd"}, onlyOS: "windows",
+		steps: [][]string{{"{tool}", "/c", "{file}"}}},
 }
 
 func TestCrossTargetConformance(t *testing.T) {
@@ -129,7 +144,24 @@ func TestCrossTargetConformance(t *testing.T) {
 
 	for _, r := range conformanceRunners {
 		t.Run(r.target, func(t *testing.T) {
-			tool := e2e.FirstWorking(r.tools...)
+			tool := ""
+			if r.onlyOS != "" {
+				// A plain skip, not e2e.Missing: XQL_E2E_REQUIRE promises the
+				// toolchains a *published tier* needs, and this runner backs no
+				// tier. Failing CI over a missing cmd.exe on Linux would be
+				// demanding evidence nobody claimed.
+				if runtime.GOOS != r.onlyOS {
+					t.Skipf("%s runs only on %s, and this is %s", r.target, r.onlyOS, runtime.GOOS)
+				}
+				for _, name := range r.tools {
+					if _, err := exec.LookPath(name); err == nil {
+						tool = name
+						break
+					}
+				}
+			} else {
+				tool = e2e.FirstWorking(r.tools...)
+			}
 			if tool == "" {
 				e2e.Missing(t, "none of %v is on PATH, so %s was generated but never run",
 					r.tools, r.target)
@@ -233,6 +265,16 @@ func errWithOutput(err error, out []byte) error {
 // alone would overstate it.
 func TestConformanceRunnersAreExecutedTier(t *testing.T) {
 	for _, r := range conformanceRunners {
+		if r.onlyOS != "" {
+			// CI is Linux. A runner that cannot run there produces no evidence
+			// for the published tier, whatever it proves on a developer's
+			// machine, so the registry must not have been raised on its account.
+			if v, ok := VerificationFor(r.target); ok && v.Tier == TierExecuted {
+				t.Errorf("%s is only run on %s, which CI is not, so it cannot be published as executed",
+					r.target, r.onlyOS)
+			}
+			continue
+		}
 		v, ok := VerificationFor(r.target)
 		if !ok {
 			t.Errorf("conformanceRunners covers %q, which declares no verification at all", r.target)
