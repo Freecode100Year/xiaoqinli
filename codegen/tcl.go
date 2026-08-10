@@ -10,11 +10,23 @@ import (
 // GenerateTcl produces Tcl source code from the given typed AST.
 // The "main" function's body is emitted at top level after proc definitions.
 func GenerateTcl(root ast.Node) ([]byte, error) {
-	g := &tclGen{buf: &strings.Builder{}}
+	g := &tclGen{
+		buf:      &strings.Builder{},
+		varTypes: make(map[string]string),
+		funcRets: make(map[string]string),
+	}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	// Collected before any body is walked: a call can name a proc declared
+	// further down the file.
+	for _, d := range prog.Decls {
+		if fd, ok := d.(*ast.FunctionDecl); ok {
+			g.funcRets[fd.Name] = fd.ReturnType.KindName
+		}
 	}
 
 	first := true
@@ -82,6 +94,120 @@ func GenerateTcl(root ast.Node) ([]byte, error) {
 type tclGen struct {
 	buf    *strings.Builder
 	indent int
+
+	// `expr` is Tcl's only arithmetic context and it is strictly numeric, so a
+	// `+` over strings has to be routed to concatenation instead — otherwise
+	// `expr {"Hello, " + $name}` aborts with "can't use non-numeric string as
+	// operand". These maps carry just enough type information to tell the two
+	// apart.
+	varTypes map[string]string
+	funcRets map[string]string
+}
+
+// inferTypeKind reports the AST type kind of an expression. Int is the default
+// because everything Tcl does inside `expr` is arithmetic.
+func (g *tclGen) inferTypeKind(n ast.Node) string {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return node.ValueType
+	case *ast.Ident:
+		if t, ok := g.varTypes[node.Name]; ok {
+			return t
+		}
+		return "Int"
+	case *ast.CallExpr:
+		if node.Callee == "sprintf" {
+			return "String"
+		}
+		if rt, ok := g.funcRets[node.Callee]; ok {
+			return rt
+		}
+		return "Int"
+	case *ast.BinaryExpr:
+		if node.Op == "+" && (g.inferTypeKind(node.Left) == "String" || g.inferTypeKind(node.Right) == "String") {
+			return "String"
+		}
+		switch node.Op {
+		case "==", "!=", "<", ">", "<=", ">=", "&&", "||":
+			return "Bool"
+		}
+		return g.inferTypeKind(node.Left)
+	case *ast.UnaryExpr:
+		if node.Op == "!" {
+			return "Bool"
+		}
+		return g.inferTypeKind(node.Operand)
+	default:
+		return ""
+	}
+}
+
+// isStringConcat reports whether a `+` joins strings rather than numbers.
+func (g *tclGen) isStringConcat(be *ast.BinaryExpr) bool {
+	return be.Op == "+" &&
+		(g.inferTypeKind(be.Left) == "String" || g.inferTypeKind(be.Right) == "String")
+}
+
+// emitStringConcat writes a string-valued `+` as a quoted Tcl word with each
+// operand substituted into it.
+func (g *tclGen) emitStringConcat(be *ast.BinaryExpr) error {
+	g.write("\"")
+	if err := g.emitInterpolated(be.Left); err != nil {
+		return err
+	}
+	if err := g.emitInterpolated(be.Right); err != nil {
+		return err
+	}
+	g.write("\"")
+	return nil
+}
+
+// emitInterpolated writes an expression as it must appear inside a quoted word:
+// bare text, a `${var}` substitution, or a `[...]` command substitution. The
+// quoted forms emitExprInline produces would close the word being built.
+func (g *tclGen) emitInterpolated(n ast.Node) error {
+	switch node := n.(type) {
+	case *ast.Literal:
+		if node.ValueType == "String" {
+			s, _ := node.Value.(string)
+			g.write(tclEscapeInQuotes(s))
+			return nil
+		}
+		return g.emitLiteral(node)
+	case *ast.Ident:
+		g.write("${" + node.Name + "}")
+		return nil
+	case *ast.BinaryExpr:
+		if g.isStringConcat(node) {
+			if err := g.emitInterpolated(node.Left); err != nil {
+				return err
+			}
+			return g.emitInterpolated(node.Right)
+		}
+		g.write("[expr {")
+		if err := g.emitCondExpr(node); err != nil {
+			return err
+		}
+		g.write("}]")
+		return nil
+	default:
+		// Everything else already emits as a bracketed command substitution,
+		// which is exactly what a quoted word wants.
+		return g.emitExprInline(n)
+	}
+}
+
+// tclEscapeInQuotes escapes the characters Tcl still substitutes inside a
+// double-quoted word.
+func tclEscapeInQuotes(s string) string {
+	r := strings.NewReplacer(
+		`\`, `\\`,
+		`"`, `\"`,
+		"$", `\$`,
+		"[", `\[`,
+		"]", `\]`,
+	)
+	return r.Replace(s)
 }
 
 func (g *tclGen) write(s string)   { g.buf.WriteString(s) }
@@ -195,6 +321,7 @@ func (g *tclGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.writeIndent()
 	g.write("proc " + fd.Name + " {")
 	for i, p := range fd.Params {
+		g.varTypes[p.Name] = p.Type.KindName
 		if i > 0 {
 			g.write(" ")
 		}
@@ -228,6 +355,7 @@ func (g *tclGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *tclGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.varTypes[vd.Name] = vd.Type.KindName
 	g.writeIndent()
 	g.write("set " + vd.Name + " ")
 	if vd.Value != nil {
@@ -408,6 +536,9 @@ func (g *tclGen) emitExprInline(n ast.Node) error {
 		g.write("$" + node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		if g.isStringConcat(node) {
+			return g.emitStringConcat(node)
+		}
 		g.write("[expr {")
 		if err := g.emitCondExpr(node); err != nil {
 			return err

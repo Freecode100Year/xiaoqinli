@@ -10,11 +10,23 @@ import (
 // GenerateBash produces Bash shell script source code from the given typed AST.
 // The "main" function's body is emitted at top level after function definitions.
 func GenerateBash(root ast.Node) ([]byte, error) {
-	g := &bashGen{buf: &strings.Builder{}}
+	g := &bashGen{
+		buf:      &strings.Builder{},
+		varTypes: make(map[string]string),
+		funcRets: make(map[string]string),
+	}
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
 		return nil, fmt.Errorf("XQL_E401: top-level node must be Program")
+	}
+
+	// Return types are needed before any body is walked: a call can appear in
+	// an expression whose function is declared further down the file.
+	for _, d := range prog.Decls {
+		if fd, ok := d.(*ast.FunctionDecl); ok {
+			g.funcRets[fd.Name] = fd.ReturnType.KindName
+		}
 	}
 
 	g.writeln("#!/bin/bash")
@@ -72,6 +84,58 @@ type bashGen struct {
 	buf    *strings.Builder
 	indent int
 	inFunc bool
+
+	// Bash has one data type, the string, and `$(( ))` reads whatever is inside
+	// it as arithmetic. Telling a string apart from a number is therefore not a
+	// nicety here — `"Hello, " + name` compiled into an arithmetic expansion
+	// evaluates to 0. These two maps are the only type information the backend
+	// needs to route `+` to concatenation instead.
+	varTypes map[string]string
+	funcRets map[string]string
+}
+
+// inferTypeKind reports the AST type kind of an expression, defaulting to Int
+// because arithmetic is the safe assumption for everything bash does with $(( )).
+func (g *bashGen) inferTypeKind(n ast.Node) string {
+	switch node := n.(type) {
+	case *ast.Literal:
+		return node.ValueType
+	case *ast.Ident:
+		if t, ok := g.varTypes[node.Name]; ok {
+			return t
+		}
+		return "Int"
+	case *ast.CallExpr:
+		if node.Callee == "sprintf" {
+			return "String"
+		}
+		if rt, ok := g.funcRets[node.Callee]; ok {
+			return rt
+		}
+		return "Int"
+	case *ast.BinaryExpr:
+		if node.Op == "+" && (g.inferTypeKind(node.Left) == "String" || g.inferTypeKind(node.Right) == "String") {
+			return "String"
+		}
+		switch node.Op {
+		case "==", "!=", "<", ">", "<=", ">=", "&&", "||":
+			return "Bool"
+		}
+		return g.inferTypeKind(node.Left)
+	case *ast.UnaryExpr:
+		if node.Op == "!" {
+			return "Bool"
+		}
+		return g.inferTypeKind(node.Operand)
+	default:
+		return ""
+	}
+}
+
+// isStringConcat reports whether a `+` joins strings rather than numbers.
+func (g *bashGen) isStringConcat(be *ast.BinaryExpr) bool {
+	return be.Op == "+" &&
+		(g.inferTypeKind(be.Left) == "String" || g.inferTypeKind(be.Right) == "String")
 }
 
 func (g *bashGen) write(s string)   { g.buf.WriteString(s) }
@@ -184,6 +248,7 @@ func (g *bashGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.inFunc = true
 	// Assign parameters from positional args.
 	for i, p := range fd.Params {
+		g.varTypes[p.Name] = p.Type.KindName
 		g.writeIndent()
 		g.writeln(fmt.Sprintf("local %s=\"$%d\"", p.Name, i+1))
 	}
@@ -214,9 +279,25 @@ func (g *bashGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *bashGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.varTypes[vd.Name] = vd.Type.KindName
 	g.writeIndent()
-	if g.inFunc {
+
+	// A struct becomes an associative array, and bash only treats `([k]=v)` as
+	// one if the name was declared associative first. Without the -A the
+	// subscripts are evaluated as arithmetic — every field name resolves to 0,
+	// so `([x]=3 [y]=5)` collapses into a single element and both fields read
+	// back as 5.
+	assoc := false
+	if _, ok := vd.Value.(*ast.StructLit); ok {
+		assoc = true
+	}
+	switch {
+	case g.inFunc && assoc:
+		g.write("local -A ")
+	case g.inFunc:
 		g.write("local ")
+	case assoc:
+		g.write("declare -A ")
 	}
 	g.write(vd.Name + "=")
 	if vd.Value != nil {
@@ -441,6 +522,9 @@ func (g *bashGen) emitExpr(n ast.Node) error {
 		g.write("\"${" + node.Name + "}\"")
 		return nil
 	case *ast.BinaryExpr:
+		if g.isStringConcat(node) {
+			return g.emitStringConcat(node)
+		}
 		g.write("$(( ")
 		if err := g.emitArithExpr(node); err != nil {
 			return err
@@ -504,6 +588,100 @@ func (g *bashGen) emitIfExpr(ie *ast.IfExpr) error {
 
 func (g *bashGen) emitLambda(lam *ast.Lambda) error {
 	return fmt.Errorf("XQL_E401: Bash does not support Lambda expressions")
+}
+
+// emitStringConcat writes a string-valued `+` as bash concatenation: one pair
+// of double quotes with every operand expanded inside it.
+func (g *bashGen) emitStringConcat(be *ast.BinaryExpr) error {
+	g.write("\"")
+	if err := g.emitInterpolated(be.Left); err != nil {
+		return err
+	}
+	if err := g.emitInterpolated(be.Right); err != nil {
+		return err
+	}
+	g.write("\"")
+	return nil
+}
+
+// emitInterpolated writes an expression as it must appear *inside* double
+// quotes. That rules out the quoted forms emitExpr produces — a `"` there would
+// close the string being built — so every case here expands to bare text, a
+// parameter expansion, or a command substitution.
+func (g *bashGen) emitInterpolated(n ast.Node) error {
+	switch node := n.(type) {
+	case *ast.Literal:
+		if node.ValueType == "String" {
+			s, _ := node.Value.(string)
+			g.write(bashEscapeInDoubleQuotes(s))
+			return nil
+		}
+		return g.emitLiteralRaw(node)
+	case *ast.Ident:
+		g.write("${" + node.Name + "}")
+		return nil
+	case *ast.MemberExpr:
+		ident, ok := node.Object.(*ast.Ident)
+		if !ok {
+			return fmt.Errorf("XQL_E401: Bash member access requires simple identifier as object")
+		}
+		g.write("${" + ident.Name + "[" + node.Field + "]}")
+		return nil
+	case *ast.IndexExpr:
+		ident, ok := node.Target.(*ast.Ident)
+		if !ok {
+			return fmt.Errorf("XQL_E401: Bash index access requires simple identifier as target")
+		}
+		g.write("${" + ident.Name + "[")
+		if err := g.emitExprUnquoted(node.Index); err != nil {
+			return err
+		}
+		g.write("]}")
+		return nil
+	case *ast.BinaryExpr:
+		if g.isStringConcat(node) {
+			if err := g.emitInterpolated(node.Left); err != nil {
+				return err
+			}
+			return g.emitInterpolated(node.Right)
+		}
+		g.write("$(( ")
+		if err := g.emitArithExpr(node); err != nil {
+			return err
+		}
+		g.write(" ))")
+		return nil
+	case *ast.CallExpr:
+		// A command substitution starts a fresh quoting context, so the quotes
+		// emitExpr puts around the arguments are safe in here.
+		callee := node.Callee
+		if callee == "sprintf" {
+			callee = "printf"
+		}
+		g.write("$(" + callee)
+		for _, arg := range node.Args {
+			g.write(" ")
+			if err := g.emitExpr(arg); err != nil {
+				return err
+			}
+		}
+		g.write(")")
+		return nil
+	default:
+		return fmt.Errorf("XQL_E401: unsupported expression %s in string concatenation", n.Kind())
+	}
+}
+
+// bashEscapeInDoubleQuotes escapes the four characters bash still interprets
+// between double quotes.
+func bashEscapeInDoubleQuotes(s string) string {
+	r := strings.NewReplacer(
+		`\`, `\\`,
+		`"`, `\"`,
+		"$", `\$`,
+		"`", "\\`",
+	)
+	return r.Replace(s)
 }
 
 // emitArithExpr writes an expression inside $(( )) arithmetic context.
