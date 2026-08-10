@@ -84,6 +84,11 @@ type conformanceRunner struct {
 	tools  []string
 	steps  [][]string
 
+	// probe replaces the --version / version handshake FirstWorking uses. lua
+	// answers -v and errors on --version, so without this it looks absent on a
+	// runner that has it.
+	probe []string
+
 	// onlyOS restricts a runner to one GOOS. cmd.exe exists nowhere but
 	// Windows and CI is Linux, so such a runner can never be the evidence
 	// behind a published tier — it is a check for whoever develops on that
@@ -121,6 +126,19 @@ var conformanceRunners = []conformanceRunner{
 	// ships pwsh, which does, so CI runs it.
 	{target: "powershell", ext: ".ps1", tools: []string{"pwsh", "powershell"},
 		steps: [][]string{{"{tool}", "-NoProfile", "-NonInteractive", "-File", "{file}"}}},
+
+	// ruby, lua, php and julia were executed-tier already, but only through the
+	// dogfood workspace — which has no arithmetic in it at all. Their integer
+	// division was changed twice with nothing running the result. lua needs its
+	// own probe: it answers -v and errors on --version.
+	{target: "ruby", ext: ".rb", tools: []string{"ruby"},
+		steps: [][]string{{"{tool}", "{file}"}}},
+	{target: "lua", ext: ".lua", tools: []string{"lua", "lua5.4"}, probe: []string{"-v"},
+		steps: [][]string{{"{tool}", "{file}"}}},
+	{target: "php", ext: ".php", tools: []string{"php"},
+		steps: [][]string{{"{tool}", "{file}"}}},
+	{target: "julia", ext: ".jl", tools: []string{"julia"},
+		steps: [][]string{{"{tool}", "{file}"}}},
 
 	{target: "c", ext: ".c", tools: []string{"gcc", "clang"},
 		steps: [][]string{{"{tool}", "-o", "{bin}", "{file}"}, {"{bin}"}}},
@@ -163,6 +181,17 @@ func TestCrossTargetConformance(t *testing.T) {
 				}
 				for _, name := range r.tools {
 					if _, err := exec.LookPath(name); err == nil {
+						tool = name
+						break
+					}
+				}
+			} else if len(r.probe) > 0 {
+				for _, name := range r.tools {
+					path, err := exec.LookPath(name)
+					if err != nil {
+						continue
+					}
+					if exec.Command(path, r.probe...).Run() == nil {
 						tool = name
 						break
 					}
