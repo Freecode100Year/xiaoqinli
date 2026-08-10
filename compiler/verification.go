@@ -123,7 +123,7 @@ var targetVerification = map[string]TargetVerification{
 	"haskell":  {TierCompiled, "TestCompiledTier/haskell", "ghc", "rejects Result<T>"},
 	"ocaml":    {TierCompiled, "TestCompiledTier/ocaml", "ocamlc", "rejects Result<T>"},
 	"fsharp":   {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"ada":      {TierCompiled, "TestCompiledTier/ada", "gnatmake", "rejects Result<T>"},
+	"ada":      {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>; gnat also rejects the generated source — see compiled_tier_test.go"},
 	"crystal":  {TierCompiled, "TestCompiledTier/crystal", "crystal", "rejects Result<T>"},
 	"d":        {TierCompiled, "TestCompiledTier/d", "gdc", "rejects Result<T>"},
 	"fortran":  {TierCompiled, "TestCompiledTier/fortran", "gfortran", "rejects for-each loops"},

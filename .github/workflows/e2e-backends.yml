@@ -100,10 +100,9 @@ jobs:
 
     # Five backends were smoke-only for want of a compiler, not for want of a
     # way to check them. All five are in apt.
-    - name: Setup check-only compilers (ada, d, pascal, vala, groovy)
+    - name: Setup check-only compilers (d, pascal, vala, groovy)
       run: |
-        sudo apt-get install -y gnat gdc fp-compiler valac groovy
-        gnatmake --version | head -1
+        sudo apt-get install -y gdc fp-compiler valac groovy
         gdc --version | head -1
         fpc -iV
         valac --version
