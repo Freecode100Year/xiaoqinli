@@ -524,7 +524,7 @@ func (g *swGen) emitFor(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("...")
+		g.write("..<")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}

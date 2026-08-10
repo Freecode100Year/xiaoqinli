@@ -414,12 +414,12 @@ func (g *rsGen) emitForStmt(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		// for i in start..=end {
+		// for i in start..end {
 		g.write("for " + fs.Var + " in ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
-		g.write("..=")
+		g.write("..")
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}

@@ -59,3 +59,34 @@
 `TestNoBackendFakesResultSupport` 会对每个后端提同一个问题：输出里引用了 `Result`，那么输出里定义 `Result` 了吗？
 只有 `rust`（标准库自带）和 `zig`（生成独立的 `result.zig`）被豁免，且两者都在 executed 层——它们的程序在 CI 里真的
 编译、运行并核对了 stdout。
+
+---
+
+## `ForStmt` 的 range 形式在九个后端曾多跑一轮
+
+**改成什么：** `go` `rust` `ts` `js` `py` `java` `csharp` `swift`（以及 `ios`、`android` 两个脚手架）生成的
+range 循环由闭区间改为半开区间。`kotlin` 之前生成的 `for (i in 0L <= 5L)` 根本不是区间，改为 `until`。
+
+| 目标 | 之前 | 现在 |
+|---|---|---|
+| `go` | `for i := 0; i <= 5; i++` | `for i := 0; i < 5; i++` |
+| `rust` | `for i in 0..=5` | `for i in 0..5` |
+| `ts` `js` | `for (let i = 0; i <= 5; i++)` | `for (let i = 0; i < 5; i++)` |
+| `py` | `range(0, (5) + 1)` | `range(0, 5)` |
+| `java` `csharp` | `for (long i = 0L; i <= 5L; i++)` | `... i < 5L ...` |
+| `swift` `ios` | `for i in 0...5` | `for i in 0..<5` |
+| `kotlin` `android` | `for (i in 0L <= 5L)` / `for (i in 0L..5L)` | `for (i in 0L until 5L)` |
+
+**为什么：** `ast/nodes.go` 一直把 range 定义为**不含** `end`，另外 23 个后端也是这么实现的。这九个不是。
+仓库自带的 `examples/loop.xql.json` 对一个五元素数组求和，正确答案是 15——它在 Go 里 panic，在 Python 里
+`IndexError`，在 JavaScript 里打印 `NaN`，而在 C、Lua、Perl、Tcl 里打印 15。同一份 AST，两种语义。
+
+其中八个属于 executed 层。它们跑的 dogfood 工程里没有 range 循环，断言又只检查 stdout 是否**包含**两个名字，
+所以这件事一直没被看见。
+
+**需要你做什么：** 如果你的 AST 是照着上述某个后端的实际行为（而不是照着 range 的定义）写的——比如为了迭代
+`0..n` 而把 `end` 写成 `n - 1`——把 `end` 改回 `n`。按定义写的 AST 不受影响，只是终于在这九个目标上也对了。
+
+**未变：** `each` 形式、错误码、退出码。
+
+`TestCrossTargetConformance` 现在用九种语言真的运行这批示例并逐行核对 stdout，这条语义不会再各说各话。
