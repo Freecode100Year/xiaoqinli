@@ -98,6 +98,17 @@ jobs:
         curl -fsSL https://crystal-lang.org/install.sh | sudo bash
         crystal --version
 
+    # Five backends were smoke-only for want of a compiler, not for want of a
+    # way to check them. All five are in apt.
+    - name: Setup check-only compilers (ada, d, pascal, vala, groovy)
+      run: |
+        sudo apt-get install -y gnat gdc fp-compiler valac groovy
+        gnatmake --version | head -1
+        gdc --version | head -1
+        fpc -iV
+        valac --version
+        groovyc --version | head -1
+
     - name: Report the toolchains this run will use
       run: |
         for t in go python3 rustc tsx javac dotnet kotlinc swiftc dart zig php ruby lua julia \

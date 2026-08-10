@@ -180,6 +180,11 @@ func (g *pascalGen) emitMainBlock(fd *ast.FunctionDecl, prog *ast.Program) error
 	}
 
 	g.writeln("program Main;")
+	// The backend assigns to `Result` inside functions, which only exists in
+	// Object Pascal / Delphi mode — fpc's default mode has no such identifier
+	// and rejects the assignment. {$H+} makes String an AnsiString, so a
+	// string is not silently truncated to 255 characters.
+	g.writeln("{$mode objfpc}{$H+}")
 	if g.needIfThen {
 		g.writeln("uses StrUtils, Math;")
 	}

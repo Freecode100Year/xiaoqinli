@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted inside a `procedure Main is begin ... end Main;` block.
 func GenerateAda(root ast.Node) ([]byte, error) {
 	g := &adaGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -23,7 +24,14 @@ func GenerateAda(root ast.Node) ([]byte, error) {
 	header.WriteString("with Ada.Integer_Text_IO; use Ada.Integer_Text_IO;\n")
 	header.WriteString("\n")
 
-	// Emit type declarations (structs and enums).
+	// Everything goes inside `procedure Main`. An Ada source file holds exactly
+	// one library unit, so emitting `function greet ...` beside `procedure Main`
+	// is not a stylistic choice — gnat rejects the file. Types and helper
+	// subprograms belong in Main's declarative part, which is also where Ada
+	// expects locally-used declarations to live.
+	g.writeln("procedure Main is")
+	g.indent++
+
 	for _, d := range prog.Decls {
 		switch node := d.(type) {
 		case *ast.StructDecl:
@@ -39,7 +47,6 @@ func GenerateAda(root ast.Node) ([]byte, error) {
 		}
 	}
 
-	// Emit non-main functions/procedures.
 	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name == "main" {
@@ -51,13 +58,12 @@ func GenerateAda(root ast.Node) ([]byte, error) {
 		g.writeln("")
 	}
 
-	// Emit main procedure.
 	for _, d := range prog.Decls {
 		fd, ok := d.(*ast.FunctionDecl)
 		if !ok || fd.Name != "main" {
 			continue
 		}
-		if err := g.emitMainBlock(fd); err != nil {
+		if err := g.emitMainBody(fd); err != nil {
 			return nil, err
 		}
 	}
@@ -66,6 +72,7 @@ func GenerateAda(root ast.Node) ([]byte, error) {
 }
 
 type adaGen struct {
+	types  *typeKinds
 	buf    *strings.Builder
 	indent int
 }
@@ -100,20 +107,16 @@ func typeToAda(t ast.TypeExpr) string {
 	}
 }
 
-func (g *adaGen) emitMainBlock(fd *ast.FunctionDecl) error {
-	g.writeln("procedure Main is")
-
-	// Collect and emit variable declarations.
-	vars := collectVarDecls(fd.Body)
-	if len(vars) > 0 {
-		g.indent++
-		for _, vd := range vars {
-			g.writeIndent()
-			g.writeln(vd.Name + " : " + typeToAda(vd.Type) + ";")
-		}
-		g.indent--
+// emitMainBody writes Main's own variables and its statement part. The
+// `procedure Main is` line and the declarations before it are written by
+// GenerateAda, which owns the whole unit.
+func (g *adaGen) emitMainBody(fd *ast.FunctionDecl) error {
+	for _, vd := range collectVarDecls(fd.Body) {
+		g.writeIndent()
+		g.writeln(vd.Name + " : " + typeToAda(vd.Type) + ";")
 	}
 
+	g.indent--
 	g.writeln("begin")
 	g.indent++
 	for _, stmt := range fd.Body {
@@ -182,6 +185,7 @@ func (g *adaGen) emitEnumDecl(ed *ast.EnumDecl) error {
 }
 
 func (g *adaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	rt := typeToAda(fd.ReturnType)
 	isProcedure := rt == ""
 
@@ -243,6 +247,7 @@ func (g *adaGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *adaGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	// Variable declaration is in the declaration section; here we only emit the assignment if there is a value.
 	if vd.Value != nil {
 		g.writeIndent()
@@ -529,6 +534,17 @@ func adaIsStringExpr(n ast.Node) bool {
 	return false
 }
 
+// isStringExpr adds what adaIsStringExpr cannot see on its own: the declared
+// return type of a call. `Put_Line(Long_Integer'Image(greet("World")))` was the
+// result of not knowing greet returns a String — 'Image over a String does not
+// compile.
+func (g *adaGen) isStringExpr(n ast.Node) bool {
+	if adaIsStringExpr(n) {
+		return true
+	}
+	return g.types.kindOf(n) == "String"
+}
+
 func (g *adaGen) emitCall(ce *ast.CallExpr) error {
 	switch ce.Callee {
 	case "println":
@@ -537,7 +553,7 @@ func (g *adaGen) emitCall(ce *ast.CallExpr) error {
 			return nil
 		}
 		arg := ce.Args[0]
-		if adaIsStringExpr(arg) {
+		if g.isStringExpr(arg) {
 			g.write("Put_Line(")
 			if err := g.emitExpr(arg); err != nil {
 				return err
