@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted at top level after function definitions.
 func GeneratePowerShell(root ast.Node) ([]byte, error) {
 	g := &psGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -80,6 +81,7 @@ func GeneratePowerShell(root ast.Node) ([]byte, error) {
 }
 
 type psGen struct {
+	types  *typeKinds
 	buf    *strings.Builder
 	indent int
 }
@@ -211,6 +213,7 @@ func (g *psGen) emitMatchExpr(me *ast.MatchExpr) error {
 }
 
 func (g *psGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	g.write("function " + fd.Name + " {")
 	g.writeln("")
@@ -252,6 +255,7 @@ func (g *psGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *psGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write("$" + vd.Name)
 	if vd.Value != nil {
@@ -379,6 +383,21 @@ func (g *psGen) emitExpr(n ast.Node) error {
 		g.write("$" + node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// PowerShell's `/` yields a Double, and casting the result to [int]
+		// would round half to even (7/2 -> 4). Truncate is the one that agrees
+		// with the other targets.
+		if g.types.isIntDivision(node) {
+			g.write("[long][math]::Truncate(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(" / ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

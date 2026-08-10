@@ -276,6 +276,21 @@ func (*MatchExpr) Kind() string { return "MatchExpr" }
 // --- Expressions ---
 
 // BinaryExpr represents a binary operation.
+//
+// `/` between two Ints is integer division, truncating toward zero: 7 / 2 is 3.
+// Saying so is not pedantry. Roughly a third of the target languages make `/`
+// float division — Python, JavaScript, Perl, awk, Lua, PHP, Julia, Dart,
+// Elixir, Groovy and PowerShell — and Haskell and Zig refuse `/` on integers
+// altogether. A backend that passes the operator straight through inherits
+// whichever meaning its language happens to have, and `7 / 2` printed both 3
+// and 3.5 across the matrix until each of those emitted its language's integer
+// division instead.
+//
+// Truncation is the majority rule (C, Go, Java, Rust, Swift, and the div/quot
+// functions the rest reach for). Three backends floor instead, which differs
+// only when exactly one operand is negative: py and lua use `//`, and ruby's
+// `/` floors natively. That gap is not covered by the conformance corpus and
+// should be treated as unspecified rather than as working.
 type BinaryExpr struct {
 	Op    string
 	Left  Node

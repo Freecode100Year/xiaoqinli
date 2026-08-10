@@ -11,6 +11,7 @@ import (
 // All code is wrapped in a BEGIN { ... } block.
 func GenerateAwk(root ast.Node) ([]byte, error) {
 	g := &awkGen{buf: &strings.Builder{}, funcBuf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -84,6 +85,7 @@ func GenerateAwk(root ast.Node) ([]byte, error) {
 }
 
 type awkGen struct {
+	types   *typeKinds
 	buf     *strings.Builder
 	funcBuf *strings.Builder
 	indent  int
@@ -198,6 +200,7 @@ func (g *awkGen) emitMatchExpr(me *ast.MatchExpr) error {
 }
 
 func (g *awkGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	g.write("function " + fd.Name + "(")
 	for i, p := range fd.Params {
@@ -234,6 +237,7 @@ func (g *awkGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *awkGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	if al, ok := vd.Value.(*ast.ArrayLit); ok {
 		for i, elem := range al.Elements {
 			g.writeIndent()
@@ -371,6 +375,19 @@ func (g *awkGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// awk has one numeric type and it is a double, so `7 / 2` is 3.5.
+		if g.types.isIntDivision(node) {
+			g.write("int(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(" / ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

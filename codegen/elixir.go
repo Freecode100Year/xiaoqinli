@@ -11,6 +11,7 @@ import (
 // The "main" function's body is wrapped in a Main module.
 func GenerateElixir(root ast.Node) ([]byte, error) {
 	g := &exGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -88,6 +89,7 @@ func GenerateElixir(root ast.Node) ([]byte, error) {
 }
 
 type exGen struct {
+	types       *typeKinds
 	buf         *strings.Builder
 	indent      int
 	needSprintf bool
@@ -170,6 +172,7 @@ func (g *exGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *exGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	g.write("def " + fd.Name + "(")
 	for i, p := range fd.Params {
@@ -205,6 +208,7 @@ func (g *exGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *exGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write(vd.Name)
 	if vd.Value != nil {
@@ -429,6 +433,21 @@ func (g *exGen) emitBinaryExpr(be *ast.BinaryExpr) error {
 	op := be.Op
 	// Map operators to Elixir equivalents
 	switch op {
+	case "/":
+		// Elixir's `/` always returns a float; div/2 is integer division.
+		if !g.types.isIntDivision(be) {
+			break
+		}
+		g.write("div(")
+		if err := g.emitExpr(be.Left); err != nil {
+			return err
+		}
+		g.write(", ")
+		if err := g.emitExpr(be.Right); err != nil {
+			return err
+		}
+		g.write(")")
+		return nil
 	case "%":
 		op = "rem"
 		// rem(a, b) form

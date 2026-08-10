@@ -12,6 +12,7 @@ import (
 func GeneratePython(root ast.Node) ([]byte, error) {
 	strat := InspectCodegenStrategy("py")
 	g := &pyGen{buf: &strings.Builder{}, strat: strat}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -83,6 +84,7 @@ func GeneratePython(root ast.Node) ([]byte, error) {
 }
 
 type pyGen struct {
+	types         *typeKinds
 	buf           *strings.Builder
 	indent        int
 	needDataclass bool
@@ -258,6 +260,7 @@ func (g *pyGen) emitMatchExpr(me *ast.MatchExpr) error {
 }
 
 func (g *pyGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	g.write("def " + fd.Name + "(")
 	for i, p := range fd.Params {
@@ -302,6 +305,7 @@ func (g *pyGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *pyGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write(vd.Name + ": " + g.typeToPython(vd.Type))
 	if vd.Value != nil {
@@ -479,6 +483,10 @@ func (g *pyGen) emitExpr(n ast.Node) error {
 			op = "and"
 		} else if op == "||" {
 			op = "or"
+		} else if g.types.isIntDivision(node) {
+			// Python's `/` is float division even between two ints, so `7 / 2`
+			// printed 3.5 where every integer-division language printed 3.
+			op = "//"
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {

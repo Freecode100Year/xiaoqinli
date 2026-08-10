@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted at top level (Groovy scripts).
 func GenerateGroovy(root ast.Node) ([]byte, error) {
 	g := &groovyGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -75,6 +76,7 @@ func GenerateGroovy(root ast.Node) ([]byte, error) {
 }
 
 type groovyGen struct {
+	types  *typeKinds
 	buf    *strings.Builder
 	indent int
 }
@@ -253,6 +255,7 @@ func (g *groovyGen) emitMatchStmt(me *ast.MatchExpr) error {
 }
 
 func (g *groovyGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	rt := typeToGroovy(fd.ReturnType)
 	g.write(rt + " " + fd.Name + "(")
@@ -290,6 +293,7 @@ func (g *groovyGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *groovyGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	if vd.Value != nil {
 		g.write("def " + vd.Name + " = ")
@@ -419,6 +423,20 @@ func (g *groovyGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Groovy's `/` on two integers produces a BigDecimal, so `7 / 2` is
+		// 3.5. intdiv() is the integer division.
+		if g.types.isIntDivision(node) {
+			g.write("(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(").intdiv(")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

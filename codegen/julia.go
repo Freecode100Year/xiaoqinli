@@ -11,6 +11,7 @@ import (
 // A main() call is appended at the bottom if main is defined.
 func GenerateJulia(root ast.Node) ([]byte, error) {
 	g := &jlGen{buf: &strings.Builder{}, imports: make(map[string]bool)}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -87,6 +88,7 @@ func GenerateJulia(root ast.Node) ([]byte, error) {
 }
 
 type jlGen struct {
+	types   *typeKinds
 	buf     *strings.Builder
 	indent  int
 	imports map[string]bool
@@ -271,6 +273,7 @@ func (g *jlGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *jlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	g.write("function " + fd.Name + "(")
 	for i, p := range fd.Params {
@@ -312,6 +315,7 @@ func (g *jlGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *jlGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write(vd.Name + "::" + g.typeToJulia(vd.Type))
 	if vd.Value != nil {
@@ -437,6 +441,19 @@ func (g *jlGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Julia's `/` promotes to Float64 even for two Int64s.
+		if g.types.isIntDivision(node) {
+			g.write("div(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(", ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

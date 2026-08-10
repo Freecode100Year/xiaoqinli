@@ -13,6 +13,7 @@ import (
 // If the program is a module (no "main" function), declarations are exported via a module table 'M'.
 func GenerateLua(root ast.Node) ([]byte, error) {
 	g := &luaGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -101,6 +102,7 @@ func GenerateLua(root ast.Node) ([]byte, error) {
 }
 
 type luaGen struct {
+	types  *typeKinds
 	buf    *strings.Builder
 	indent int
 }
@@ -217,6 +219,7 @@ func (g *luaGen) emitMatchExpr(me *ast.MatchExpr) error {
 }
 
 func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl, isModule bool) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	funcName := fd.Name
 	if isModule {
@@ -262,6 +265,7 @@ func (g *luaGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *luaGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write("local " + vd.Name)
 	if vd.Value != nil {
@@ -399,6 +403,12 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 			op = "or"
 		case "!=":
 			op = "~="
+		case "/":
+			// Lua 5.3 made `/` float division, so `7 / 2` is 3.5 and prints as
+			// "3.5". `//` is the integer one.
+			if g.types.isIntDivision(node) {
+				op = "//"
+			}
 		}
 		if op == "+" && containsStringExpr(node) {
 			op = ".."
