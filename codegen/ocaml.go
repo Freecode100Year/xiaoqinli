@@ -247,9 +247,9 @@ func (g *ocamlGen) emitStmt(n ast.Node) error {
 	case *ast.ForStmt:
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
-		return fmt.Errorf("XQL_E401: OCaml does not support break")
+		return fmt.Errorf("XQL_E402: OCaml does not support break")
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: OCaml does not support continue")
+		return fmt.Errorf("XQL_E402: OCaml does not support continue")
 	case *ast.MatchExpr:
 		return g.emitMatchStmt(node)
 	default:

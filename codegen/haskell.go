@@ -332,9 +332,9 @@ func (g *hsGen) emitStmt(n ast.Node) error {
 	case *ast.ForStmt:
 		return g.emitForStmt(node)
 	case *ast.BreakStmt:
-		return fmt.Errorf("XQL_E401: Haskell does not support break")
+		return fmt.Errorf("XQL_E402: Haskell does not support break")
 	case *ast.ContinueStmt:
-		return fmt.Errorf("XQL_E401: Haskell does not support continue")
+		return fmt.Errorf("XQL_E402: Haskell does not support continue")
 	case *ast.MatchExpr:
 		return g.emitMatchExpr(node)
 	default:

@@ -1,0 +1,125 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "a",
+          "type": { "kind": "String" },
+          "value": { "kind": "Literal", "valueType": "String", "value": "abc" }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "b",
+          "type": { "kind": "String" },
+          "value": { "kind": "Literal", "valueType": "String", "value": "xyz" }
+        },
+        {
+          "kind": "IfStmt",
+          "condition": {
+            "kind": "BinaryExpr",
+            "op": "==",
+            "left": { "kind": "Ident", "name": "a" },
+            "right": { "kind": "Ident", "name": "b" }
+          },
+          "then": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "same" }]
+              }
+            }
+          ],
+          "else": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "differ" }]
+              }
+            }
+          ]
+        },
+        {
+          "kind": "VarDecl",
+          "name": "joined",
+          "type": { "kind": "String" },
+          "value": {
+            "kind": "BinaryExpr",
+            "op": "+",
+            "left": { "kind": "Literal", "valueType": "String", "value": "ab" },
+            "right": { "kind": "Literal", "valueType": "String", "value": "c" }
+          }
+        },
+        {
+          "kind": "IfStmt",
+          "condition": {
+            "kind": "BinaryExpr",
+            "op": "==",
+            "left": { "kind": "Ident", "name": "joined" },
+            "right": { "kind": "Ident", "name": "a" }
+          },
+          "then": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "eq" }]
+              }
+            }
+          ],
+          "else": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "ne" }]
+              }
+            }
+          ]
+        },
+        {
+          "kind": "IfStmt",
+          "condition": {
+            "kind": "BinaryExpr",
+            "op": "!=",
+            "left": { "kind": "Ident", "name": "a" },
+            "right": { "kind": "Ident", "name": "b" }
+          },
+          "then": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "ne-ok" }]
+              }
+            }
+          ],
+          "else": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "ne-bad" }]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

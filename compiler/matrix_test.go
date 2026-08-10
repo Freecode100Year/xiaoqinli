@@ -58,8 +58,19 @@ var expectedRejections = map[string][]string{
 	"collections.xql.json":    {"tccli"},
 	"loop.xql.json":           {"tccli"},
 	"int_arithmetic.xql.json": {"tccli"},
+	"string_compare.xql.json": {"tccli"},
 	"lambda_ifexpr.xql.json":  {"tccli"},
 	"example.xql.json":        {"tccli"},
+
+	// `break` is the construct that splits the matrix along a different line
+	// than Result does: a language without an early loop exit cannot fake one.
+	// All six declined with XQL_E401 until this example existed, which claimed
+	// a compiler bug for what is a capability limit — the distinction the two
+	// codes exist to draw.
+	"control_flow.xql.json": {
+		"bat", "clojure", "elixir", "fsharp", "haskell", "ocaml",
+		"tccli", // no while loop either
+	},
 
 	// The chrome examples declare host externs restricted to browser targets,
 	// so every backend that cannot provide them is refused by design. This is

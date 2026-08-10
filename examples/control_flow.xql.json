@@ -1,0 +1,131 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": {
+        "kind": "Void"
+      },
+      "effects": [
+        "state"
+      ],
+      "grant": [
+        "io"
+      ],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "i",
+          "type": {
+            "kind": "Int"
+          },
+          "value": {
+            "kind": "Literal",
+            "valueType": "Int",
+            "value": 0
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "total",
+          "type": {
+            "kind": "Int"
+          },
+          "value": {
+            "kind": "Literal",
+            "valueType": "Int",
+            "value": 0
+          }
+        },
+        {
+          "kind": "WhileStmt",
+          "condition": {
+            "kind": "BinaryExpr",
+            "op": "<",
+            "left": {
+              "kind": "Ident",
+              "name": "i"
+            },
+            "right": {
+              "kind": "Literal",
+              "valueType": "Int",
+              "value": 10
+            }
+          },
+          "body": [
+            {
+              "kind": "AssignStmt",
+              "target": "i",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": {
+                  "kind": "Ident",
+                  "name": "i"
+                },
+                "right": {
+                  "kind": "Literal",
+                  "valueType": "Int",
+                  "value": 1
+                }
+              }
+            },
+            {
+              "kind": "IfStmt",
+              "condition": {
+                "kind": "BinaryExpr",
+                "op": ">",
+                "left": {
+                  "kind": "Ident",
+                  "name": "i"
+                },
+                "right": {
+                  "kind": "Literal",
+                  "valueType": "Int",
+                  "value": 6
+                }
+              },
+              "then": [
+                {
+                  "kind": "BreakStmt"
+                }
+              ],
+              "else": []
+            },
+            {
+              "kind": "AssignStmt",
+              "target": "total",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": {
+                  "kind": "Ident",
+                  "name": "total"
+                },
+                "right": {
+                  "kind": "Ident",
+                  "name": "i"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "Ident",
+                "name": "total"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

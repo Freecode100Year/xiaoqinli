@@ -479,6 +479,26 @@ func (g *cGen) emitBinary(be *ast.BinaryExpr) error {
 		g.write(")")
 		return nil
 	}
+
+	// A String is a `const char *` in C, so `a == b` compares addresses. Two
+	// equal strings built at runtime compared as different, and two different
+	// string literals could compare as equal if the compiler happened to pool
+	// them. Every relational operator has to go through strcmp.
+	if cComparisonOps[be.Op] &&
+		(g.inferTypeKind(be.Left) == "String" || g.inferTypeKind(be.Right) == "String") {
+		g.needString = true
+		g.write("(strcmp(")
+		if err := g.emitExpr(be.Left); err != nil {
+			return err
+		}
+		g.write(", ")
+		if err := g.emitExpr(be.Right); err != nil {
+			return err
+		}
+		g.write(") " + be.Op + " 0)")
+		return nil
+	}
+
 	g.write("(")
 	if err := g.emitExpr(be.Left); err != nil {
 		return err
@@ -489,6 +509,12 @@ func (g *cGen) emitBinary(be *ast.BinaryExpr) error {
 	}
 	g.write(")")
 	return nil
+}
+
+// cComparisonOps are the operators strcmp's return value answers directly:
+// `strcmp(a, b) == 0` is equality, `< 0` is ordering, and so on for all six.
+var cComparisonOps = map[string]bool{
+	"==": true, "!=": true, "<": true, ">": true, "<=": true, ">=": true,
 }
 
 func (g *cGen) emitCall(ce *ast.CallExpr) error {

@@ -12,6 +12,7 @@ import (
 // with int main() { ...; return 0; }. Includes are deduced from types used.
 func GenerateCpp(root ast.Node) ([]byte, error) {
 	g := &cppGen{buf: &strings.Builder{}, enums: make(map[string]bool)}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -73,6 +74,7 @@ func GenerateCpp(root ast.Node) ([]byte, error) {
 }
 
 type cppGen struct {
+	types     *typeKinds
 	buf       *strings.Builder
 	indent    int
 	muts      map[string]bool
@@ -267,6 +269,7 @@ func (g *cppGen) emitMatchExpr(me *ast.MatchExpr) error {
 }
 
 func (g *cppGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.muts = collectMutables(fd.Body)
 
 	// Check for Result return type.
@@ -328,6 +331,7 @@ func (g *cppGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *cppGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write(g.typeStr(vd.Type) + " " + vd.Name)
 	if vd.Value != nil {
@@ -457,6 +461,25 @@ func (g *cppGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// `"ab" + "c"` in C++ is pointer arithmetic on two const char arrays,
+		// which does not compile. std::string on the left turns the whole chain
+		// into string concatenation; the right operand needs no help, because
+		// std::string's operator+ accepts a const char* on that side.
+		if node.Op == "+" && g.types.kindOf(node) == "String" {
+			if lit, ok := node.Left.(*ast.Literal); ok && lit.ValueType == "String" {
+				g.needStr = true
+				g.write("(std::string(")
+				if err := g.emitExpr(node.Left); err != nil {
+					return err
+				}
+				g.write(") + ")
+				if err := g.emitExpr(node.Right); err != nil {
+					return err
+				}
+				g.write(")")
+				return nil
+			}
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

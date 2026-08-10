@@ -56,6 +56,14 @@ var conformanceExpect = map[string][]string{
 	// 3 in Go, C, Ruby and Tcl and 3.5 in Python, JavaScript, Perl, awk, Lua,
 	// PHP, Julia and Dart, and did not compile at all in Haskell or Zig.
 	"int_arithmetic.xql.json": {"3", "1", "15"},
+
+	// A while loop with an early exit, and string equality. Perl's `==` is
+	// numeric, so it numified both operands to 0 and answered yes to every
+	// string comparison; C compared `const char *` addresses, so two equal
+	// strings built differently came out unequal; and C++ would not compile
+	// `"ab" + "c"` at all, that being pointer arithmetic on two char arrays.
+	"control_flow.xql.json":   {"21"},
+	"string_compare.xql.json": {"differ", "eq", "ne-ok"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

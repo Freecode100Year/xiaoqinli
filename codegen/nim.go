@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted at top level.
 func GenerateNim(root ast.Node) ([]byte, error) {
 	g := &nimGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -93,6 +94,7 @@ func GenerateNim(root ast.Node) ([]byte, error) {
 }
 
 type nimGen struct {
+	types       *typeKinds
 	buf         *strings.Builder
 	indent      int
 	muts        map[string]bool
@@ -245,6 +247,7 @@ func (g *nimGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *nimGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.muts = collectMutables(fd.Body)
 
 	g.writeIndent()
@@ -291,6 +294,7 @@ func (g *nimGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *nimGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	if g.muts[vd.Name] {
 		g.write("var " + vd.Name + ": " + typeToNim(vd.Type))
@@ -441,6 +445,12 @@ func (g *nimGen) emitExpr(n ast.Node) error {
 			op = "or"
 		case "%":
 			op = "mod"
+		case "/":
+			// Nim's `/` is float division and is not even defined for two
+			// int64s — `nim check` reports "type mismatch: got <int64, int64>".
+			if g.types.isIntDivision(node) {
+				op = "div"
+			}
 		}
 		if op == "+" && containsStringExpr(node) {
 			op = "&"
