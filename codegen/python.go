@@ -73,6 +73,20 @@ func GeneratePython(root ast.Node) ([]byte, error) {
 
 `)
 	}
+	if g.needIntDiv {
+		out.WriteString(`def _xql_idiv(a: int, b: int) -> int:
+    q = a // b
+    if q < 0 and q * b != a:
+        q += 1
+    return q
+
+
+def _xql_irem(a: int, b: int) -> int:
+    return a - b * _xql_idiv(a, b)
+
+
+`)
+	}
 	if g.needEnum {
 		out.WriteString("from enum import Enum\n\n")
 	}
@@ -90,6 +104,7 @@ type pyGen struct {
 	needDataclass bool
 	needEnum      bool
 	needResult    bool
+	needIntDiv    bool
 	strat         *CodegenStrategyConfig
 }
 
@@ -474,6 +489,27 @@ func (g *pyGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Python's `/` is float division even between two ints, and its `//`
+		// floors rather than truncates, so `-7 // 2` is -4 where C and Go say
+		// -3. `%` takes the sign of the divisor for the same reason. Both go
+		// through a helper that gives the answer the other targets give.
+		if g.types.isIntDivision(node) || g.types.isIntRemainder(node) {
+			g.needIntDiv = true
+			if node.Op == "%" {
+				g.write("_xql_irem(")
+			} else {
+				g.write("_xql_idiv(")
+			}
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(", ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err
@@ -483,10 +519,6 @@ func (g *pyGen) emitExpr(n ast.Node) error {
 			op = "and"
 		} else if op == "||" {
 			op = "or"
-		} else if g.types.isIntDivision(node) {
-			// Python's `/` is float division even between two ints, so `7 / 2`
-			// printed 3.5 where every integer-division language printed 3.
-			op = "//"
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {

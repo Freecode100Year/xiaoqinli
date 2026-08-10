@@ -286,11 +286,15 @@ func (*MatchExpr) Kind() string { return "MatchExpr" }
 // and 3.5 across the matrix until each of those emitted its language's integer
 // division instead.
 //
-// Truncation is the majority rule (C, Go, Java, Rust, Swift, and the div/quot
-// functions the rest reach for). Three backends floor instead, which differs
-// only when exactly one operand is negative: py and lua use `//`, and ruby's
-// `/` floors natively. That gap is not covered by the conformance corpus and
-// should be treated as unspecified rather than as working.
+// `%` follows from that: the remainder takes the sign of the dividend, so
+// -7 % 2 is -1. The two rules travel together — every language that floors its
+// division also gives `%` the sign of the divisor — and Python, Ruby, Lua, Tcl
+// and Perl emit a helper rather than their native operator because of it.
+//
+// Truncation is the majority rule (C, Go, Java, Rust, Swift, JavaScript, awk,
+// bash, and the div/quot functions the rest reach for), which is why it is the
+// rule here rather than flooring. examples/negative_arithmetic.xql.json pins
+// all four combinations of sign in the conformance corpus.
 type BinaryExpr struct {
 	Op    string
 	Left  Node

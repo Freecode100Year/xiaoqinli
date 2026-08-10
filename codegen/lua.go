@@ -14,6 +14,7 @@ import (
 func GenerateLua(root ast.Node) ([]byte, error) {
 	g := &luaGen{buf: &strings.Builder{}}
 	g.types = newTypeKinds(root)
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -98,13 +99,28 @@ func GenerateLua(root ast.Node) ([]byte, error) {
 		g.writeln("return M")
 	}
 
-	return []byte(g.buf.String()), nil
+	preamble := ""
+	if g.needIntDiv {
+		preamble = `local function _xql_idiv(a, b)
+  local q = a // b
+  if q < 0 and q * b ~= a then q = q + 1 end
+  return q
+end
+
+local function _xql_irem(a, b)
+  return a - b * _xql_idiv(a, b)
+end
+
+`
+	}
+	return []byte(preamble + g.buf.String()), nil
 }
 
 type luaGen struct {
-	types  *typeKinds
-	buf    *strings.Builder
-	indent int
+	types      *typeKinds
+	needIntDiv bool
+	buf        *strings.Builder
+	indent     int
 }
 
 func (g *luaGen) write(s string)   { g.buf.WriteString(s) }
@@ -220,6 +236,7 @@ func (g *luaGen) emitMatchExpr(me *ast.MatchExpr) error {
 
 func (g *luaGen) emitFunctionDecl(fd *ast.FunctionDecl, isModule bool) error {
 	g.types.noteParams(fd)
+	g.types.noteParams(fd)
 	g.writeIndent()
 	funcName := fd.Name
 	if isModule {
@@ -265,6 +282,7 @@ func (g *luaGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *luaGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write("local " + vd.Name)
@@ -391,6 +409,25 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Lua's `//` floors and `%` takes the sign of the divisor: -7 // 2 is
+		// -4 and -7 % 2 is 1, where C and Go say -3 and -1.
+		if g.types.isIntDivision(node) || g.types.isIntRemainder(node) {
+			g.needIntDiv = true
+			if node.Op == "%" {
+				g.write("_xql_irem(")
+			} else {
+				g.write("_xql_idiv(")
+			}
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(", ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

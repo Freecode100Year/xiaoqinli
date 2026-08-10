@@ -1,0 +1,161 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": {
+        "kind": "Void"
+      },
+      "effects": [
+        "state"
+      ],
+      "grant": [
+        "io"
+      ],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "a",
+          "type": {
+            "kind": "Int"
+          },
+          "value": {
+            "kind": "UnaryExpr",
+            "op": "-",
+            "operand": {
+              "kind": "Literal",
+              "valueType": "Int",
+              "value": 7
+            }
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "b",
+          "type": {
+            "kind": "Int"
+          },
+          "value": {
+            "kind": "Literal",
+            "valueType": "Int",
+            "value": 2
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "c",
+          "type": {
+            "kind": "Int"
+          },
+          "value": {
+            "kind": "Literal",
+            "valueType": "Int",
+            "value": 7
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "d",
+          "type": {
+            "kind": "Int"
+          },
+          "value": {
+            "kind": "UnaryExpr",
+            "op": "-",
+            "operand": {
+              "kind": "Literal",
+              "valueType": "Int",
+              "value": 2
+            }
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "BinaryExpr",
+                "op": "/",
+                "left": {
+                  "kind": "Ident",
+                  "name": "a"
+                },
+                "right": {
+                  "kind": "Ident",
+                  "name": "b"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "BinaryExpr",
+                "op": "%",
+                "left": {
+                  "kind": "Ident",
+                  "name": "a"
+                },
+                "right": {
+                  "kind": "Ident",
+                  "name": "b"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "BinaryExpr",
+                "op": "/",
+                "left": {
+                  "kind": "Ident",
+                  "name": "c"
+                },
+                "right": {
+                  "kind": "Ident",
+                  "name": "d"
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "BinaryExpr",
+                "op": "%",
+                "left": {
+                  "kind": "Ident",
+                  "name": "c"
+                },
+                "right": {
+                  "kind": "Ident",
+                  "name": "d"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

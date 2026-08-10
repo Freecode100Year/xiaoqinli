@@ -112,7 +112,20 @@ func (t *typeKinds) kindOf(n ast.Node) string {
 // Unknown operands answer false: emitting integer division over something that
 // turns out to be a Float would silently truncate it.
 func (t *typeKinds) isIntDivision(be *ast.BinaryExpr) bool {
-	if t == nil || be == nil || be.Op != "/" {
+	return t.isIntOp(be, "/")
+}
+
+// isIntRemainder reports whether a `%` takes the remainder of one Int by
+// another. It matters for the same reason division does, one layer down: the
+// languages that floor their division also give `%` the sign of the divisor,
+// so -7 % 2 is 1 in Python, Ruby, Lua, Tcl and Perl and -1 in C, Go, Java,
+// Rust, JavaScript, awk and bash.
+func (t *typeKinds) isIntRemainder(be *ast.BinaryExpr) bool {
+	return t.isIntOp(be, "%")
+}
+
+func (t *typeKinds) isIntOp(be *ast.BinaryExpr, op string) bool {
+	if t == nil || be == nil || be.Op != op {
 		return false
 	}
 	return t.kindOf(be.Left) == "Int" && t.kindOf(be.Right) == "Int"
