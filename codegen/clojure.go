@@ -11,6 +11,7 @@ import (
 // The "main" function is emitted as (defn -main [] ...) with a (-main) call.
 func GenerateClojure(root ast.Node) ([]byte, error) {
 	g := &cljGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -72,6 +73,7 @@ func GenerateClojure(root ast.Node) ([]byte, error) {
 }
 
 type cljGen struct {
+	types    *typeKinds
 	buf      *strings.Builder
 	indent   int
 	mutables map[string]bool
@@ -121,6 +123,7 @@ func (g *cljGen) emitNode(n ast.Node) error {
 }
 
 func (g *cljGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.mutables = collectMutables(fd.Body)
 	g.writeIndent()
 	g.write("(defn " + fd.Name + " [")
@@ -158,6 +161,7 @@ func (g *cljGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *cljGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	if g.mutables[vd.Name] {
 		g.write("(def " + vd.Name + "Ref (atom ")
@@ -365,6 +369,12 @@ func (g *cljGen) emitExpr(n ast.Node) error {
 func (g *cljGen) emitBinaryExpr(be *ast.BinaryExpr) error {
 	op := be.Op
 	switch op {
+	case "/":
+		// Clojure's `/` on two integers yields an exact Ratio: (/ 7 2) is 7/2,
+		// and that is what it prints. quot is the truncating division.
+		if g.types.isIntDivision(be) {
+			op = "quot"
+		}
 	case "+":
 		if containsStringExpr(be) {
 			g.write("(str ")

@@ -10,6 +10,7 @@ import (
 // GenerateZig produces Zig source code from the given typed AST.
 func GenerateZig(root ast.Node) ([]byte, error) {
 	g := &zigGen{buf: &strings.Builder{}, funcReturns: make(map[string]string)}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -85,6 +86,7 @@ func GenerateZig(root ast.Node) ([]byte, error) {
 }
 
 type zigGen struct {
+	types       *typeKinds
 	buf         *strings.Builder
 	indent      int
 	muts        map[string]bool
@@ -237,6 +239,7 @@ func (g *zigGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *zigGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.muts = collectMutables(fd.Body)
 	g.scope = make(map[string]string)
 	for _, p := range fd.Params {
@@ -280,6 +283,7 @@ func (g *zigGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *zigGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	if g.scope != nil {
 		g.scope[vd.Name] = vd.Type.KindName
 	}
@@ -415,6 +419,21 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Zig refuses `/` on signed integers outright — the compiler tells you
+		// to pick @divTrunc or @divFloor rather than guess which rounding you
+		// meant. Truncation is what the other targets do.
+		if g.types.isIntDivision(node) {
+			g.write("@divTrunc(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(", ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

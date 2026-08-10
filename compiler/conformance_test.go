@@ -49,6 +49,13 @@ var conformanceExpect = map[string][]string{
 	"collections.xql.json":   {"10", "30"},
 	"lambda_ifexpr.xql.json": {"big"},
 	"example.xql.json":       {"8", "55"},
+
+	// 7 / 2, 7 % 2, 7 * 2 + 1. The division is the whole point: `/` between
+	// two Ints is integer division, and roughly a third of the target
+	// languages make `/` float division instead. Before this, `7 / 2` printed
+	// 3 in Go, C, Ruby and Tcl and 3.5 in Python, JavaScript, Perl, awk, Lua,
+	// PHP, Julia and Dart, and did not compile at all in Haskell or Zig.
+	"int_arithmetic.xql.json": {"3", "1", "15"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

@@ -9,6 +9,7 @@ import (
 
 func GenerateDart(root ast.Node) ([]byte, error) {
 	g := &dartGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -113,6 +114,7 @@ func GenerateDart(root ast.Node) ([]byte, error) {
 }
 
 type dartGen struct {
+	types       *typeKinds
 	buf         *strings.Builder
 	indent      int
 	muts        map[string]bool
@@ -305,6 +307,7 @@ func (g *dartGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *dartGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.muts = collectMutables(fd.Body)
 	g.writeIndent()
 	rt := typeToDart(fd.ReturnType)
@@ -343,6 +346,7 @@ func (g *dartGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *dartGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	if g.muts[vd.Name] {
 		// Mutable var: use explicit type so the name is typed (e.g. `int i = 0;`)
@@ -473,11 +477,17 @@ func (g *dartGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		op := node.Op
+		// Dart's `/` always returns a double; `~/` is the integer one, and it
+		// also keeps the result assignable to an `int` variable.
+		if g.types.isIntDivision(node) {
+			op = "~/"
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err
 		}
-		g.write(" " + node.Op + " ")
+		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {
 			return err
 		}

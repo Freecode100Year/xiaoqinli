@@ -55,10 +55,11 @@ var expectedRejections = map[string][]string{
 	// tccli has no arithmetic, no comparisons, no arrays, no lambdas. It was
 	// accepting all of them and emitting shell that either printed blank lines
 	// or passed a minus sign as a command-line argument.
-	"collections.xql.json":   {"tccli"},
-	"loop.xql.json":          {"tccli"},
-	"lambda_ifexpr.xql.json": {"tccli"},
-	"example.xql.json":       {"tccli"},
+	"collections.xql.json":    {"tccli"},
+	"loop.xql.json":           {"tccli"},
+	"int_arithmetic.xql.json": {"tccli"},
+	"lambda_ifexpr.xql.json":  {"tccli"},
+	"example.xql.json":        {"tccli"},
 
 	// The chrome examples declare host externs restricted to browser targets,
 	// so every backend that cannot provide them is refused by design. This is

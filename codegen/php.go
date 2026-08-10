@@ -12,6 +12,7 @@ import (
 // The "main" function's body is emitted at top level after other functions.
 func GeneratePHP(root ast.Node) ([]byte, error) {
 	g := &phpGen{buf: &strings.Builder{}, imports: make(map[string]bool)}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -108,6 +109,7 @@ func GeneratePHP(root ast.Node) ([]byte, error) {
 }
 
 type phpGen struct {
+	types   *typeKinds
 	buf     *strings.Builder
 	indent  int
 	imports map[string]bool
@@ -285,6 +287,7 @@ func (g *phpGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *phpGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	g.write("function " + fd.Name + "(")
 	for i, p := range fd.Params {
@@ -324,6 +327,7 @@ func (g *phpGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *phpGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write("$" + vd.Name)
 	if vd.Value != nil {
@@ -451,6 +455,19 @@ func (g *phpGen) emitExpr(n ast.Node) error {
 		g.write("$" + node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// PHP's `/` yields a float whenever the division is not exact.
+		if g.types.isIntDivision(node) {
+			g.write("intdiv(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(", ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

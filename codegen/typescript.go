@@ -19,6 +19,7 @@ func GenerateJavaScript(root ast.Node) ([]byte, error) {
 
 func generateJSTarget(root ast.Node, isJS bool) ([]byte, error) {
 	g := &tsGen{buf: &strings.Builder{}, isJS: isJS}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -123,6 +124,7 @@ func generateJSTarget(root ast.Node, isJS bool) ([]byte, error) {
 }
 
 type tsGen struct {
+	types       *typeKinds
 	buf         *strings.Builder
 	indent      int
 	muts        map[string]bool
@@ -325,6 +327,7 @@ func (g *tsGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *tsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.muts = collectMutables(fd.Body)
 
 	g.writeIndent()
@@ -376,6 +379,7 @@ func (g *tsGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *tsGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	if g.muts[vd.Name] {
 		g.write("let ")
@@ -509,6 +513,20 @@ func (g *tsGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// JavaScript has one number type, so `7 / 2` is 3.5. Math.trunc is the
+		// only thing that makes Int division mean what it means everywhere else.
+		if g.types.isIntDivision(node) {
+			g.write("Math.trunc(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(" / ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

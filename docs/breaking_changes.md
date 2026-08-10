@@ -90,3 +90,36 @@ range 循环由闭区间改为半开区间。`kotlin` 之前生成的 `for (i in
 **未变：** `each` 形式、错误码、退出码。
 
 `TestCrossTargetConformance` 现在用九种语言真的运行这批示例并逐行核对 stdout，这条语义不会再各说各话。
+
+---
+
+## 两个 Int 相除现在是整数除法
+
+**改成什么：** `Int / Int` 在十四个后端由「原样透传 `/`」改为发射该语言的整数除法。`7 / 2` 现在到处都是 `3`。
+
+| 目标 | 之前 | 现在 |
+|---|---|---|
+| `py` | `a / b` → 3.5 | `a // b` |
+| `js` `ts` | `a / b` → 3.5 | `Math.trunc(a / b)` |
+| `perl` `awk` | `a / b` → 3.5 | `int(a / b)` |
+| `lua` | `a / b` → 3.5 | `a // b` |
+| `php` | `$a / $b` → 3.5 | `intdiv($a, $b)` |
+| `julia` | `a / b` → Float64 | `div(a, b)` |
+| `dart` | `a / b` → double | `a ~/ b` |
+| `elixir` | `a / b` → float | `div(a, b)` |
+| `clojure` | `(/ a b)` → 有理数 `7/2` | `(quot a b)` |
+| `groovy` | `a / b` → BigDecimal | `a.intdiv(b)` |
+| `powershell` | `$a / $b` → Double | `[long][math]::Truncate(...)` |
+| `pascal` | `a / b` → Real，赋给 Integer 都不合法 | `a div b` |
+| `haskell` | `a / b` → **不通过类型检查**（`/` 属于 Fractional） | `` a `quot` b `` |
+| `zig` | `a / b` → **编译错误**（有符号整数不许用 `/`） | `@divTrunc(a, b)` |
+
+**为什么：** `/` 的含义此前完全取决于目标语言碰巧怎么定义它。同一份 AST，`7 / 2` 在 Go、C、Rust、Java、Ruby、Tcl 里是 3，在上表那些语言里是 3.5，在 Haskell 和 Zig 里根本编译不过。这是一个转译器最不该含糊的地方。
+
+`ast/nodes.go` 现在把这条写死：**两个 Int 相除是整数除法，向零截断**。
+
+**需要你做什么：** 如果你原本靠 `Int / Int` 拿浮点结果（只在上表那些目标上碰巧成立），把操作数改成 `Float`。
+
+**已知残留：** 向零截断与向下取整只在「恰好一个操作数为负」时不同。`py`、`lua`（`//`）和 `ruby`（`/` 原生）是向下取整，其余是截断。conformance 语料只用非负操作数，所以这一段应当视为**未规定**，不要当成已验证。
+
+**未变：** `Float / Float`、`%`、其余算符，以及错误码与退出码。

@@ -11,6 +11,7 @@ func GenerateHaskell(root ast.Node) ([]byte, error) {
 	g := &hsGen{
 		buf:      &strings.Builder{},
 		funcRets: make(map[string]string),
+		types:    newTypeKinds(root),
 	}
 
 	prog, ok := root.(*ast.Program)
@@ -75,6 +76,7 @@ func GenerateHaskell(root ast.Node) ([]byte, error) {
 }
 
 type hsGen struct {
+	types      *typeKinds
 	buf        *strings.Builder
 	indent     int
 	funcRets   map[string]string
@@ -177,6 +179,7 @@ func (g *hsGen) emitStructDecl(sd *ast.StructDecl) {
 }
 
 func (g *hsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	isIO := g.isIOFunc(fd)
 	g.inIO = isIO
 	g.mutables = collectMutables(fd.Body)
@@ -267,6 +270,7 @@ func (g *hsGen) emitStmt(n ast.Node) error {
 		g.writeln("")
 		return nil
 	case *ast.VarDecl:
+		g.types.noteVar(node)
 		if g.inIO && g.mutables[node.Name] {
 			g.writeIndent()
 			g.write(node.Name + "Ref <- newIORef ")
@@ -594,6 +598,13 @@ func (g *hsGen) emitBinary(be *ast.BinaryExpr) error {
 		op = "/="
 	case "%":
 		op = "`mod`"
+	case "/":
+		// `/` belongs to Fractional, so dividing two Ints does not merely give
+		// the wrong answer in Haskell — it does not typecheck. `quot`
+		// truncates, which is what the other targets do.
+		if g.types.isIntDivision(be) {
+			op = "`quot`"
+		}
 	}
 	g.write("(")
 	if err := g.emitExpr(be.Left); err != nil {

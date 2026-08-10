@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted at top level after sub definitions.
 func GeneratePerl(root ast.Node) ([]byte, error) {
 	g := &perlGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -70,6 +71,7 @@ func GeneratePerl(root ast.Node) ([]byte, error) {
 }
 
 type perlGen struct {
+	types  *typeKinds
 	buf    *strings.Builder
 	indent int
 }
@@ -188,6 +190,7 @@ func (g *perlGen) emitMatchExpr(me *ast.MatchExpr) error {
 }
 
 func (g *perlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	g.writeln("sub " + fd.Name + " {")
 	g.indent++
@@ -228,6 +231,7 @@ func (g *perlGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *perlGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	g.write("my $" + vd.Name)
 	if vd.Value != nil {
@@ -353,6 +357,19 @@ func (g *perlGen) emitExpr(n ast.Node) error {
 		g.write("$" + node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Perl numbers are floats, so `int()` is what gives `7 / 2` the value 3.
+		if g.types.isIntDivision(node) {
+			g.write("int(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(" / ")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err

@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted inside a `program Main; begin ... end.` block.
 func GeneratePascal(root ast.Node) ([]byte, error) {
 	g := &pascalGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -32,6 +33,7 @@ func GeneratePascal(root ast.Node) ([]byte, error) {
 }
 
 type pascalGen struct {
+	types      *typeKinds
 	buf        *strings.Builder
 	indent     int
 	needIfThen bool
@@ -313,6 +315,7 @@ func (g *pascalGen) emitEnumDecl(ed *ast.EnumDecl) error {
 }
 
 func (g *pascalGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	rt := typeToPascal(fd.ReturnType)
 	isProcedure := rt == ""
 
@@ -378,6 +381,7 @@ func (g *pascalGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *pascalGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	if vd.Value == nil {
 		return nil
 	}
@@ -595,6 +599,12 @@ func (g *pascalGen) emitExpr(n ast.Node) error {
 			op = "<>"
 		case "%":
 			op = "mod"
+		case "/":
+			// Pascal's `/` is real division and returns a Real, which will not
+			// even assign to an Integer. `div` is the integer one.
+			if g.types.isIntDivision(node) {
+				op = "div"
+			}
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {
