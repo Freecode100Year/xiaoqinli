@@ -144,16 +144,41 @@ var targetVerification = map[string]TargetVerification{
 	// A smoke entry means codegen ran over the full example corpus without
 	// erroring or panicking — and that no compiler for the language has ever
 	// seen the result.
-	"bat":      {TierSmoke, "TestExampleTargetMatrix", "", "rejects struct literals"},
-	"shortcut": {TierSmoke, "TestExampleTargetMatrix", "", "emits an Apple Shortcuts plist, not source; rejects Result<T>"},
-	"chrome":   {TierSmoke, "TestExampleTargetMatrix", "", "emits an extension bundle; rejects Result<T>"},
-	"tccli":    {TierCompiled, "TestCompiledTier/tccli", "bash", "emits Tencent Cloud CLI shell; no arithmetic, comparisons or structs"},
+	"tccli": {TierCompiled, "TestCompiledTier/tccli", "bash", "emits Tencent Cloud CLI shell; no arithmetic, comparisons or structs"},
 
-	// Project scaffolds. Assembling these needs an SDK whose version triple
-	// drifts with the runner image, so CI checks their structure instead and
-	// leans on the kotlin/swift executed tiers for the source they contain.
+	// A bundle rather than a program, so the conformance corpus cannot reach
+	// it — but an extension is a manifest and some JavaScript, and both have
+	// parsers. node reads the scripts; the manifest is checked for the keys MV3
+	// will not load without. What no CI can say is whether Chrome accepts the
+	// result.
+	"chrome": {TierCompiled, "TestChromeBundle", "node", "emits an extension bundle; the JavaScript is parsed, the browser is not consulted; rejects Result<T>"},
+
+	// ios builds. `swift build` over the generated package is what
+	// TestLocalE2EProjectScaffolds does, and CI installs swift, so this is a
+	// real toolchain accepting real output — it was only ever called smoke
+	// because a Swift package has no stdout to assert.
+	"ios": {TierCompiled, "TestLocalE2EProjectScaffolds/iOS", "swift", "SwiftPM package; `swift build` succeeds, nothing is run"},
+
+	// Assembling an APK needs an SDK whose version triple drifts with the
+	// runner image, and the generated Kotlin imports androidx, which kotlinc
+	// alone cannot resolve. So the structure is checked and the source leans on
+	// the kotlin executed tier.
 	"android": {TierSmoke, "TestAndroidScaffoldStructure", "", "Gradle scaffold; structure checked, never assembled"},
-	"ios":     {TierSmoke, "TestLocalE2EProjectScaffolds/iOS", "swift", "SwiftPM scaffold; built only when swift is present"},
+
+	// The shortcut backend emits JSON — the registry called it a plist for a
+	// long time, and nothing had read the bytes to notice. TestShortcutBundle
+	// checks that it parses and that every action carries a namespaced
+	// identifier. Only Apple's Shortcuts app can say more, and it has no
+	// command-line form.
+	"shortcut": {TierSmoke, "TestShortcutBundle", "", "emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>"},
+
+	// cmd.exe exists on one platform, so this one is earned on a Windows runner
+	// rather than the Linux one every other target uses. The exclusion is real
+	// and named: `set /a` is 32-bit signed with no wider arithmetic anywhere in
+	// the interpreter, so int_width.xql.json is the single corpus program bat
+	// is excused from, and conformance_test.go prints that exclusion on
+	// every run.
+	"bat": {TierExecuted, "TestCrossTargetConformance/bat", "cmd", "rejects struct literals and for-each; `set /a` is 32-bit, so int_width is excused"},
 }
 
 // RenderVerificationTable renders the coverage table both READMEs embed. It is

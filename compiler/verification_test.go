@@ -108,6 +108,10 @@ func TestCIInstallsEveryRequiredToolchain(t *testing.T) {
 		// gfortran ships with the image too — the compiled tier has leaned on
 		// that since it existed, and the corpus only adds a run step.
 		"gfortran": true,
+
+		// cmd is part of Windows, and the bat job runs on windows-latest. There
+		// is nothing to install and nowhere else to get it.
+		"cmd": true,
 	}
 	// What the workflow calls the thing it installs, when that differs from the
 	// executable name the test looks for.

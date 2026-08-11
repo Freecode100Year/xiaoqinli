@@ -212,11 +212,11 @@ the tests actually enforce.
 <!-- verification:begin -->
 | Evidence | Targets | What was checked |
 |---|---|---|
-| **executed** (32) | `awk` `bash` `c` `cpp` `crystal` `csharp` `d` `dart` `elixir` `fortran` `go` `groovy` `haskell` `java` `js` `julia` `kotlin` `lua` `nim` `ocaml` `pascal` `perl` `php` `powershell` `py` `ruby` `rust` `swift` `tcl` `ts` `vala` `zig` | compiled and run, stdout asserted |
-| **compiled** (1) | `tccli` | compiled by a real toolchain |
-| **smoke** (5) | `android` `bat` `chrome` `ios` `shortcut` | codegen returns output; never compiled |
+| **executed** (33) | `awk` `bash` `bat` `c` `cpp` `crystal` `csharp` `d` `dart` `elixir` `fortran` `go` `groovy` `haskell` `java` `js` `julia` `kotlin` `lua` `nim` `ocaml` `pascal` `perl` `php` `powershell` `py` `ruby` `rust` `swift` `tcl` `ts` `vala` `zig` | compiled and run, stdout asserted |
+| **compiled** (3) | `chrome` `ios` `tccli` | compiled by a real toolchain |
+| **smoke** (2) | `android` `shortcut` | codegen returns output; never compiled |
 
-The executed tier needs 32 toolchains, which CI installs or inherits from the
+The executed tier needs 33 toolchains, which CI installs or inherits from the
 runner image, and it sets `XQL_E2E_REQUIRE=1` so a missing one fails the run
 instead of skipping quietly.
 
@@ -225,9 +225,9 @@ Per-target caveats:
 - `android` — Gradle scaffold; structure checked, never assembled
 - `awk` — rejects Result<T> and struct literals
 - `bash` — rejects Result<T>
-- `bat` — rejects struct literals
+- `bat` — rejects struct literals and for-each; `set /a` is 32-bit, so int_width is excused
 - `c` — rejects Result<T>
-- `chrome` — emits an extension bundle; rejects Result<T>
+- `chrome` — emits an extension bundle; the JavaScript is parsed, the browser is not consulted; rejects Result<T>
 - `cpp` — rejects Result<T>
 - `crystal` — rejects Result<T>
 - `d` — rejects Result<T>
@@ -235,14 +235,14 @@ Per-target caveats:
 - `fortran` — rejects for-each loops
 - `groovy` — rejects Result<T>
 - `haskell` — rejects Result<T>
-- `ios` — SwiftPM scaffold; built only when swift is present
+- `ios` — SwiftPM package; `swift build` succeeds, nothing is run
 - `js` — rejects Result<T>
 - `nim` — rejects Result<T>
 - `ocaml` — rejects Result<T>
 - `pascal` — rejects for-each loops
 - `perl` — rejects Result<T>
 - `powershell` — rejects Result<T>
-- `shortcut` — emits an Apple Shortcuts plist, not source; rejects Result<T>
+- `shortcut` — emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>
 - `tccli` — emits Tencent Cloud CLI shell; no arithmetic, comparisons or structs
 - `tcl` — rejects Result<T>
 - `vala` — rejects Result<T>

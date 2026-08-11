@@ -492,14 +492,20 @@ func errWithOutput(err error, out []byte) error {
 // understate what CI checks — and dropping a runner while leaving the tier
 // alone would overstate it.
 func TestConformanceRunnersAreExecutedTier(t *testing.T) {
+	workflow := readFile(t, filepath.Join("..", ".github", "workflows", "e2e-backends.yml"))
+
 	for _, r := range conformanceRunners {
 		if r.onlyOS != "" {
-			// CI is Linux. A runner that cannot run there produces no evidence
-			// for the published tier, whatever it proves on a developer's
-			// machine, so the registry must not have been raised on its account.
-			if v, ok := VerificationFor(r.target); ok && v.Tier == TierExecuted {
-				t.Errorf("%s is only run on %s, which CI is not, so it cannot be published as executed",
-					r.target, r.onlyOS)
+			// A single-platform runner can be published evidence only if CI runs
+			// on that platform. It did not, for a long time, and the rule was
+			// written as "CI is Linux" — which was a fact about the workflow
+			// rather than about the backend, and the right fix was to add the
+			// job rather than to keep the claim down.
+			if !strings.Contains(workflow, "runs-on: "+r.onlyOS+"-latest") {
+				if v, ok := VerificationFor(r.target); ok && v.Tier == TierExecuted {
+					t.Errorf("%s runs only on %s and no CI job runs there, so it cannot be published as executed",
+						r.target, r.onlyOS)
+				}
 			}
 			continue
 		}

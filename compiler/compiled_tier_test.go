@@ -236,9 +236,23 @@ func TestCompiledTierMatchesRegistry(t *testing.T) {
 	}
 
 	for _, flag := range TargetsAtTier(TierCompiled) {
-		if !inTable[flag] {
-			t.Errorf("the registry claims %q is compiled, but no case in compiledTierCases checks it — "+
+		if inTable[flag] {
+			continue
+		}
+		// Not every compiled-tier target hands one file to one compiler. chrome
+		// is a bundle and ios is a Swift package; their checkers live in
+		// TestChromeBundle and TestLocalE2EProjectScaffolds. What must hold for
+		// all of them is that the registry names the test that produces the
+		// evidence, so a reader can go and find it.
+		v, ok := VerificationFor(flag)
+		if !ok || strings.TrimSpace(v.Harness) == "" {
+			t.Errorf("the registry claims %q is compiled and names no harness — "+
 				"a tier nothing runs is a claim, not evidence", flag)
+			continue
+		}
+		if strings.HasPrefix(v.Harness, "TestCompiledTier/") {
+			t.Errorf("%q says its evidence is %s, but compiledTierCases has no case for it",
+				flag, v.Harness)
 		}
 	}
 }

@@ -122,3 +122,29 @@ jobs:
       env:
         XQL_E2E_REQUIRE: '1'
       run: go test -v ./compiler ./codegen -run 'TestLinkedPipeline|TestLocalE2E|TestCompiledTier|TestCrossTargetConformance' -count=1
+
+  # The bat backend emits cmd scripts, and cmd.exe exists on exactly one
+  # platform. Every other target's evidence comes from the Linux job above,
+  # which is why bat sat at the smoke tier claiming nothing — not because its
+  # output was unchecked in principle, but because nobody had run CI anywhere
+  # that could check it. A Windows runner costs one job.
+  e2e-verify-windows:
+    name: Verify Generated Backends (Windows)
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.25'
+        cache: true
+
+    # Only bat. The other runners have their evidence from Linux, and running
+    # them twice would buy nothing but a second way to go red.
+    - name: Run the batch scripts through cmd.exe
+      env:
+        XQL_E2E_REQUIRE: '1'
+      run: go test -v ./compiler -run 'TestCrossTargetConformance/bat' -count=1
