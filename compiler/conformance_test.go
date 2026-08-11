@@ -84,6 +84,16 @@ type conformanceRunner struct {
 	tools  []string
 	steps  [][]string
 
+	// base overrides the "prog" stem, for a toolchain that derives a name from
+	// the file rather than being told one.
+	base string
+
+	// pre runs before the generated source is written, for a target that needs a
+	// project around the file rather than just the file. `dotnet new console`
+	// writes its own Program.cs, so it has to happen first and be overwritten;
+	// scaffolding after the write would delete the program under test.
+	pre [][]string
+
 	// probe replaces the --version / version handshake FirstWorking uses. lua
 	// answers -v and errors on --version, so without this it looks absent on a
 	// runner that has it.
@@ -168,6 +178,46 @@ var conformanceRunners = []conformanceRunner{
 	// installs and what TestLinkedPipelineE2E already uses.
 	{target: "ts", ext: ".ts", tools: []string{"tsx"},
 		steps: [][]string{{"{tool}", "{file}"}}},
+
+	// The six below close the last of the gap this file was written for: every
+	// target the registry calls executed now runs the corpus, not just the
+	// dogfood workspace. None of their toolchains exists on the machine these
+	// runners were written on — dotnet here is the runtime with no SDK — so CI
+	// is what decides whether they are right. XQL_E2E_REQUIRE=1 means a missing
+	// one fails rather than skips, which is the only reason writing them blind
+	// is honest: they cannot report a pass they did not earn.
+
+	// java runs the file directly. Single-file source mode has been in the
+	// launcher since 11, it compiles in memory, and it lifts the requirement
+	// that the file be named after the class — so this needs no javac step and
+	// no `base`, even though every generated program declares `class Main`.
+	{target: "java", ext: ".java", tools: []string{"java"},
+		steps: [][]string{{"{tool}", "{file}"}}},
+
+	// csharp is the one target that needs a project rather than a file, and so
+	// the only user of pre. Taking the framework from `dotnet new` rather than
+	// writing a .csproj here keeps the test from pinning a TargetFramework that
+	// the workflow's SDK version would eventually outgrow.
+	{target: "csharp", ext: ".cs", base: "Program", tools: []string{"dotnet"},
+		pre:   [][]string{{"{tool}", "new", "console", "--force", "-o", "."}},
+		steps: [][]string{{"{tool}", "run", "--verbosity", "quiet"}}},
+
+	// kotlinc answers -version, not --version, so it needs its own probe for the
+	// same reason lua does. Building a self-contained jar is what the dogfood
+	// workspace already does in CI, so it is the invocation known to work there.
+	{target: "kotlin", ext: ".kt", tools: []string{"kotlinc"}, probe: []string{"-version"},
+		steps: [][]string{{"{tool}", "{file}", "-include-runtime", "-d", "prog.jar"},
+			{"java", "-jar", "prog.jar"}}},
+
+	{target: "swift", ext: ".swift", tools: []string{"swift"},
+		steps: [][]string{{"{tool}", "{file}"}}},
+	{target: "dart", ext: ".dart", tools: []string{"dart"},
+		steps: [][]string{{"{tool}", "run", "{file}"}}},
+
+	// zig prints through std.debug.print, which writes to stderr. CombinedOutput
+	// is what makes that comparable; nothing here asserts a stream.
+	{target: "zig", ext: ".zig", tools: []string{"zig"},
+		steps: [][]string{{"{tool}", "run", "{file}"}}},
 
 	// Windows only, and therefore never CI evidence — bat stays at the smoke
 	// tier. It is here because it is the only place the batch backend can be
@@ -268,18 +318,17 @@ func runConformance(t *testing.T, r conformanceRunner, tool string, code []byte)
 	t.Helper()
 
 	dir := t.TempDir()
-	src := filepath.Join(dir, "prog"+r.ext)
-	if err := os.WriteFile(src, code, 0o644); err != nil {
-		t.Fatalf("write %s: %v", src, err)
+	base := r.base
+	if base == "" {
+		base = "prog"
 	}
+	src := filepath.Join(dir, base+r.ext)
 	// Naming the artefact .exe everywhere keeps one code path: Windows needs the
 	// suffix and Unix does not care what an executable is called.
 	bin := filepath.Join(dir, "prog_bin.exe")
 
 	subst := strings.NewReplacer("{tool}", tool, "{file}", src, "{bin}", bin)
-
-	var out []byte
-	for _, step := range r.steps {
+	run := func(step []string) ([]byte, error) {
 		args := make([]string, len(step))
 		for i, a := range step {
 			args[i] = subst.Replace(a)
@@ -288,7 +337,24 @@ func runConformance(t *testing.T, r conformanceRunner, tool string, code []byte)
 		cmd.Dir = dir
 		// A generated program reads nothing; leaving Stdin nil hands it the null
 		// device, so an awk rule outside BEGIN cannot hang the run.
-		combined, err := cmd.CombinedOutput()
+		return cmd.CombinedOutput()
+	}
+
+	// Scaffolding runs first and its output is discarded — it is the template's
+	// chatter, not the program's.
+	for _, step := range r.pre {
+		if combined, err := run(step); err != nil {
+			return nil, errWithOutput(err, combined)
+		}
+	}
+
+	if err := os.WriteFile(src, code, 0o644); err != nil {
+		t.Fatalf("write %s: %v", src, err)
+	}
+
+	var out []byte
+	for _, step := range r.steps {
+		combined, err := run(step)
 		if err != nil {
 			return nil, errWithOutput(err, combined)
 		}
