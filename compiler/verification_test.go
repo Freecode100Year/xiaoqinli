@@ -123,6 +123,19 @@ func TestCIInstallsEveryRequiredToolchain(t *testing.T) {
 		"lua":     "lua5.4",
 		"tsx":     "tsx",
 		"tclsh":   "tcl",
+
+		// The tier that used to be compiled-only. The workflow already installs
+		// every one of these for the check-only pass; running the output needs
+		// the same packages and no more.
+		"nim":     "nim",
+		"ghc":     "ghc",
+		"ocaml":   "ocaml-nox",
+		"crystal": "crystal-lang.org/install.sh",
+		"gdc":     "gdc",
+		"fpc":     "fp-compiler",
+		"elixir":  "elixir",
+		"valac":   "valac",
+		"groovy":  "groovy",
 	}
 
 	for _, tool := range RequiredToolchains() {

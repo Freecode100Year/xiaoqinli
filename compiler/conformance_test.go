@@ -219,6 +219,46 @@ var conformanceRunners = []conformanceRunner{
 	{target: "zig", ext: ".zig", tools: []string{"zig"},
 		steps: [][]string{{"{tool}", "run", "{file}"}}},
 
+	// What follows is the compiled tier, finishing the journey. Every one of
+	// these had a real compiler read its output and accept it, which rules out
+	// syntax and types and rules out nothing else — zig was published a tier
+	// *higher* than these and still could not build three programs out of ten.
+	// A check-only toolchain and a running one are the same install, so the
+	// tier stopped short of execution for no reason but that nobody had asked.
+	//
+	// tccli is the one that stays behind, and not for want of trying: its
+	// preamble aborts unless the Tencent Cloud CLI is on PATH, so the generated
+	// script cannot run anywhere that binary is absent. It also accepts exactly
+	// one corpus program. Compiled is the honest ceiling for it.
+	{target: "nim", ext: ".nim", tools: []string{"nim"},
+		steps: [][]string{{"{tool}", "c", "--hints:off", "--verbosity:0", "-o:{bin}", "{file}"}, {"{bin}"}}},
+	{target: "haskell", ext: ".hs", tools: []string{"ghc"},
+		steps: [][]string{{"{tool}", "-v0", "-o", "{bin}", "{file}"}, {"{bin}"}}},
+
+	// ocaml and elixir and groovy run their file directly. For elixir that is
+	// the very thing the compiled tier had to avoid — it parses with
+	// Code.string_to_quoted! precisely because compiling would evaluate the
+	// top-level Main.main() call. Here evaluating it is the point.
+	{target: "ocaml", ext: ".ml", tools: []string{"ocaml"},
+		steps: [][]string{{"{tool}", "{file}"}}},
+	{target: "elixir", ext: ".ex", tools: []string{"elixir"},
+		steps: [][]string{{"{tool}", "{file}"}}},
+	{target: "groovy", ext: ".groovy", tools: []string{"groovy"},
+		steps: [][]string{{"{tool}", "{file}"}}},
+
+	{target: "crystal", ext: ".cr", tools: []string{"crystal"},
+		steps: [][]string{{"{tool}", "run", "--no-color", "{file}"}}},
+	{target: "d", ext: ".d", tools: []string{"gdc"},
+		steps: [][]string{{"{tool}", "-o", "{bin}", "{file}"}, {"{bin}"}}},
+	{target: "vala", ext: ".vala", tools: []string{"valac"},
+		steps: [][]string{{"{tool}", "-o", "{bin}", "{file}"}, {"{bin}"}}},
+
+	// fpc answers neither --version nor version and exits non-zero, so without
+	// its own probe this reports fpc absent on a runner that has it — the same
+	// trap the compiled tier already documented.
+	{target: "pascal", ext: ".pas", tools: []string{"fpc"}, probe: []string{"-iV"},
+		steps: [][]string{{"{tool}", "-o{bin}", "{file}"}, {"{bin}"}}},
+
 	// Windows only, and therefore never CI evidence — bat stays at the smoke
 	// tier. It is here because it is the only place the batch backend can be
 	// run at all, and running it found `echo (a / b)` putting that text on

@@ -118,27 +118,32 @@ var targetVerification = map[string]TargetVerification{
 	// argument that printed heap next to "Hello, World".
 	"fortran": {TierExecuted, "TestCrossTargetConformance/fortran", "gfortran", "rejects for-each loops"},
 
+	// The tier that used to be compiled-only. A check-only toolchain and one
+	// that produces a running binary are the same install, so these joined the
+	// corpus as soon as anyone asked them to; the compiled tier entries below
+	// stay, because they cover the examples with no assertable stdout.
+	"nim":     {TierExecuted, "TestCrossTargetConformance/nim", "nim", "rejects Result<T>"},
+	"haskell": {TierExecuted, "TestCrossTargetConformance/haskell", "ghc", "rejects Result<T>"},
+	"ocaml":   {TierExecuted, "TestCrossTargetConformance/ocaml", "ocaml", "rejects Result<T>"},
+	"crystal": {TierExecuted, "TestCrossTargetConformance/crystal", "crystal", "rejects Result<T>"},
+	"d":       {TierExecuted, "TestCrossTargetConformance/d", "gdc", "rejects Result<T>"},
+	"pascal":  {TierExecuted, "TestCrossTargetConformance/pascal", "fpc", "rejects for-each loops"},
+	"elixir":  {TierExecuted, "TestCrossTargetConformance/elixir", "elixir", "rejects Result<T>"},
+	"vala":    {TierExecuted, "TestCrossTargetConformance/vala", "valac", "rejects Result<T>"},
+	"groovy":  {TierExecuted, "TestCrossTargetConformance/groovy", "groovy", "rejects Result<T>"},
+
 	// Compiled where a check-only toolchain exists, smoke where none does.
 	// A smoke entry means codegen ran over the full example corpus without
 	// erroring or panicking — and that no compiler for the language has ever
 	// seen the result.
-	"nim":      {TierCompiled, "TestCompiledTier/nim", "nim", "rejects Result<T>"},
 	"mql4":     {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>, maps, Option, for-each"},
 	"mql5":     {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>, maps, Option, for-each"},
 	"scala":    {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"haskell":  {TierCompiled, "TestCompiledTier/haskell", "ghc", "rejects Result<T>"},
-	"ocaml":    {TierCompiled, "TestCompiledTier/ocaml", "ocamlc", "rejects Result<T>"},
 	"fsharp":   {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
 	"ada":      {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>; gnat also rejects the generated source — see compiled_tier_test.go"},
-	"crystal":  {TierCompiled, "TestCompiledTier/crystal", "crystal", "rejects Result<T>"},
-	"d":        {TierCompiled, "TestCompiledTier/d", "gdc", "rejects Result<T>"},
 	"objc":     {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"pascal":   {TierCompiled, "TestCompiledTier/pascal", "fpc", "rejects for-each loops"},
 	"v":        {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"elixir":   {TierCompiled, "TestCompiledTier/elixir", "elixir", "rejects Result<T>"},
 	"clojure":  {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"vala":     {TierCompiled, "TestCompiledTier/vala", "valac", "rejects Result<T>"},
-	"groovy":   {TierCompiled, "TestCompiledTier/groovy", "groovyc", "rejects Result<T>"},
 	"bat":      {TierSmoke, "TestExampleTargetMatrix", "", "rejects struct literals"},
 	"shortcut": {TierSmoke, "TestExampleTargetMatrix", "", "emits an Apple Shortcuts plist, not source; rejects Result<T>"},
 	"chrome":   {TierSmoke, "TestExampleTargetMatrix", "", "emits an extension bundle; rejects Result<T>"},
