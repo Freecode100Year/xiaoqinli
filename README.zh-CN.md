@@ -193,11 +193,11 @@ extern 不按模块划分命名空间：把一个平台的接口面声明一次�
 <!-- verification:begin -->
 | Evidence | Targets | What was checked |
 |---|---|---|
-| **executed** (22) | `awk` `bash` `c` `cpp` `csharp` `dart` `go` `java` `js` `julia` `kotlin` `lua` `perl` `php` `powershell` `py` `ruby` `rust` `swift` `tcl` `ts` `zig` | compiled and run, stdout asserted |
-| **compiled** (11) | `crystal` `d` `elixir` `fortran` `groovy` `haskell` `nim` `ocaml` `pascal` `tccli` `vala` | compiled by a real toolchain |
+| **executed** (23) | `awk` `bash` `c` `cpp` `csharp` `dart` `fortran` `go` `java` `js` `julia` `kotlin` `lua` `perl` `php` `powershell` `py` `ruby` `rust` `swift` `tcl` `ts` `zig` | compiled and run, stdout asserted |
+| **compiled** (10) | `crystal` `d` `elixir` `groovy` `haskell` `nim` `ocaml` `pascal` `tccli` `vala` | compiled by a real toolchain |
 | **smoke** (13) | `ada` `android` `bat` `chrome` `clojure` `fsharp` `ios` `mql4` `mql5` `objc` `scala` `shortcut` `v` | codegen returns output; never compiled |
 
-The executed tier needs 22 toolchains, which CI installs or inherits from the
+The executed tier needs 23 toolchains, which CI installs or inherits from the
 runner image, and it sets `XQL_E2E_REQUIRE=1` so a missing one fails the run
 instead of skipping quietly.
 

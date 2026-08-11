@@ -104,6 +104,10 @@ func TestCIInstallsEveryRequiredToolchain(t *testing.T) {
 		"bash": true,
 		"gawk": true,
 		"pwsh": true,
+
+		// gfortran ships with the image too — the compiled tier has leaned on
+		// that since it existed, and the corpus only adds a run step.
+		"gfortran": true,
 	}
 	// What the workflow calls the thing it installs, when that differs from the
 	// executable name the test looks for.

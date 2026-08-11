@@ -66,6 +66,28 @@ func typeToFortran(t ast.TypeExpr) string {
 	}
 }
 
+// fortranParamType is typeToFortran for a dummy argument, where a character's
+// length must be assumed rather than fixed.
+//
+// A local String is `character(len=256)` because it has to be some length, and
+// assignment blank-pads it. A *dummy argument* declared that way is a different
+// thing entirely: Fortran passes character length as a hidden argument and the
+// callee believes the declaration, so `greet('World')` — five characters
+// against a dummy declared 256 — let the body read 251 bytes past the end of
+// the actual argument. That is what it did: hello.xql.json printed
+// "Hello, World" followed by a page of heap, including fragments of libm's
+// error-message table. gfortran -fsyntax-only cannot see it, which is why the
+// defect survived the compiled tier.
+//
+// len=* takes the length from the caller, which is what every other backend
+// means by passing a string.
+func fortranParamType(t ast.TypeExpr) string {
+	if t.KindName == "String" {
+		return "character(len=*)"
+	}
+	return typeToFortran(t)
+}
+
 func (g *fortranGen) emitMainBlock(fd *ast.FunctionDecl, prog *ast.Program) error {
 	g.writeln("program main")
 	g.indent++
@@ -231,7 +253,7 @@ func (g *fortranGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	// Emit parameter type declarations.
 	for _, p := range fd.Params {
 		g.writeIndent()
-		g.writeln(typeToFortran(p.Type) + ", intent(in) :: " + p.Name)
+		g.writeln(fortranParamType(p.Type) + ", intent(in) :: " + p.Name)
 	}
 
 	// Emit result type declaration for functions.

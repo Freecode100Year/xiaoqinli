@@ -145,6 +145,30 @@ var conformanceRunners = []conformanceRunner{
 	{target: "cpp", ext: ".cpp", tools: []string{"g++", "clang++"},
 		steps: [][]string{{"{tool}", "-o", "{bin}", "{file}"}, {"{bin}"}}},
 
+	// rust was executed-tier through the dogfood workspace alone, and that
+	// workspace has neither a range loop nor integer division — the two things
+	// this backend was changed for. -Awarnings because an unused variable is a
+	// remark about the generated style, not about whether the program means what
+	// the AST says.
+	//
+	// On Windows with the msvc toolchain this needs a real link.exe: an MSYS or
+	// mingw bin directory earlier on PATH supplies coreutils' `link`, which
+	// rustc then invokes and which fails on the second object file. Running the
+	// suite as RUSTUP_TOOLCHAIN=stable-x86_64-pc-windows-gnu picks the linker
+	// that machine does have. CI is Linux and unaffected.
+	{target: "rust", ext: ".rs", tools: []string{"rustc"},
+		steps: [][]string{{"{tool}", "-Awarnings", "-o", "{bin}", "{file}"}, {"{bin}"}}},
+
+	// fortran leaves the compiled tier here. gfortran was already syntax-checking
+	// every example; the step that was missing is the one that runs the result.
+	{target: "fortran", ext: ".f90", tools: []string{"gfortran"},
+		steps: [][]string{{"{tool}", "-o", "{bin}", "{file}"}, {"{bin}"}}},
+
+	// ts, like rust, had only the dogfood workspace behind it. tsx is what CI
+	// installs and what TestLinkedPipelineE2E already uses.
+	{target: "ts", ext: ".ts", tools: []string{"tsx"},
+		steps: [][]string{{"{tool}", "{file}"}}},
+
 	// Windows only, and therefore never CI evidence — bat stays at the smoke
 	// tier. It is here because it is the only place the batch backend can be
 	// run at all, and running it found `echo (a / b)` putting that text on

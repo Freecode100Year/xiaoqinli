@@ -112,6 +112,12 @@ var targetVerification = map[string]TargetVerification{
 	// because it covers the examples with no assertable stdout.
 	"powershell": {TierExecuted, "TestCrossTargetConformance/powershell", "pwsh", "rejects Result<T>"},
 
+	// fortran leaves the compiled tier: gfortran was already checking its
+	// syntax, and running the result found the backend handing five-character
+	// arguments to dummies declared 256 long — a read past the end of the actual
+	// argument that printed heap next to "Hello, World".
+	"fortran": {TierExecuted, "TestCrossTargetConformance/fortran", "gfortran", "rejects for-each loops"},
+
 	// Compiled where a check-only toolchain exists, smoke where none does.
 	// A smoke entry means codegen ran over the full example corpus without
 	// erroring or panicking — and that no compiler for the language has ever
@@ -126,7 +132,6 @@ var targetVerification = map[string]TargetVerification{
 	"ada":      {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>; gnat also rejects the generated source — see compiled_tier_test.go"},
 	"crystal":  {TierCompiled, "TestCompiledTier/crystal", "crystal", "rejects Result<T>"},
 	"d":        {TierCompiled, "TestCompiledTier/d", "gdc", "rejects Result<T>"},
-	"fortran":  {TierCompiled, "TestCompiledTier/fortran", "gfortran", "rejects for-each loops"},
 	"objc":     {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
 	"pascal":   {TierCompiled, "TestCompiledTier/pascal", "fpc", "rejects for-each loops"},
 	"v":        {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
