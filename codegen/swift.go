@@ -516,11 +516,22 @@ func (g *swGen) emitWhile(ws *ast.WhileStmt) error {
 	return nil
 }
 
+// swiftLoopVar names the loop variable, or `_` when the body never mentions it.
+// Swift warns on an unused binding and names the placeholder in the warning
+// text; string_build.xql.json repeats a concatenation a fixed number of times
+// and has no use for its index.
+func swiftLoopVar(fs *ast.ForStmt) string {
+	if identUsed(fs.Var, fs.Body) {
+		return fs.Var
+	}
+	return "_"
+}
+
 func (g *swGen) emitFor(fs *ast.ForStmt) error {
 	g.writeIndent()
 	switch fs.Form {
 	case "range":
-		g.write("for " + fs.Var + " in ")
+		g.write("for " + swiftLoopVar(fs) + " in ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
@@ -529,7 +540,7 @@ func (g *swGen) emitFor(fs *ast.ForStmt) error {
 			return err
 		}
 	case "each":
-		g.write("for " + fs.Var + " in ")
+		g.write("for " + swiftLoopVar(fs) + " in ")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
 		}

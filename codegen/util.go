@@ -513,6 +513,26 @@ func validateNodesForTarget(root ast.Node, target string) error {
 	return err
 }
 
+// identUsed reports whether a name is mentioned anywhere in a statement list.
+//
+// It decides whether a loop variable needs a name at all. A loop that repeats
+// something a fixed number of times never mentions its index, and Swift and
+// Elixir both warn about that — on stderr, where a warning is indistinguishable
+// from the program's own output, and under -Werror where it is fatal.
+// string_build.xql.json is such a loop, and it made both of them print their
+// complaint alongside the right answer.
+func identUsed(name string, body []ast.Node) bool {
+	found := false
+	for _, s := range body {
+		walkNodes(s, func(n ast.Node) {
+			if id, ok := n.(*ast.Ident); ok && id.Name == name {
+				found = true
+			}
+		})
+	}
+	return found
+}
+
 func walkNodes(n ast.Node, fn func(ast.Node)) {
 	if n == nil {
 		return

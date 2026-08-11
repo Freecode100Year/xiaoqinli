@@ -322,6 +322,14 @@ func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
 	// as an accumulator, which is how one writes it by hand.
 	mutated := exMutatedNames(fs.Body)
 
+	// Elixir warns about a bound variable the body never mentions, and asks for
+	// the underscore prefix by name. That warning goes to stderr, right next to
+	// the program's own output.
+	loopVar := fs.Var
+	if !identUsed(loopVar, fs.Body) {
+		loopVar = "_" + loopVar
+	}
+
 	g.writeIndent()
 	if len(mutated) > 0 {
 		acc := exTuple(mutated)
@@ -329,7 +337,7 @@ func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
 	} else {
 		// Nothing escapes the body, so the comprehension is honest — and reads
 		// better than a reduce over an accumulator no one wants.
-		g.write("for " + fs.Var + " <- ")
+		g.write("for " + loopVar + " <- ")
 	}
 
 	switch fs.Form {
@@ -352,7 +360,7 @@ func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
 
 	if len(mutated) > 0 {
 		acc := exTuple(mutated)
-		g.writeln(", " + acc + ", fn " + fs.Var + ", " + acc + " ->")
+		g.writeln(", " + acc + ", fn " + loopVar + ", " + acc + " ->")
 	} else {
 		g.writeln(" do")
 	}
