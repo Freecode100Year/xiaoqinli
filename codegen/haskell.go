@@ -831,7 +831,14 @@ func (g *hsGen) emitWhileStmt(ws *ast.WhileStmt) error {
 
 	g.writeIndent()
 	g.writeln("let " + loopName + " = do")
-	g.indent++
+	// Two levels, not one. Haskell's layout rule closes a `let` block at the
+	// first line indented no further than the *binding name*, and "let " is four
+	// characters — so a body one level in lands in the same column as
+	// `xqlLoop0` and `i <- readIORef iRef` is read as a second binding: "parse
+	// error on input '<-'". Nothing caught it because control_flow.xql.json is
+	// the corpus's only while program and haskell declines its `break`, so this
+	// loop had never been compiled.
+	g.indent += 2
 
 	if lit, ok := ws.Cond.(*ast.Literal); ok && lit.ValueType == "Bool" && lit.Value == true {
 		for _, s := range ws.Body {
@@ -866,7 +873,7 @@ func (g *hsGen) emitWhileStmt(ws *ast.WhileStmt) error {
 		g.indent--
 	}
 
-	g.indent--
+	g.indent -= 2
 	g.writeIndent()
 	g.writeln(loopName)
 	return nil

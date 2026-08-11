@@ -530,6 +530,28 @@ func identUsed(name string, body []ast.Node) bool {
 	return found
 }
 
+// identCount counts how many times a name is mentioned in a subtree, and
+// identCountIn does the same across a statement list. The difference between
+// the two answers a question a single walk cannot: whether a name is used
+// anywhere *outside* a particular node.
+func identCount(name string, n ast.Node) int {
+	c := 0
+	walkNodes(n, func(x ast.Node) {
+		if id, ok := x.(*ast.Ident); ok && id.Name == name {
+			c++
+		}
+	})
+	return c
+}
+
+func identCountIn(name string, nodes []ast.Node) int {
+	total := 0
+	for _, n := range nodes {
+		total += identCount(name, n)
+	}
+	return total
+}
+
 func walkNodes(n ast.Node, fn func(ast.Node)) {
 	if n == nil {
 		return

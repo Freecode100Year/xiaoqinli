@@ -89,11 +89,14 @@ func GenerateElixir(root ast.Node) ([]byte, error) {
 }
 
 type exGen struct {
-	types       *typeKinds
-	buf         *strings.Builder
-	indent      int
-	needSprintf bool
-	loopCount   int
+	types *typeKinds
+	// currentFuncBody is the body being emitted, so a loop can ask whether a
+	// variable it mutates is read after it ends.
+	currentFuncBody []ast.Node
+	buf             *strings.Builder
+	indent          int
+	needSprintf     bool
+	loopCount       int
 }
 
 func (g *exGen) write(s string)   { g.buf.WriteString(s) }
@@ -173,6 +176,9 @@ func (g *exGen) emitStructDecl(sd *ast.StructDecl) error {
 
 func (g *exGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.types.noteParams(fd)
+	prevBody := g.currentFuncBody
+	g.currentFuncBody = fd.Body
+	defer func() { g.currentFuncBody = prevBody }()
 	g.writeIndent()
 	g.write("def " + fd.Name + "(")
 	for i, p := range fd.Params {
@@ -302,6 +308,33 @@ func exMutatedNames(body []ast.Node) []string {
 	return out
 }
 
+// exResultPattern is the tuple a loop's value is matched against.
+//
+// A variable the loop mutates has to be threaded through whether or not anyone
+// reads it afterwards — the loop itself needs it. But binding it at the end and
+// never using it is exactly what Elixir warns about, and it names the remedy in
+// the warning: prefix with an underscore. while_accumulate.xql.json counts `i`
+// up to a bound and then prints only `sum`, so `i` is live inside the loop and
+// dead after it.
+//
+// An underscore-prefixed variable is still an ordinary variable in Elixir; the
+// prefix only turns off the warning. Getting the direction wrong warns either
+// way — reading a `_name` has its own complaint — so with no enclosing function
+// body to compare against, this leaves the name alone.
+func (g *exGen) exResultPattern(names []string, loop ast.Node) string {
+	out := make([]string, len(names))
+	for i, name := range names {
+		out[i] = name
+		if g.currentFuncBody == nil {
+			continue
+		}
+		if identCountIn(name, g.currentFuncBody) == identCount(name, loop) {
+			out[i] = "_" + name
+		}
+	}
+	return exTuple(out)
+}
+
 // exTuple renders one name, or several as a tuple pattern.
 func exTuple(names []string) string {
 	if len(names) == 1 {
@@ -332,8 +365,7 @@ func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
 
 	g.writeIndent()
 	if len(mutated) > 0 {
-		acc := exTuple(mutated)
-		g.write(acc + " = Enum.reduce(")
+		g.write(g.exResultPattern(mutated, fs) + " = Enum.reduce(")
 	} else {
 		// Nothing escapes the body, so the comprehension is honest — and reads
 		// better than a reduce over an accumulator no one wants.
@@ -463,7 +495,7 @@ func (g *exGen) emitWhileStmt(ws *ast.WhileStmt) error {
 	g.writeln("end")
 	g.writeIndent()
 	if threaded {
-		g.writeln(acc + " = " + loopName + ".(" + loopName + ", " + acc + ")")
+		g.writeln(g.exResultPattern(mutated, ws) + " = " + loopName + ".(" + loopName + ", " + acc + ")")
 	} else {
 		g.writeln(loopName + ".(" + loopName + ")")
 	}
