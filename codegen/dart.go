@@ -483,6 +483,22 @@ func (g *dartGen) emitExpr(n ast.Node) error {
 		if g.types.isIntDivision(node) {
 			op = "~/"
 		}
+		// `%` in Dart is Euclidean: its result is never negative, so -7 % 2 is 1
+		// where C, Go, Java, Rust and the majority of this matrix say -1. `~/`
+		// truncates, so leaving `%` alone left division and remainder disagreeing
+		// about the same pair of operands. remainder() is the truncating one.
+		if g.types.isIntRemainder(node) {
+			g.write("(")
+			if err := g.emitExpr(node.Left); err != nil {
+				return err
+			}
+			g.write(").remainder(")
+			if err := g.emitExpr(node.Right); err != nil {
+				return err
+			}
+			g.write(")")
+			return nil
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err
