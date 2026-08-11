@@ -1,0 +1,93 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "a",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 2 }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "b",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 3 }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "c",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 4 }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "BinaryExpr",
+                "op": "*",
+                "left": {
+                  "kind": "BinaryExpr",
+                  "op": "+",
+                  "left": { "kind": "Ident", "name": "a" },
+                  "right": { "kind": "Ident", "name": "b" }
+                },
+                "right": { "kind": "Ident", "name": "c" }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": { "kind": "Ident", "name": "a" },
+                "right": {
+                  "kind": "BinaryExpr",
+                  "op": "*",
+                  "left": { "kind": "Ident", "name": "b" },
+                  "right": { "kind": "Ident", "name": "c" }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "BinaryExpr",
+                "op": "-",
+                "left": { "kind": "Ident", "name": "a" },
+                "right": {
+                  "kind": "BinaryExpr",
+                  "op": "-",
+                  "left": { "kind": "Ident", "name": "b" },
+                  "right": { "kind": "Ident", "name": "c" }
+                }
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

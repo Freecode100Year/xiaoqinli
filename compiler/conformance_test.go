@@ -94,6 +94,27 @@ var conformanceExpect = map[string][]string{
 	// one fortran, pascal and mql decline outright, so this is also the first
 	// corpus program a target is expected to refuse rather than run.
 	"for_each.xql.json": {"12"},
+
+	// Grouping. Two of these three expressions differ only in where the
+	// parentheses are, so a backend that flattens the tree into text and lets
+	// its own precedence table decide emits identical source for both — which
+	// the go backend did, printing 14 twice and -5 for a - (b - c).
+	"precedence.xql.json": {"20", "14", "3"},
+
+	// `!` over a comparison, `&&` over two of them, and the short-circuit
+	// operators next to each other. Nothing in the corpus had negated anything.
+	"bool_logic.xql.json": {"and-ok", "or-ok", "range-ok", "not-ok"},
+
+	// Concatenation in a loop. hello.xql.json concatenates once, which any
+	// backend can do; doing it repeatedly is what asks whether the result is a
+	// value or a buffer — fortran's Strings are fixed-length and blank-padded,
+	// and zig's have to come out of an arena.
+	"string_build.xql.json": {"xababab"},
+
+	// A struct crossing a function boundary. struct.xql.json builds one and
+	// reads its fields in the same scope, which never asks how the thing is
+	// passed.
+	"struct_arg.xql.json": {"7"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

@@ -455,12 +455,29 @@ func (g *goGen) emitExpr(n ast.Node) error {
 	}
 }
 
+// emitBinaryExpr parenthesises, which the reference backend was alone in not
+// doing — and it is the one whose output the others are compared against.
+//
+// Without them the tree is flattened into text and Go's precedence decides what
+// it meant, which is not always what the AST said: `(a + b) * c` and
+// `a + (b * c)` both came out as `a + b * c`, so two different programs
+// compiled to the same source and one of them printed 14 where it should print
+// 20. `a - (b - c)` came out as `a - b - c`, which is -5 rather than 3.
+//
+// Every other backend already wraps. Doing the same here costs redundant
+// parentheses in the generated source and buys the guarantee that the source
+// means what the tree does.
 func (g *goGen) emitBinaryExpr(be *ast.BinaryExpr) error {
+	g.write("(")
 	if err := g.emitExpr(be.Left); err != nil {
 		return err
 	}
 	g.write(" " + be.Op + " ")
-	return g.emitExpr(be.Right)
+	if err := g.emitExpr(be.Right); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
 }
 
 func (g *goGen) emitUnaryExpr(ue *ast.UnaryExpr) error {

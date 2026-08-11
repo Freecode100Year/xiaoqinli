@@ -1,0 +1,48 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "s",
+          "type": { "kind": "String" },
+          "value": { "kind": "Literal", "valueType": "String", "value": "x" }
+        },
+        {
+          "kind": "ForStmt",
+          "form": "range",
+          "var": "i",
+          "start": { "kind": "Literal", "valueType": "Int", "value": 0 },
+          "end": { "kind": "Literal", "valueType": "Int", "value": 3 },
+          "body": [
+            {
+              "kind": "AssignStmt",
+              "target": "s",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": { "kind": "Ident", "name": "s" },
+                "right": { "kind": "Literal", "valueType": "String", "value": "ab" }
+              }
+            }
+          ]
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "s" }]
+          }
+        }
+      ]
+    }
+  ]
+}

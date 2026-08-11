@@ -532,11 +532,22 @@ func (g *tclGen) emitExprStmt(es *ast.ExprStmt) error {
 func (g *tclGen) emitCondExpr(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.BinaryExpr:
+		// Parenthesised, because otherwise the tree is flattened into text and
+		// `expr`'s own precedence decides what it meant. `(a + b) * c` and
+		// `a + (b * c)` both came out as `$a + $b * $c`, and `a - (b - c)` as
+		// `$a - $b - $c`, which is -5 rather than 3. It also puts the `!` below
+		// on the whole comparison instead of its left operand: `!$x == 4`
+		// negates $x and then compares the result to 4.
+		g.write("(")
 		if err := g.emitCondExpr(node.Left); err != nil {
 			return err
 		}
 		g.write(" " + node.Op + " ")
-		return g.emitCondExpr(node.Right)
+		if err := g.emitCondExpr(node.Right); err != nil {
+			return err
+		}
+		g.write(")")
+		return nil
 	case *ast.UnaryExpr:
 		g.write(node.Op)
 		return g.emitCondExpr(node.Operand)

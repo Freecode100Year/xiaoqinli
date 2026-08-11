@@ -499,6 +499,9 @@ func (g *fortranGen) emitExpr(n ast.Node) error {
 			g.write(")")
 			return nil
 		}
+		if node.Op == "+" && containsStringExpr(node) {
+			return g.emitConcat(node)
+		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
 			return err
@@ -513,9 +516,6 @@ func (g *fortranGen) emitExpr(n ast.Node) error {
 			op = "/="
 		case "==":
 			op = "=="
-		}
-		if op == "+" && containsStringExpr(node) {
-			op = "//"
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {
@@ -588,6 +588,49 @@ func (g *fortranGen) emitIfExpr(ie *ast.IfExpr) error {
 	}
 	g.write(", ")
 	if err := g.emitExpr(ie.Cond); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+// emitConcat writes `//` with every non-literal operand trimmed.
+//
+// A Fortran String is a fixed-length buffer and assignment blank-pads it, so a
+// variable holding "x" is really "x" followed by 255 spaces. Concatenating that
+// produces 257 characters, and assigning them back to a 256-character variable
+// throws away everything past the padding — so `s = s + "ab"` in a loop left s
+// as "x" no matter how many times it ran. string_build.xql.json printed x where
+// every other target printed xababab.
+//
+// trim drops the padding, which is the only reading of these strings that
+// matches what the other backends do. It also means a String whose value ends
+// in a space cannot survive a concatenation here — but a fixed-length buffer
+// could not tell that space from its own padding in the first place.
+func (g *fortranGen) emitConcat(node *ast.BinaryExpr) error {
+	g.write("(")
+	if err := g.emitConcatOperand(node.Left); err != nil {
+		return err
+	}
+	g.write(" // ")
+	if err := g.emitConcatOperand(node.Right); err != nil {
+		return err
+	}
+	g.write(")")
+	return nil
+}
+
+func (g *fortranGen) emitConcatOperand(n ast.Node) error {
+	// A literal has no padding to trim, and a nested concatenation has already
+	// trimmed its own operands.
+	if lit, ok := n.(*ast.Literal); ok && lit.ValueType == "String" {
+		return g.emitLiteral(lit)
+	}
+	if be, ok := n.(*ast.BinaryExpr); ok && be.Op == "+" && containsStringExpr(be) {
+		return g.emitConcat(be)
+	}
+	g.write("trim(")
+	if err := g.emitExpr(n); err != nil {
 		return err
 	}
 	g.write(")")

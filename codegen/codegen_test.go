@@ -304,7 +304,7 @@ func TestGenerateGo(t *testing.T) {
 		"func add(a int, b int) int",
 		"func main()",
 		"fmt.Println(result)",
-		"return a + b",
+		"return (a + b)",
 	}
 	for _, c := range checks {
 		if !strings.Contains(code, c) {
@@ -320,7 +320,7 @@ func TestGenerateGoWhile(t *testing.T) {
 		t.Fatalf("GenerateGo: %v", err)
 	}
 	code := string(out)
-	if !strings.Contains(code, "for i < 10") {
+	if !strings.Contains(code, "for (i < 10)") {
 		t.Errorf("Go while should use 'for', got:\n%s", code)
 	}
 }

@@ -11,9 +11,12 @@ import (
 // The "main" function's body is emitted at top level after function definitions.
 func GenerateBash(root ast.Node) ([]byte, error) {
 	g := &bashGen{
-		buf:      &strings.Builder{},
-		varTypes: make(map[string]string),
-		funcRets: make(map[string]string),
+		buf:         &strings.Builder{},
+		varTypes:    make(map[string]string),
+		funcRets:    make(map[string]string),
+		funcParams:  make(map[string][]string),
+		structNames: make(map[string]bool),
+		refNames:    make(map[string]string),
 	}
 
 	prog, ok := root.(*ast.Program)
@@ -24,8 +27,16 @@ func GenerateBash(root ast.Node) ([]byte, error) {
 	// Return types are needed before any body is walked: a call can appear in
 	// an expression whose function is declared further down the file.
 	for _, d := range prog.Decls {
-		if fd, ok := d.(*ast.FunctionDecl); ok {
-			g.funcRets[fd.Name] = fd.ReturnType.KindName
+		switch decl := d.(type) {
+		case *ast.FunctionDecl:
+			g.funcRets[decl.Name] = decl.ReturnType.KindName
+			kinds := make([]string, len(decl.Params))
+			for i, p := range decl.Params {
+				kinds[i] = p.Type.KindName
+			}
+			g.funcParams[decl.Name] = kinds
+		case *ast.StructDecl:
+			g.structNames[decl.Name] = true
 		}
 	}
 
@@ -92,6 +103,27 @@ type bashGen struct {
 	// needs to route `+` to concatenation instead.
 	varTypes map[string]string
 	funcRets map[string]string
+
+	// Struct-typed parameters need a name rather than a value at the call site,
+	// so both ends have to agree on which parameters those are.
+	funcParams  map[string][]string
+	structNames map[string]bool
+
+	// refNames maps a struct parameter to the local nameref standing in for it.
+	// `local -n p="$1"` with the caller's variable also called p is a name
+	// bound to itself, which bash reports as a circular reference on every
+	// use; the local has to be called something else, and every mention of the
+	// parameter in the body has to follow.
+	refNames map[string]string
+}
+
+// varName is the shell name for an XQL variable, which differs from its own
+// name only for a parameter reached through a nameref.
+func (g *bashGen) varName(name string) string {
+	if ref, ok := g.refNames[name]; ok {
+		return ref
+	}
+	return name
 }
 
 // inferTypeKind reports the AST type kind of an expression, defaulting to Int
@@ -250,12 +282,27 @@ func (g *bashGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	for i, p := range fd.Params {
 		g.varTypes[p.Name] = p.Type.KindName
 		g.writeIndent()
+		// A struct is an associative array, and bash cannot pass one by value:
+		// `manhattan "${p}"` expands to the element keyed 0, which does not
+		// exist, so the body computed `( + )` and the shell reported an
+		// arithmetic syntax error. A nameref binds the local to the caller's
+		// array, which is the one way bash has of handing an array to a
+		// function. The call site passes the bare name to match.
+		if g.structNames[p.Type.KindName] {
+			ref := "xql_ref_" + p.Name
+			g.refNames[p.Name] = ref
+			g.writeln(fmt.Sprintf("local -n %s=\"$%d\"", ref, i+1))
+			continue
+		}
 		g.writeln(fmt.Sprintf("local %s=\"$%d\"", p.Name, i+1))
 	}
 	for _, stmt := range fd.Body {
 		if err := g.emitNode(stmt); err != nil {
 			return err
 		}
+	}
+	for _, p := range fd.Params {
+		delete(g.refNames, p.Name)
 	}
 	g.inFunc = prevInFunc
 	g.indent--
@@ -431,7 +478,7 @@ func (g *bashGen) emitExprStmt(es *ast.ExprStmt) error {
 func (g *bashGen) emitExprUnquoted(n ast.Node) error {
 	switch node := n.(type) {
 	case *ast.Ident:
-		g.write(node.Name)
+		g.write(g.varName(node.Name))
 		return nil
 	case *ast.Literal:
 		return g.emitLiteralRaw(node)
@@ -511,17 +558,36 @@ func (g *bashGen) emitCondExpr(n ast.Node) error {
 			g.write(" || ")
 			return g.emitCondExpr(node.Right)
 		default:
-			return g.emitExpr(n)
+			return g.emitCondValue(n)
 		}
 	case *ast.UnaryExpr:
 		if node.Op == "!" {
 			g.write("! ")
 			return g.emitCondExpr(node.Operand)
 		}
-		return g.emitExpr(n)
+		return g.emitCondValue(n)
 	default:
-		return g.emitExpr(n)
+		return g.emitCondValue(n)
 	}
+}
+
+// emitCondValue writes an expression that is being used as a truth value in its
+// own right rather than as an operand of a comparison.
+//
+// Bash has one data type, and `[[ "$b" ]]` asks whether the string is
+// non-empty. A Bool is 1 or 0 here, and "0" is a perfectly non-empty string, so
+// every false Bool tested true: bool_logic.xql.json wrote `[[ "${a}" && !
+// "${b}" ]]` with b false and printed and-bad, because `!` negated a test that
+// had already answered yes. Comparing against 1 asks the question that was
+// meant.
+func (g *bashGen) emitCondValue(n ast.Node) error {
+	if err := g.emitExpr(n); err != nil {
+		return err
+	}
+	if g.inferTypeKind(n) == "Bool" {
+		g.write(" == 1")
+	}
+	return nil
 }
 
 func (g *bashGen) emitExpr(n ast.Node) error {
@@ -529,7 +595,7 @@ func (g *bashGen) emitExpr(n ast.Node) error {
 	case *ast.Literal:
 		return g.emitLiteral(node)
 	case *ast.Ident:
-		g.write("\"${" + node.Name + "}\"")
+		g.write("\"${" + g.varName(node.Name) + "}\"")
 		return nil
 	case *ast.BinaryExpr:
 		if g.isStringConcat(node) {
@@ -558,7 +624,7 @@ func (g *bashGen) emitExpr(n ast.Node) error {
 		// Associative array access: ${obj[field]}
 		g.write("\"${")
 		if ident, ok := node.Object.(*ast.Ident); ok {
-			g.write(ident.Name)
+			g.write(g.varName(ident.Name))
 		} else {
 			return fmt.Errorf("XQL_E401: Bash member access requires simple identifier as object")
 		}
@@ -628,21 +694,21 @@ func (g *bashGen) emitInterpolated(n ast.Node) error {
 		}
 		return g.emitLiteralRaw(node)
 	case *ast.Ident:
-		g.write("${" + node.Name + "}")
+		g.write("${" + g.varName(node.Name) + "}")
 		return nil
 	case *ast.MemberExpr:
 		ident, ok := node.Object.(*ast.Ident)
 		if !ok {
 			return fmt.Errorf("XQL_E401: Bash member access requires simple identifier as object")
 		}
-		g.write("${" + ident.Name + "[" + node.Field + "]}")
+		g.write("${" + g.varName(ident.Name) + "[" + node.Field + "]}")
 		return nil
 	case *ast.IndexExpr:
 		ident, ok := node.Target.(*ast.Ident)
 		if !ok {
 			return fmt.Errorf("XQL_E401: Bash index access requires simple identifier as target")
 		}
-		g.write("${" + ident.Name + "[")
+		g.write("${" + g.varName(ident.Name) + "[")
 		if err := g.emitExprUnquoted(node.Index); err != nil {
 			return err
 		}
@@ -700,7 +766,7 @@ func (g *bashGen) emitArithExpr(n ast.Node) error {
 	case *ast.Literal:
 		return g.emitLiteralRaw(node)
 	case *ast.Ident:
-		g.write(node.Name)
+		g.write(g.varName(node.Name))
 		return nil
 	case *ast.BinaryExpr:
 		g.write("(")
@@ -810,8 +876,20 @@ func (g *bashGen) emitCall(ce *ast.CallExpr) error {
 	default:
 		// Call function and capture output via $().
 		g.write("$(" + ce.Callee)
-		for _, arg := range ce.Args {
+		params := g.funcParams[ce.Callee]
+		for i, arg := range ce.Args {
 			g.write(" ")
+			// The nameref on the other side wants the variable's name, not its
+			// contents. Only a plain identifier has one to give.
+			if i < len(params) && g.structNames[params[i]] {
+				id, ok := arg.(*ast.Ident)
+				if !ok {
+					return fmt.Errorf("XQL_E402: Bash passes a struct by name, "+
+						"so the argument to %s must be a variable", ce.Callee)
+				}
+				g.write(id.Name)
+				continue
+			}
 			if err := g.emitExpr(arg); err != nil {
 				return err
 			}

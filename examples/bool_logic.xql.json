@@ -1,0 +1,167 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "a",
+          "type": { "kind": "Bool" },
+          "value": { "kind": "Literal", "valueType": "Bool", "value": true }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "b",
+          "type": { "kind": "Bool" },
+          "value": { "kind": "Literal", "valueType": "Bool", "value": false }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "x",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 5 }
+        },
+        {
+          "kind": "IfStmt",
+          "condition": {
+            "kind": "BinaryExpr",
+            "op": "&&",
+            "left": { "kind": "Ident", "name": "a" },
+            "right": {
+              "kind": "UnaryExpr",
+              "op": "!",
+              "operand": { "kind": "Ident", "name": "b" }
+            }
+          },
+          "then": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "and-ok" }]
+              }
+            }
+          ],
+          "else": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "and-bad" }]
+              }
+            }
+          ]
+        },
+        {
+          "kind": "IfStmt",
+          "condition": {
+            "kind": "BinaryExpr",
+            "op": "||",
+            "left": { "kind": "Ident", "name": "b" },
+            "right": { "kind": "Ident", "name": "a" }
+          },
+          "then": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "or-ok" }]
+              }
+            }
+          ],
+          "else": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "or-bad" }]
+              }
+            }
+          ]
+        },
+        {
+          "kind": "IfStmt",
+          "condition": {
+            "kind": "BinaryExpr",
+            "op": "&&",
+            "left": {
+              "kind": "BinaryExpr",
+              "op": ">",
+              "left": { "kind": "Ident", "name": "x" },
+              "right": { "kind": "Literal", "valueType": "Int", "value": 3 }
+            },
+            "right": {
+              "kind": "BinaryExpr",
+              "op": "<",
+              "left": { "kind": "Ident", "name": "x" },
+              "right": { "kind": "Literal", "valueType": "Int", "value": 10 }
+            }
+          },
+          "then": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "range-ok" }]
+              }
+            }
+          ],
+          "else": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "range-bad" }]
+              }
+            }
+          ]
+        },
+        {
+          "kind": "IfStmt",
+          "condition": {
+            "kind": "UnaryExpr",
+            "op": "!",
+            "operand": {
+              "kind": "BinaryExpr",
+              "op": "==",
+              "left": { "kind": "Ident", "name": "x" },
+              "right": { "kind": "Literal", "valueType": "Int", "value": 4 }
+            }
+          },
+          "then": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "not-ok" }]
+              }
+            }
+          ],
+          "else": [
+            {
+              "kind": "ExprStmt",
+              "expr": {
+                "kind": "CallExpr",
+                "callee": "println",
+                "args": [{ "kind": "Literal", "valueType": "String", "value": "not-bad" }]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

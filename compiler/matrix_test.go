@@ -73,6 +73,17 @@ var expectedRejections = map[string][]string{
 	// all.
 	"for_each.xql.json": {"bat", "c", "fortran", "mql4", "mql5", "pascal", "tccli"},
 
+	// `!` is a UnaryExpr, which the batch and tccli backends have never
+	// emitted; both decline it rather than guess.
+	"bool_logic.xql.json":   {"bat", "tccli"},
+	"precedence.xql.json":   {"tccli"},
+	"string_build.xql.json": {"tccli"},
+
+	// A struct crossing a function boundary. awk arrays cannot be passed by
+	// value or returned at all, which is why awk already declines the struct
+	// example; bat has no struct literals; tccli has no member access.
+	"struct_arg.xql.json": {"awk", "bat", "tccli"},
+
 	// `break` is the construct that splits the matrix along a different line
 	// than Result does: a language without an early loop exit cannot fake one.
 	// All six declined with XQL_E401 until this example existed, which claimed
