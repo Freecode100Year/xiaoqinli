@@ -81,6 +81,10 @@ func GenerateZig(root ast.Node) ([]byte, error) {
 	if g.needStd {
 		out.WriteString("const std = @import(\"std\");\n\n")
 	}
+	if g.needConcat {
+		out.WriteString(zigConcatHelper)
+		out.WriteString("\n")
+	}
 	out.WriteString(g.buf.String())
 	return []byte(out.String()), nil
 }
@@ -94,6 +98,49 @@ type zigGen struct {
 	needResult  bool
 	scope       map[string]string // variable/param name → type kind
 	funcReturns map[string]string // function name → return type kind
+	needConcat  bool
+}
+
+// zigConcatFn is the helper `+` on Strings compiles to, and zigConcatHelper is
+// its definition.
+//
+// Zig has no runtime string concatenation in the language: `++` is a comptime
+// operator over arrays, and joining two slices at runtime means asking an
+// allocator for the result. A generated program has no allocator to hand and
+// nowhere sensible to free, so this bump-allocates out of one static buffer and
+// never reclaims any of it. That is a deliberate trade and worth stating: a
+// program that concatenates in an unbounded loop will run out of buffer and
+// panic on the slice bounds. Every example in the corpus concatenates a fixed
+// number of times, and a translation that compiles and is honest about its
+// ceiling beats one that does not compile at all.
+const zigConcatFn = "xqlConcat"
+
+const zigConcatHelper = `var xql_str_arena: [1 << 16]u8 = undefined;
+var xql_str_used: usize = 0;
+
+fn ` + zigConcatFn + `(a: []const u8, b: []const u8) []const u8 {
+    const start = xql_str_used;
+    @memcpy(xql_str_arena[start .. start + a.len], a);
+    @memcpy(xql_str_arena[start + a.len .. start + a.len + b.len], b);
+    xql_str_used = start + a.len + b.len;
+    return xql_str_arena[start..xql_str_used];
+}
+`
+
+// emitBuiltinCall writes `name(arg, arg)`, the shape Zig's arithmetic builtins
+// take.
+func (g *zigGen) emitBuiltinCall(name string, args ...ast.Node) error {
+	g.write(name + "(")
+	for i, a := range args {
+		if i > 0 {
+			g.write(", ")
+		}
+		if err := g.emitExpr(a); err != nil {
+			return err
+		}
+	}
+	g.write(")")
+	return nil
 }
 
 func (g *zigGen) write(s string)   { g.buf.WriteString(s) }
@@ -423,7 +470,26 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 		// to pick @divTrunc or @divFloor rather than guess which rounding you
 		// meant. Truncation is what the other targets do.
 		if g.types.isIntDivision(node) {
-			g.write("@divTrunc(")
+			return g.emitBuiltinCall("@divTrunc", node.Left, node.Right)
+		}
+		// And it refuses `%` on them for the same reason: "signed integers and
+		// floats must use @rem or @mod". @rem truncates and @mod floors, which
+		// is the same divide the division above settles — so it settles the same
+		// way. @rem(-7, 2) is -1, which is what C, Go, Java and Rust answer.
+		if g.types.isIntRemainder(node) {
+			return g.emitBuiltinCall("@rem", node.Left, node.Right)
+		}
+		// Slices have no `==`. Comparing two `[]const u8` with it is a compile
+		// error, not a pointer comparison, so there was never a wrong answer
+		// here — only a program that could not be built. std.mem.eql compares
+		// contents, which is what every other target's `==` on a String means.
+		if (node.Op == "==" || node.Op == "!=") &&
+			(g.types.kindOf(node.Left) == "String" || g.types.kindOf(node.Right) == "String") {
+			g.needStd = true
+			if node.Op == "!=" {
+				g.write("!")
+			}
+			g.write("std.mem.eql(u8, ")
 			if err := g.emitExpr(node.Left); err != nil {
 				return err
 			}
@@ -433,6 +499,16 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 			}
 			g.write(")")
 			return nil
+		}
+		// `++` concatenates arrays at comptime; it cannot join a slice whose
+		// contents are only known at runtime. `"Hello, " ++ name` inside a
+		// function that takes name compiled to "slice value being concatenated
+		// must be comptime-known" — every string the transpiler built from a
+		// parameter failed to compile.
+		if node.Op == "+" && g.types.kindOf(node) == "String" {
+			g.needConcat = true
+			g.needStd = true
+			return g.emitBuiltinCall(zigConcatFn, node.Left, node.Right)
 		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
@@ -444,9 +520,6 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 			op = "and"
 		case "||":
 			op = "or"
-		}
-		if op == "+" && containsStringExpr(node) {
-			op = "++"
 		}
 		g.write(" " + op + " ")
 		if err := g.emitExpr(node.Right); err != nil {

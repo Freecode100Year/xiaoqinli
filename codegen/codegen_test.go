@@ -957,8 +957,19 @@ func TestGenerateZigStringConcat(t *testing.T) {
 		t.Fatalf("GenerateZig: %v", err)
 	}
 	code := string(out)
-	if !strings.Contains(code, "++") {
-		t.Errorf("Zig string concat should use '++', got:\n%s", code)
+	// This test used to require `++`, and got it — which is precisely how the
+	// defect survived. `++` joins arrays at comptime; handed a slice whose
+	// contents are only known at runtime it does not produce a wrong answer, it
+	// refuses to build. So the assertion is inverted: the helper must be there,
+	// defined as well as called, and `++` must not be.
+	if !strings.Contains(code, zigConcatFn+"(") {
+		t.Errorf("Zig string concat should call %s, got:\n%s", zigConcatFn, code)
+	}
+	if !strings.Contains(code, "fn "+zigConcatFn+"(") {
+		t.Errorf("%s is called but never defined, got:\n%s", zigConcatFn, code)
+	}
+	if strings.Contains(code, "++") {
+		t.Errorf("`++` cannot concatenate a runtime slice, got:\n%s", code)
 	}
 }
 
