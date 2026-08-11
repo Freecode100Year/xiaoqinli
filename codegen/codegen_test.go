@@ -1189,7 +1189,7 @@ func TestCollectionCodegenAll(t *testing.T) {
 		{"zig", []string{"&[_]i64{", "nums[@intCast(0)]"}},
 		{"nim", []string{"@[10'i64", "nums[0'i64]"}},
 		{"julia", []string{"Int64[Int64(10)", "nums[(Int64(0)) + 1]"}},
-		{"cpp", []string{"std::vector<long>{10, 20, 30}", "nums[0]"}},
+		{"cpp", []string{"std::vector<long long>{10LL, 20LL, 30LL}", "nums[0LL]"}},
 	}
 
 	for _, tc := range cases {
@@ -1537,7 +1537,7 @@ func TestGenerateCpp(t *testing.T) {
 
 	checks := []string{
 		"#include <iostream>",
-		"long add(long a, long b)",
+		"long long add(long long a, long long b)",
 		"int main()",
 		"std::cout << result << std::endl",
 		"return (a + b);",
@@ -1824,7 +1824,7 @@ func TestGenerateC(t *testing.T) {
 
 	checks := []string{
 		"#include <stdio.h>",
-		"long add(long a, long b)",
+		"long long add(long long a, long long b)",
 		"int main()",
 		"printf(",
 		"return (a + b);",

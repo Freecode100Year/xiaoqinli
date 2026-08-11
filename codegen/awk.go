@@ -338,11 +338,27 @@ func (g *awkGen) emitForStmt(fs *ast.ForStmt) error {
 		}
 		g.writeln("; " + fs.Var + "++) {")
 	case "each":
-		g.write("for (" + fs.Var + " in ")
+		// awk's `for (k in a)` walks the *subscripts*, not the values, and in
+		// unspecified order. So this summed 0+1+2 and printed 3 where every
+		// other target prints 12, and would have been unordered even had it
+		// summed the right things. Arrays here are 0..n-1, so an index loop is
+		// both correct and ordered; the value is bound to the loop variable so
+		// the body needs no rewriting.
+		idx := "xql_i_" + fs.Var
+		g.write("for (" + idx + " = 0; " + idx + " < length(")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
 		}
-		g.writeln(") {")
+		g.write("); " + idx + "++) {")
+		g.writeln("")
+		g.indent++
+		g.writeIndent()
+		g.write(fs.Var + " = ")
+		if err := g.emitExpr(fs.Iterable); err != nil {
+			return err
+		}
+		g.writeln("[" + idx + "]")
+		g.indent--
 	default:
 		return fmt.Errorf("XQL_E401: unsupported for-loop form %q", fs.Form)
 	}

@@ -1,0 +1,61 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "nums",
+          "type": { "kind": "Array", "elem": { "kind": "Int" } },
+          "value": {
+            "kind": "ArrayLit",
+            "elemType": { "kind": "Int" },
+            "elements": [
+              { "kind": "Literal", "valueType": "Int", "value": 2 },
+              { "kind": "Literal", "valueType": "Int", "value": 4 },
+              { "kind": "Literal", "valueType": "Int", "value": 6 }
+            ]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "total",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 0 }
+        },
+        {
+          "kind": "ForStmt",
+          "form": "each",
+          "var": "n",
+          "iterable": { "kind": "Ident", "name": "nums" },
+          "body": [
+            {
+              "kind": "AssignStmt",
+              "target": "total",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": { "kind": "Ident", "name": "total" },
+                "right": { "kind": "Ident", "name": "n" }
+              }
+            }
+          ]
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "total" }]
+          }
+        }
+      ]
+    }
+  ]
+}

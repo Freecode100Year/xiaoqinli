@@ -387,10 +387,20 @@ func (g *bashGen) emitForStmt(fs *ast.ForStmt) error {
 		}
 		g.writeln("; " + fs.Var + "++)); do")
 	case "each":
-		g.write("for " + fs.Var + " in ")
-		// For arrays, emit with "${arr[@]}" style.
-		if err := g.emitExprUnquoted(fs.Iterable); err != nil {
-			return err
+		// The comment here used to say "${arr[@]} style" while the code emitted
+		// the bare name, so `for n in nums` iterated the single word "nums" and
+		// arithmetic on it evaluated an unset variable to 0. for_each.xql.json
+		// summed to 2 rather than 12 — the loop ran once, on nothing.
+		//
+		// Only an identifier can be expanded this way: it names a bash array.
+		// Anything else has no array to expand and is left as it was.
+		if id, ok := fs.Iterable.(*ast.Ident); ok {
+			g.write("for " + fs.Var + ` in "${` + id.Name + `[@]}"`)
+		} else {
+			g.write("for " + fs.Var + " in ")
+			if err := g.emitExprUnquoted(fs.Iterable); err != nil {
+				return err
+			}
 		}
 		g.writeln("; do")
 	default:

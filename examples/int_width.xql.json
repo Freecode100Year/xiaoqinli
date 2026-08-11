@@ -1,0 +1,59 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "big",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 2147483647 }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "past",
+          "type": { "kind": "Int" },
+          "value": {
+            "kind": "BinaryExpr",
+            "op": "+",
+            "left": { "kind": "Ident", "name": "big" },
+            "right": { "kind": "Literal", "valueType": "Int", "value": 1 }
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "wide",
+          "type": { "kind": "Int" },
+          "value": {
+            "kind": "BinaryExpr",
+            "op": "*",
+            "left": { "kind": "Literal", "valueType": "Int", "value": 100000 },
+            "right": { "kind": "Literal", "valueType": "Int", "value": 100000 }
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "past" }]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "wide" }]
+          }
+        }
+      ]
+    }
+  ]
+}

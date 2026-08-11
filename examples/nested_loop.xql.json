@@ -1,0 +1,86 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "total",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 0 }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "rows",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 0 }
+        },
+        {
+          "kind": "ForStmt",
+          "form": "range",
+          "var": "i",
+          "start": { "kind": "Literal", "valueType": "Int", "value": 0 },
+          "end": { "kind": "Literal", "valueType": "Int", "value": 3 },
+          "body": [
+            {
+              "kind": "AssignStmt",
+              "target": "rows",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": { "kind": "Ident", "name": "rows" },
+                "right": { "kind": "Literal", "valueType": "Int", "value": 1 }
+              }
+            },
+            {
+              "kind": "ForStmt",
+              "form": "range",
+              "var": "j",
+              "start": { "kind": "Literal", "valueType": "Int", "value": 0 },
+              "end": { "kind": "Literal", "valueType": "Int", "value": 3 },
+              "body": [
+                {
+                  "kind": "AssignStmt",
+                  "target": "total",
+                  "value": {
+                    "kind": "BinaryExpr",
+                    "op": "+",
+                    "left": { "kind": "Ident", "name": "total" },
+                    "right": {
+                      "kind": "BinaryExpr",
+                      "op": "*",
+                      "left": { "kind": "Ident", "name": "i" },
+                      "right": { "kind": "Ident", "name": "j" }
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "total" }]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "rows" }]
+          }
+        }
+      ]
+    }
+  ]
+}

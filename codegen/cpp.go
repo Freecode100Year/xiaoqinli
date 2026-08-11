@@ -119,7 +119,12 @@ func (g *cppGen) collectIncludes() []string {
 func (g *cppGen) typeStr(t ast.TypeExpr) string {
 	switch t.KindName {
 	case "Int":
-		return "long"
+		// `long` is 32 bits on Windows and 64 on Linux, so this backend was
+		// emitting a program whose arithmetic depended on where it was built:
+		// 2147483647 + 1 printed -2147483648 under mingw and 2147483648 under
+		// gcc. long long is the narrowest type the standard guarantees holds
+		// the 64-bit Int this AST means.
+		return "long long"
 	case "Float":
 		return "double"
 	case "String":
@@ -666,8 +671,11 @@ func (g *cppGen) emitLiteral(lit *ast.Literal) error {
 		s, _ := lit.Value.(string)
 		g.write(fmt.Sprintf("%q", s))
 	case "Int":
+		// See c.go: widening the variables leaves the arithmetic between two
+		// int literals still happening in int, so `100000 * 100000` overflowed
+		// before it was ever assigned.
 		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%d", int64(f)))
+		g.write(fmt.Sprintf("%dLL", int64(f)))
 	case "Float":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%g", f))

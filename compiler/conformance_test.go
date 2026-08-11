@@ -73,6 +73,27 @@ var conformanceExpect = map[string][]string{
 	// -1. Truncation is the majority and now the rule; those five emit a
 	// helper rather than their native operator.
 	"negative_arithmetic.xql.json": {"-3", "-1", "-3", "1"},
+
+	// Sum of i*j over 0..2 squared, and a counter in the outer body. Nothing in
+	// the corpus had a loop inside a loop, and the shapes that go wrong there
+	// are not the shapes that go wrong in one: a loop variable that leaks
+	// between levels, and an accumulator that has to survive the inner loop —
+	// the elixir backend threads one through Enum.reduce and had never been
+	// asked to nest two.
+	"nested_loop.xql.json": {"9", "3"},
+
+	// Int is 64-bit in this AST. A backend that maps it to its language's
+	// 32-bit int prints -2147483648 for the first line and something unrelated
+	// for the second, and no compiler objects. Both values stay under 2^53 so
+	// the targets that hold integers in doubles — awk, and js before BigInt —
+	// are being asked about width, not about float precision.
+	"int_width.xql.json": {"2147483648", "10000000000"},
+
+	// The each form. The corpus reached every loop through the range form,
+	// which is a different code path in every backend that has both — and the
+	// one fortran, pascal and mql decline outright, so this is also the first
+	// corpus program a target is expected to refuse rather than run.
+	"for_each.xql.json": {"12"},
 }
 
 // conformanceRunner says how to turn one target's output into a running
@@ -98,6 +119,17 @@ type conformanceRunner struct {
 	// answers -v and errors on --version, so without this it looks absent on a
 	// runner that has it.
 	probe []string
+
+	// cannot names examples the target's *language* cannot express, mapped to
+	// why. Every entry is printed by the run, because an exclusion nobody sees
+	// is indistinguishable from coverage.
+	//
+	// This is not somewhere to park a failing backend. A target that produces
+	// the wrong answer has a defect and the defect gets fixed; an entry belongs
+	// here only when no codegen could route around the limit — cmd's `set /a`
+	// being 32-bit signed, with no wider arithmetic anywhere in the interpreter,
+	// is the one case so far.
+	cannot map[string]string
 
 	// onlyOS restricts a runner to one GOOS. cmd.exe exists nowhere but
 	// Windows and CI is Linux, so such a runner can never be the evidence
@@ -264,6 +296,10 @@ var conformanceRunners = []conformanceRunner{
 	// run at all, and running it found `echo (a / b)` putting that text on
 	// stdout: echo evaluates nothing, so arithmetic needs `set /a` first.
 	{target: "bat", ext: ".bat", tools: []string{"cmd"}, onlyOS: "windows",
+		cannot: map[string]string{
+			"int_width.xql.json": "`set /a` is 32-bit signed and cmd has no wider " +
+				"arithmetic, so 2147483647 + 1 wraps whatever the backend emits",
+		},
 		steps: [][]string{{"{tool}", "/c", "{file}"}}},
 }
 
@@ -321,6 +357,10 @@ func TestCrossTargetConformance(t *testing.T) {
 
 			ran := 0
 			for _, name := range names {
+				if why, ok := r.cannot[name]; ok {
+					t.Logf("%s skips %s: %s", r.target, name, why)
+					continue
+				}
 				res := CompileFromFile(corpus[name], r.target, "")
 				if !res.Success {
 					// Declining is the matrix's business, and it already asserts
@@ -454,6 +494,22 @@ func TestConformanceRunnersAreExecutedTier(t *testing.T) {
 		if !strings.HasPrefix(v.Harness, "TestCrossTargetConformance/") &&
 			!strings.Contains(v.Harness, "E2E") {
 			t.Errorf("%s claims evidence from %q, but this test is what runs it", r.target, v.Harness)
+		}
+	}
+}
+
+// TestConformanceExclusionsAreJustified keeps `cannot` from becoming a place to
+// hide a red test. An entry must name an example that exists and must carry a
+// reason, so adding one is a claim someone can read and disagree with.
+func TestConformanceExclusionsAreJustified(t *testing.T) {
+	for _, r := range conformanceRunners {
+		for name, why := range r.cannot {
+			if _, ok := conformanceExpect[name]; !ok {
+				t.Errorf("%s excludes %q, which is not in the corpus", r.target, name)
+			}
+			if strings.TrimSpace(why) == "" {
+				t.Errorf("%s excludes %s with no reason given", r.target, name)
+			}
 		}
 	}
 }

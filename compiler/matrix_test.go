@@ -62,6 +62,16 @@ var expectedRejections = map[string][]string{
 	"string_compare.xql.json":      {"tccli"},
 	"lambda_ifexpr.xql.json":       {"tccli"},
 	"example.xql.json":             {"tccli"},
+	"nested_loop.xql.json":         {"tccli"},
+	"int_width.xql.json":           {"tccli"},
+
+	// The each form, which is the line the matrix splits along here. c has no
+	// array length to iterate; fortran and pascal declare the limit outright;
+	// mql4 and mql5 have no for-each; and bat has no array *values* at all —
+	// it fakes arrays with variables named nums[0], nums[1], which indexing can
+	// reach by writing the index into the name and iteration cannot reach at
+	// all.
+	"for_each.xql.json": {"bat", "c", "fortran", "mql4", "mql5", "pascal", "tccli"},
 
 	// `break` is the construct that splits the matrix along a different line
 	// than Result does: a language without an early loop exit cannot fake one.

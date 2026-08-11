@@ -47,7 +47,11 @@ func (g *fortranGen) writeIndent() {
 func typeToFortran(t ast.TypeExpr) string {
 	switch t.KindName {
 	case "Int":
-		return "integer"
+		// Default `integer` is 32-bit in every Fortran compiler anyone uses, so
+		// 2147483647 + 1 wrapped to -2147483648 and 100000 * 100000 to
+		// 1410065408 — silently, since the arithmetic is legal. Int is 64-bit
+		// in this AST; integer(8) is the kind that says so.
+		return "integer(8)"
 	case "Float":
 		return "real(8)"
 	case "String":
@@ -60,7 +64,7 @@ func typeToFortran(t ast.TypeExpr) string {
 		if t.Elem != nil {
 			return typeToFortran(*t.Elem) + ", dimension(:), allocatable"
 		}
-		return "integer, dimension(:), allocatable"
+		return "integer(8), dimension(:), allocatable"
 	default:
 		return "type(" + t.KindName + ")"
 	}
@@ -122,7 +126,10 @@ func (g *fortranGen) emitMainBlock(fd *ast.FunctionDecl, prog *ast.Program) erro
 	for _, name := range forVars {
 		if !declaredNames[name] {
 			g.writeIndent()
-			g.writeln("integer :: " + name)
+			// integer(8) like every other Int here: a loop bound is an Int
+			// expression, and a counter one kind narrower than the values it
+			// is compared against is the same overflow one step removed.
+			g.writeln("integer(8) :: " + name)
 		}
 	}
 
@@ -274,7 +281,10 @@ func (g *fortranGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	for _, name := range forVars {
 		if !declaredNames[name] {
 			g.writeIndent()
-			g.writeln("integer :: " + name)
+			// integer(8) like every other Int here: a loop bound is an Int
+			// expression, and a counter one kind narrower than the values it
+			// is compared against is the same overflow one step removed.
+			g.writeln("integer(8) :: " + name)
 		}
 	}
 
@@ -685,8 +695,13 @@ func (g *fortranGen) emitLiteral(lit *ast.Literal) error {
 		s, _ := lit.Value.(string)
 		g.write("'" + strings.ReplaceAll(s, "'", "''") + "'")
 	case "Int":
+		// `_8` is the kind suffix, and it is required rather than tidy: Fortran
+		// checks argument kinds exactly, so `add(3, 5)` against a dummy declared
+		// integer(8) is "Type mismatch in argument 'a': passed INTEGER(4) to
+		// INTEGER(8)" and does not compile. The same suffix keeps `100000 *
+		// 100000` from overflowing in the default kind before it is stored.
 		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%d", int64(f)))
+		g.write(fmt.Sprintf("%d_8", int64(f)))
 	case "Float":
 		f, _ := lit.Value.(float64)
 		s := fmt.Sprintf("%g", f)

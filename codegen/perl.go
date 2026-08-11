@@ -325,11 +325,16 @@ func (g *perlGen) emitForStmt(fs *ast.ForStmt) error {
 		}
 		g.writeln("; $" + fs.Var + "++) {")
 	case "each":
-		g.write("for my $" + fs.Var + " (")
+		// Arrays are array *references* in this backend — `my $nums = [2, 4, 6]`
+		// — so `for my $n ($nums)` iterated a one-element list holding the
+		// reference itself, and `$total + $n` numified it to its address.
+		// for_each.xql.json printed 42949701560 instead of 12. @{...} is the
+		// dereference that makes it a list of elements.
+		g.write("for my $" + fs.Var + " (@{")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
 		}
-		g.writeln(") {")
+		g.writeln("}) {")
 	default:
 		return fmt.Errorf("XQL_E401: unsupported for-loop form %q", fs.Form)
 	}

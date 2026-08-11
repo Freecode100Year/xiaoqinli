@@ -2,6 +2,7 @@ package codegen
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"xiaoqinli/ast"
@@ -389,24 +390,16 @@ func (g *batGen) emitForStmt(fs *ast.ForStmt) error {
 		g.writeIndent()
 		g.writeln(")")
 	case "each":
-		g.write("for %%")
-		g.write(fs.Var)
-		g.write(" in (")
-		if err := g.emitValExpr(fs.Iterable); err != nil {
-			return err
-		}
-		g.writeln(") do (")
-		g.forVars[fs.Var] = true
-		g.indent++
-		for _, s := range fs.Body {
-			if err := g.emitNode(s); err != nil {
-				return err
-			}
-		}
-		g.indent--
-		delete(g.forVars, fs.Var)
-		g.writeIndent()
-		g.writeln(")")
+		// Batch has no arrays. This backend fakes one with variables named
+		// nums[0], nums[1] and so on, which indexing can reach because the index
+		// is written into the name — but nothing can ask how many exist, and
+		// `for %%n in (!nums!)` expanded a variable that was never set, so the
+		// body ran once over an empty word and for_each.xql.json printed 0.
+		//
+		// Declining says the same thing the output was already saying, and says
+		// it at compile time. fortran, pascal and mql decline this form too.
+		return fmt.Errorf("XQL_E402: Batch has no array values to iterate — " +
+			"an indexed range loop is the only form it can express")
 	default:
 		return fmt.Errorf("XQL_E401: unsupported for-loop form %q", fs.Form)
 	}
@@ -801,6 +794,16 @@ func (g *batGen) emitArithExpr(n ast.Node) error {
 	case *ast.Literal:
 		return g.emitLiteral(node)
 	case *ast.Ident:
+		// A `for` variable is not an environment variable: cmd substitutes %%i
+		// textually before `set /a` ever sees the line, and a bare `i` there is
+		// an unset variable, which set /a reads as 0. Indexing already knew
+		// this (emitIndexExpr consults forVars); arithmetic did not, so
+		// nested_loop.xql.json summed `i * j` as 0 * 0 nine times and printed 0
+		// while its outer counter, a real variable, came out right.
+		if g.forVars[node.Name] {
+			g.write("%%" + node.Name)
+			return nil
+		}
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
@@ -847,8 +850,22 @@ func (g *batGen) emitLiteral(lit *ast.Literal) error {
 		s, _ := lit.Value.(string)
 		g.write(s)
 	case "Int":
+		// `set /a` is 32-bit signed and there is no wider arithmetic in cmd —
+		// not a gap in this backend, a limit of the interpreter. Int is 64-bit
+		// here, so a literal that does not fit is a program batch cannot mean:
+		// int_width.xql.json printed -2147483648 for 2147483647 + 1, silently,
+		// because the wrap is what `set /a` does.
+		//
+		// This catches only what it can see. Arithmetic that overflows from
+		// operands which each fit is still wrong and still silent, and no
+		// compile-time check can reach it — the note in verification.go says so.
 		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%d", int64(f)))
+		n := int64(f)
+		if n > math.MaxInt32 || n < math.MinInt32 {
+			return fmt.Errorf("XQL_E402: Batch arithmetic is 32-bit signed; "+
+				"the literal %d cannot be represented", n)
+		}
+		g.write(fmt.Sprintf("%d", n))
 	case "Float":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%g", f))

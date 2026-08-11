@@ -120,7 +120,12 @@ func (g *cGen) writeIndent() {
 func typeToC(t ast.TypeExpr) string {
 	switch t.KindName {
 	case "Int":
-		return "long"
+		// Not `long`. C only promises long is at least 32 bits, and on Windows
+		// it is exactly 32 — so 2147483647 + 1 printed -2147483648 there while
+		// the same source was correct on Linux, where long is 64. Int is 64-bit
+		// in this AST on every platform, and long long is the narrowest type C
+		// guarantees will hold it.
+		return "long long"
 	case "Float":
 		return "double"
 	case "String":
@@ -133,7 +138,7 @@ func typeToC(t ast.TypeExpr) string {
 		if t.Elem != nil {
 			return typeToC(*t.Elem)
 		}
-		return "long"
+		return "long long"
 	default:
 		return t.KindName
 	}
@@ -188,7 +193,7 @@ func (g *cGen) printfFmt(typeKind string) string {
 	case "Bool":
 		return "%d"
 	default:
-		return "%ld"
+		return "%lld"
 	}
 }
 
@@ -589,8 +594,13 @@ func (g *cGen) emitLiteral(lit *ast.Literal) error {
 		s, _ := lit.Value.(string)
 		g.write(fmt.Sprintf("%q", s))
 	case "Int":
+		// The LL suffix is not decoration. Widening the *variables* to long long
+		// is not enough: `100000 * 100000` is int times int, so it overflows
+		// during the multiply and the 64-bit destination receives a number that
+		// was already wrong. It printed 1410065408. The suffix makes the operands
+		// wide, which is where the arithmetic actually happens.
 		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%d", int64(f)))
+		g.write(fmt.Sprintf("%dLL", int64(f)))
 	case "Float":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%g", f))
