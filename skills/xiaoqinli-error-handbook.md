@@ -164,7 +164,7 @@ refusing to emit code that would only break later.
 - `XQL_E402: MQL does not support Map type`
 - `XQL_E402: bat cannot express StructLit`
 
-**Affected targets for Result<T>:** js, c, cpp, nim, mql4, mql5.
+**Affected targets for Result<T>:** js, c, cpp, nim.
 
 Every backend reports capability limits with this one code. MQL used to raise
 XQL_E403 for the identical condition, which meant a caller could not switch on

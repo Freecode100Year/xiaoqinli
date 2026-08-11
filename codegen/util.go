@@ -92,22 +92,12 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateJulia(root)
 	case "cpp":
 		return GenerateCpp(root)
-	case "mql4":
-		return GenerateMQL4(root)
-	case "mql5":
-		return GenerateMQL5(root)
 	case "c":
 		return GenerateC(root)
-	case "scala":
-		return GenerateScala(root)
 	case "haskell":
 		return GenerateHaskell(root)
 	case "ocaml":
 		return GenerateOCaml(root)
-	case "fsharp":
-		return GenerateFSharp(root)
-	case "ada":
-		return GenerateAda(root)
 	case "awk":
 		return GenerateAwk(root)
 	case "bash":
@@ -118,8 +108,6 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GenerateD(root)
 	case "fortran":
 		return GenerateFortran(root)
-	case "objc":
-		return GenerateObjC(root)
 	case "pascal":
 		return GeneratePascal(root)
 	case "perl":
@@ -128,12 +116,8 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return GeneratePowerShell(root)
 	case "tcl":
 		return GenerateTcl(root)
-	case "v":
-		return GenerateV(root)
 	case "elixir":
 		return GenerateElixir(root)
-	case "clojure":
-		return GenerateClojure(root)
 	case "vala":
 		return GenerateVala(root)
 	case "groovy":
@@ -284,23 +268,17 @@ var unsupportedResultTargets = map[string]bool{
 	// the appearance of support from the dispatcher, because nothing checked.
 	// A backend that cannot express a construct is supposed to reject it
 	// rather than degrade it silently, so they do that now.
-	"ada":        true,
 	"chrome":     true, // emits JavaScript, which is on this list already
-	"clojure":    true,
 	"crystal":    true,
 	"d":          true,
 	"elixir":     true,
-	"fsharp":     true,
 	"groovy":     true,
 	"haskell":    true,
-	"objc":       true,
 	"ocaml":      true,
 	"powershell": true,
-	"scala":      true,
 	"shortcut":   true,
 	"tccli":      true,
 	"tcl":        true,
-	"v":          true,
 	"vala":       true,
 }
 

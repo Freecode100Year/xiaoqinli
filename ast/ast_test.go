@@ -160,7 +160,7 @@ func TestParseAllNodeKinds(t *testing.T) {
 
 // TestParseArrayLiteralNormalizesToArrayLit pins the fix for a codegen gap:
 // "ArrayLit" and "ArrayLiteral" are the same shape (ElemType + Elements)
-// under two historical JSON spellings, but only a minority of the 45 codegen
+// under two historical JSON spellings, but only a minority of the codegen
 // backends implemented emitArrayLiteral, so a program using the "ArrayLiteral"
 // spelling failed on the other 28. Both spellings must parse to the same Go
 // type so every backend that already handles ArrayLit handles both.

@@ -224,9 +224,9 @@ func resetDefaultProfiles() {
 
 	// Add basic profiles for long-tail 42+ target backends
 	allTargets := []string{
-		"js", "c", "scala", "haskell", "ocaml", "fsharp", "elixir", "clojure", "lua", "ruby", "php",
-		"nim", "julia", "mql4", "mql5", "ada", "awk", "bash", "bat", "crystal", "d", "fortran",
-		"objc", "pascal", "perl", "powershell", "tcl", "v", "vala", "groovy", "shortcut", "chrome",
+		"js", "c", "haskell", "ocaml", "elixir", "lua", "ruby", "php",
+		"nim", "julia", "awk", "bash", "bat", "crystal", "d", "fortran",
+		"pascal", "perl", "powershell", "tcl", "vala", "groovy", "shortcut", "chrome",
 	}
 
 	for _, t := range allTargets {

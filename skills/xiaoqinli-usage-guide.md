@@ -29,11 +29,11 @@ xql http :8080 --mode rest     # REST API mode
 ## Supported Targets (37)
 
 **Systems:** `go` `rust` `c` `cpp` `zig` `d` `v` `nim`
-**JVM/CLR:** `java` `kotlin` `scala` `csharp` `dart` `groovy`
+**JVM/CLR:** `java` `kotlin` `csharp` `dart` `groovy`
 **Scripting:** `py` `ts` `ruby` `lua` `php` `perl` `julia` `crystal` `awk`
-**Functional:** `haskell` `ocaml` `fsharp` `elixir` `clojure`
+**Functional:** `haskell` `ocaml` `elixir`
 **Shell:** `bash` `powershell` `tcl`
-**Legacy/Niche:** `ada` `fortran` `pascal` `objc` `vala` `mql4` `mql5`
+**Legacy/Niche:** `fortran` `pascal` `vala`
 
 ## .xql.json Format
 

@@ -43,9 +43,9 @@ func TestAdvertisedTargetsAreGeneratable(t *testing.T) {
 	}
 	for _, flag := range []string{
 		"go", "rust", "ts", "js", "javascript", "kotlin", "swift", "py", "java", "csharp",
-		"dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp", "mql4", "mql5", "c",
-		"scala", "haskell", "ocaml", "fsharp", "ada", "awk", "bash", "crystal", "d",
-		"fortran", "objc", "pascal", "perl", "powershell", "tcl", "v", "elixir", "clojure",
+		"dart", "lua", "ruby", "php", "zig", "nim", "julia", "cpp", "c",
+		"haskell", "ocaml", "awk", "bash", "crystal", "d",
+		"fortran", "pascal", "perl", "powershell", "tcl", "elixir",
 		"vala", "groovy", "bat", "shortcut", "chrome", "tccli", "tencentcloud", "android",
 		"apk", "ios", "swift-pkg",
 	} {
@@ -372,8 +372,8 @@ func TestLearnedDiagnosticFixOverridesPrePopulatedDefault(t *testing.T) {
 
 func TestGetSupportedTargets(t *testing.T) {
 	targets := GetSupportedTargets()
-	if len(targets) < 40 {
-		t.Fatalf("expected 40+ targets, got %d", len(targets))
+	if len(targets) < 38 {
+		t.Fatalf("expected 38+ targets, got %d", len(targets))
 	}
 	targets[0] = "MODIFIED"
 	fresh := GetSupportedTargets()

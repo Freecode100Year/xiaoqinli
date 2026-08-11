@@ -12,7 +12,7 @@ import (
 	"xiaoqinli/internal/e2e"
 )
 
-// One AST, forty-six targets — the claim is not that forty-six backends emit
+// One AST, thirty-eight targets — the claim is not that thirty-eight backends emit
 // something, it is that they emit the *same program*. Nothing tested that.
 //
 // TestExampleTargetMatrix asks whether codegen returns bytes. TestCompiledTier
@@ -91,7 +91,7 @@ var conformanceExpect = map[string][]string{
 
 	// The each form. The corpus reached every loop through the range form,
 	// which is a different code path in every backend that has both — and the
-	// one fortran, pascal and mql decline outright, so this is also the first
+	// one fortran and pascal decline outright, so this is also the first
 	// corpus program a target is expected to refuse rather than run.
 	"for_each.xql.json": {"12"},
 

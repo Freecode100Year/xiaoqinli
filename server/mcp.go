@@ -217,7 +217,7 @@ func (s *MCPServer) handleToolsList(req *jsonRPCRequest) jsonRPCResponse {
 					},
 					"target": map[string]string{
 						"type":        "string",
-						"description": "Target language: go | rust | ts | py | cpp | c | java | csharp | kotlin | swift | scala | haskell | ocaml | fsharp | elixir | clojure | dart | lua | ruby | php | zig | nim | julia | mql4 | mql5 | ada | awk | bash | bat | crystal | d | fortran | objc | pascal | perl | powershell | tcl | v | vala | groovy | shortcut | chrome (default: go)",
+						"description": "Target language: go | rust | ts | py | cpp | c | java | csharp | kotlin | swift | haskell | ocaml | elixir | dart | lua | ruby | php | zig | nim | julia | awk | bash | bat | crystal | d | fortran | pascal | perl | powershell | tcl | vala | groovy | shortcut | chrome | tccli | android | ios (default: go)",
 					},
 				},
 				"required": []string{"source"},

@@ -397,7 +397,7 @@ func (g *batGen) emitForStmt(fs *ast.ForStmt) error {
 		// body ran once over an empty word and for_each.xql.json printed 0.
 		//
 		// Declining says the same thing the output was already saying, and says
-		// it at compile time. fortran, pascal and mql decline this form too.
+		// it at compile time. fortran and pascal decline this form too.
 		return fmt.Errorf("XQL_E402: Batch has no array values to iterate — " +
 			"an indexed range loop is the only form it can express")
 	default:

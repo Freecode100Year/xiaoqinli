@@ -645,11 +645,10 @@ func TestGenerateDispatcher(t *testing.T) {
 	targets := []string{
 		"go", "rust", "ts", "kotlin", "swift", "py",
 		"java", "csharp", "dart", "lua", "ruby", "php",
-		"zig", "nim", "julia", "cpp", "c", "scala", "haskell",
-		"mql4", "mql5",
-		"ocaml", "fsharp", "elixir", "clojure",
-		"ada", "awk", "bash", "crystal", "d", "fortran",
-		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"zig", "nim", "julia", "cpp", "c", "haskell",
+		"ocaml", "elixir",
+		"awk", "bash", "crystal", "d", "fortran",
+		"pascal", "perl", "powershell", "tcl",
 		"vala", "groovy", "bat", "shortcut", "chrome",
 	}
 	for _, tgt := range targets {
@@ -1143,8 +1142,6 @@ func TestStructCodegenAll(t *testing.T) {
 		{"nim", []string{"type Point = object", "x: int64", "Point(x:"}},
 		{"julia", []string{"struct Point", "x::Int64", "Point("}},
 		{"cpp", []string{"struct Point {", "long x;", "Point{"}},
-		{"mql4", []string{"struct Point {", "long x;"}},
-		{"mql5", []string{"struct Point {", "long x;"}},
 		{"chrome", []string{"class Point", "constructor(x, y)", "toString()"}},
 	}
 
@@ -1389,11 +1386,11 @@ func TestForStmtCodegenAll(t *testing.T) {
 	targets := []string{
 		"go", "rust", "ts", "kotlin", "swift", "py",
 		"java", "csharp", "dart", "lua", "ruby", "php",
-		"zig", "nim", "julia", "cpp", "mql4", "mql5",
-		"c", "scala", "haskell",
-		"ocaml", "fsharp", "elixir", "clojure",
-		"ada", "awk", "bash", "crystal", "d", "fortran",
-		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"zig", "nim", "julia", "cpp",
+		"c", "haskell",
+		"ocaml", "elixir",
+		"awk", "bash", "crystal", "d", "fortran",
+		"pascal", "perl", "powershell", "tcl",
 		"vala", "groovy", "bat", "shortcut", "chrome",
 	}
 	root := mustParse(t, forRangeProgram)
@@ -1440,10 +1437,10 @@ func TestBreakContinueCodegenAll(t *testing.T) {
 	targets := []string{
 		"go", "rust", "ts", "kotlin", "swift", "py",
 		"java", "csharp", "dart", "ruby", "php",
-		"zig", "nim", "julia", "cpp", "mql4", "mql5",
-		"c", "scala",
+		"zig", "nim", "julia", "cpp",
+		"c",
 		"awk", "bash", "crystal", "d", "fortran",
-		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"pascal", "perl", "powershell", "tcl",
 		"vala", "groovy", "chrome",
 	}
 	root := mustParse(t, breakContinueProgram)
@@ -1500,15 +1497,15 @@ const assignIndexProgram = `{
 }`
 
 func TestAssignIndexCodegenAll(t *testing.T) {
-	// Excluded: haskell, clojure (functional — no imperative index assignment), fortran, bat, mql (limited array support)
+	// Excluded: haskell (functional — no imperative index assignment), fortran, bat (limited array support)
 	targets := []string{
 		"go", "rust", "ts", "kotlin", "swift", "py",
 		"java", "csharp", "dart", "lua", "ruby", "php",
 		"zig", "nim", "julia", "cpp",
-		"c", "scala",
-		"ocaml", "fsharp", "elixir",
-		"ada", "awk", "bash", "crystal", "d",
-		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"c",
+		"ocaml", "elixir",
+		"awk", "bash", "crystal", "d",
+		"pascal", "perl", "powershell", "tcl",
 		"vala", "groovy", "chrome",
 	}
 	root := mustParse(t, assignIndexProgram)
@@ -1617,56 +1614,9 @@ func TestGenerateCppResultRejection(t *testing.T) {
 
 // --- MQL4/MQL5 codegen ---
 
-func TestGenerateMQL4Hello(t *testing.T) {
-	root := mustParse(t, helloProgram)
-	out, err := GenerateMQL4(root)
-	if err != nil {
-		t.Fatalf("GenerateMQL4: %v", err)
-	}
-	code := string(out)
-
-	checks := []string{
-		"#property strict",
-		"void OnStart()",
-		"Print(",
-		"string greet(string name)",
-	}
-	for _, c := range checks {
-		if !strings.Contains(code, c) {
-			t.Errorf("MQL4 output missing %q\n---\n%s", c, code)
-		}
-	}
-	forbidden := []string{"OrderSend", "CTrade", "OnTick", "OnCalculate", "PositionOpen"}
-	for _, f := range forbidden {
-		if strings.Contains(code, f) {
-			t.Errorf("MQL4 output must not contain %q\n---\n%s", f, code)
-		}
-	}
-}
-
-func TestGenerateMQL5Hello(t *testing.T) {
-	root := mustParse(t, helloProgram)
-	out, err := GenerateMQL5(root)
-	if err != nil {
-		t.Fatalf("GenerateMQL5: %v", err)
-	}
-	code := string(out)
-
-	checks := []string{
-		"#property strict",
-		"void OnStart()",
-		"Print(",
-	}
-	for _, c := range checks {
-		if !strings.Contains(code, c) {
-			t.Errorf("MQL5 output missing %q\n---\n%s", c, code)
-		}
-	}
-}
-
 func TestGenerateMQLStruct(t *testing.T) {
 	root := mustParse(t, structProgram)
-	for _, dialect := range []string{"mql4", "mql5"} {
+	for _, dialect := range []string{} {
 		t.Run(dialect, func(t *testing.T) {
 			out, err := Generate(root, dialect)
 			if err != nil {
@@ -1697,7 +1647,7 @@ func TestGenerateMQLMapRejection(t *testing.T) {
 		}]
 	}`
 	root := mustParse(t, src)
-	for _, dialect := range []string{"mql4", "mql5"} {
+	for _, dialect := range []string{} {
 		_, err := Generate(root, dialect)
 		if err == nil {
 			t.Errorf("MQL %s should reject Map type", dialect)
@@ -1721,7 +1671,7 @@ func TestGenerateMQLOptionRejection(t *testing.T) {
 		}]
 	}`
 	root := mustParse(t, src)
-	for _, dialect := range []string{"mql4", "mql5"} {
+	for _, dialect := range []string{} {
 		_, err := Generate(root, dialect)
 		if err == nil {
 			t.Errorf("MQL %s should reject Option type", dialect)
@@ -1749,7 +1699,7 @@ func TestGenerateMQLForEachRejection(t *testing.T) {
 		}]
 	}`
 	root := mustParse(t, src)
-	for _, dialect := range []string{"mql4", "mql5"} {
+	for _, dialect := range []string{} {
 		_, err := Generate(root, dialect)
 		if err == nil {
 			t.Errorf("MQL %s should reject for-each loops", dialect)
@@ -1886,64 +1836,6 @@ func TestGenerateCStruct(t *testing.T) {
 }
 
 // --- Scala codegen ---
-
-func TestGenerateScala(t *testing.T) {
-	root := mustParse(t, addFibMain)
-	out, err := GenerateScala(root)
-	if err != nil {
-		t.Fatalf("GenerateScala: %v", err)
-	}
-	code := string(out)
-
-	checks := []string{
-		"object Main {",
-		"def add(a: Long, b: Long): Long",
-		"def main(args: Array[String]): Unit",
-		"println(result)",
-		"3L",
-	}
-	for _, c := range checks {
-		if !strings.Contains(code, c) {
-			t.Errorf("Scala output missing %q\n---\n%s", c, code)
-		}
-	}
-}
-
-func TestGenerateScalaMutability(t *testing.T) {
-	root := mustParse(t, whileProgram)
-	out, err := GenerateScala(root)
-	if err != nil {
-		t.Fatalf("GenerateScala: %v", err)
-	}
-	code := string(out)
-	if !strings.Contains(code, "var i: Long") {
-		t.Errorf("Scala should use 'var' for reassigned var, got:\n%s", code)
-	}
-}
-
-func TestGenerateScalaIfElse(t *testing.T) {
-	root := mustParse(t, ifElseProgram)
-	out, err := GenerateScala(root)
-	if err != nil {
-		t.Fatalf("GenerateScala: %v", err)
-	}
-	code := string(out)
-	if !strings.Contains(code, "if (") || !strings.Contains(code, "} else {") {
-		t.Errorf("Scala should emit 'if (...) { ... } else { ... }', got:\n%s", code)
-	}
-}
-
-func TestGenerateScalaStruct(t *testing.T) {
-	root := mustParse(t, structProgram)
-	out, err := GenerateScala(root)
-	if err != nil {
-		t.Fatalf("GenerateScala: %v", err)
-	}
-	code := string(out)
-	if !strings.Contains(code, "case class Point") {
-		t.Errorf("Scala should emit case class, got:\n%s", code)
-	}
-}
 
 // --- Haskell codegen ---
 
@@ -2115,21 +2007,6 @@ func TestEnumMatchCodegenC(t *testing.T) {
 	}
 }
 
-func TestEnumMatchCodegenScala(t *testing.T) {
-	root := mustParse(t, enumMatchProgram)
-	out, err := GenerateScala(root)
-	if err != nil {
-		t.Fatalf("GenerateScala: %v", err)
-	}
-	code := string(out)
-	if !strings.Contains(code, "object Color") {
-		t.Errorf("Scala should emit object enum, got:\n%s", code)
-	}
-	if !strings.Contains(code, "match {") {
-		t.Errorf("Scala should emit match, got:\n%s", code)
-	}
-}
-
 func TestEnumMatchCodegenHaskell(t *testing.T) {
 	root := mustParse(t, enumMatchProgram)
 	out, err := GenerateHaskell(root)
@@ -2150,11 +2027,10 @@ func TestEnumMatchCodegenMultiTarget(t *testing.T) {
 	targets := []string{
 		"go", "rust", "ts", "kotlin", "swift", "py",
 		"java", "csharp", "dart", "lua", "ruby", "php",
-		"zig", "nim", "julia", "cpp", "c", "scala", "haskell",
-		"mql4", "mql5",
-		"ocaml", "fsharp", "elixir", "clojure",
-		"ada", "awk", "bash", "crystal", "d", "fortran",
-		"objc", "pascal", "perl", "powershell", "tcl", "v",
+		"zig", "nim", "julia", "cpp", "c", "haskell",
+		"ocaml", "elixir",
+		"awk", "bash", "crystal", "d", "fortran",
+		"pascal", "perl", "powershell", "tcl",
 		"vala", "groovy", "bat", "shortcut", "chrome",
 	}
 	for _, tgt := range targets {
@@ -2226,18 +2102,6 @@ func TestCPrintfMultiArg(t *testing.T) {
 	code := string(out)
 	if !strings.Contains(code, `printf("hello %s", name)`) {
 		t.Errorf("C printf should pass all args, got:\n%s", code)
-	}
-}
-
-func TestScalaPrintfMultiArg(t *testing.T) {
-	root := mustParse(t, printfMultiArgProgram)
-	out, err := GenerateScala(root)
-	if err != nil {
-		t.Fatalf("GenerateScala: %v", err)
-	}
-	code := string(out)
-	if !strings.Contains(code, ".format(name)") {
-		t.Errorf("Scala printf should use .format with args, got:\n%s", code)
 	}
 }
 

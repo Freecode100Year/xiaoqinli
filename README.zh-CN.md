@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#开源协议)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
 
-**一份 AST，46 个目标语言。** AST-First 转译器，在编译期完成类型检查、效果推断与基于能力的安全校验。
+**一份 AST，38 个目标语言。** AST-First 转译器，在编译期完成类型检查、效果推断与基于能力的安全校验。
 
 *[English](README.md)*
 
@@ -41,9 +41,9 @@
 }
 ```
 
-编译器对它做类型检查、效果推断、能力校验、链接被导入的模块，然后生成 46 个后端中任意一个的源码。
+编译器对它做类型检查、效果推断、能力校验、链接被导入的模块，然后生成 38 个后端中任意一个的源码。
 
-**为什么这样设计？** 写一棵 AST 而不是 46 种方言，能让语义在所有目标间保持一致。而对于 LLM 驱动的代码生成，输出一棵**写错就会被编译器拒绝**的结构化树，远比输出 46 种只在运行时才暴露问题的表层语法可靠。
+**为什么这样设计？** 写一棵 AST 而不是 38 种方言，能让语义在所有目标间保持一致。而对于 LLM 驱动的代码生成，输出一棵**写错就会被编译器拒绝**的结构化树，远比输出 38 种只在运行时才暴露问题的表层语法可靠。
 
 ---
 
@@ -172,22 +172,22 @@ extern 不按模块划分命名空间：把一个平台的接口面声明一次�
 
 ---
 
-## 支持的目标平台（46 种）
+## 支持的目标平台（38 种）
 
 | 分类 | 目标 |
 |---|---|
-| 系统级 | `go` `rust` `c` `cpp` `zig` `nim` `d` `v` `ada` `fortran` `pascal` |
-| JVM / .NET | `java` `kotlin` `scala` `groovy` `clojure` `csharp` `fsharp` |
+| 系统级 | `go` `rust` `c` `cpp` `zig` `nim` `d` `fortran` `pascal` |
+| JVM / .NET | `java` `kotlin` `groovy` `csharp` |
 | 脚本 | `py` `js` `ts` `ruby` `php` `perl` `lua` `tcl` `awk` |
 | 函数式 | `haskell` `ocaml` `elixir` `julia` `crystal` |
-| Apple 生态 | `swift` `objc` `ios` `shortcut` |
+| Apple 生态 | `swift` `ios` `shortcut` |
 | Shell | `bash` `powershell` `bat` |
 | 移动 / Web | `android` `chrome` |
-| 领域专用 | `mql4` `mql5` `vala` `tccli` |
+| 领域专用 | `vala` `tccli` |
 
 `android` 与 `ios` 输出的是多文件工程脚手架（Gradle / Swift Package Manager），而非单个源文件。
 
-**每个目标各自的验证强度。** 宣称支持四十六个后端，并不说明其中任何一个的成色。
+**每个目标各自的验证强度。** 宣称支持三十八个后端，并不说明其中任何一个的成色。
 下表由 `compiler/verification.go` 生成，一旦它与测试实际强制的等级脱节，测试就会失败。
 
 <!-- verification:begin -->
@@ -195,7 +195,7 @@ extern 不按模块划分命名空间：把一个平台的接口面声明一次�
 |---|---|---|
 | **executed** (32) | `awk` `bash` `c` `cpp` `crystal` `csharp` `d` `dart` `elixir` `fortran` `go` `groovy` `haskell` `java` `js` `julia` `kotlin` `lua` `nim` `ocaml` `pascal` `perl` `php` `powershell` `py` `ruby` `rust` `swift` `tcl` `ts` `vala` `zig` | compiled and run, stdout asserted |
 | **compiled** (1) | `tccli` | compiled by a real toolchain |
-| **smoke** (13) | `ada` `android` `bat` `chrome` `clojure` `fsharp` `ios` `mql4` `mql5` `objc` `scala` `shortcut` `v` | codegen returns output; never compiled |
+| **smoke** (5) | `android` `bat` `chrome` `ios` `shortcut` | codegen returns output; never compiled |
 
 The executed tier needs 32 toolchains, which CI installs or inherits from the
 runner image, and it sets `XQL_E2E_REQUIRE=1` so a missing one fails the run
@@ -203,37 +203,29 @@ instead of skipping quietly.
 
 Per-target caveats:
 
-- `ada` — rejects Result<T>; gnat also rejects the generated source — see compiled_tier_test.go
 - `android` — Gradle scaffold; structure checked, never assembled
 - `awk` — rejects Result<T> and struct literals
 - `bash` — rejects Result<T>
 - `bat` — rejects struct literals
 - `c` — rejects Result<T>
 - `chrome` — emits an extension bundle; rejects Result<T>
-- `clojure` — rejects Result<T>
 - `cpp` — rejects Result<T>
 - `crystal` — rejects Result<T>
 - `d` — rejects Result<T>
 - `elixir` — rejects Result<T>
 - `fortran` — rejects for-each loops
-- `fsharp` — rejects Result<T>
 - `groovy` — rejects Result<T>
 - `haskell` — rejects Result<T>
 - `ios` — SwiftPM scaffold; built only when swift is present
 - `js` — rejects Result<T>
-- `mql4` — rejects Result<T>, maps, Option, for-each
-- `mql5` — rejects Result<T>, maps, Option, for-each
 - `nim` — rejects Result<T>
-- `objc` — rejects Result<T>
 - `ocaml` — rejects Result<T>
 - `pascal` — rejects for-each loops
 - `perl` — rejects Result<T>
 - `powershell` — rejects Result<T>
-- `scala` — rejects Result<T>
 - `shortcut` — emits an Apple Shortcuts plist, not source; rejects Result<T>
 - `tccli` — emits Tencent Cloud CLI shell; no arithmetic, comparisons or structs
 - `tcl` — rejects Result<T>
-- `v` — rejects Result<T>
 - `vala` — rejects Result<T>
 <!-- verification:end -->
 
@@ -336,7 +328,7 @@ xiaoqinli/
   ast/             AST 节点定义、JSON 解析器、稳定二进制编解码
   check/           类型检查器、效果推断、能力校验器
   compiler/        公共库 API：解析 → 检查 → 链接 → 代码生成
-  codegen/         46 个语言后端与派发
+  codegen/         38 个语言后端与派发
   evolution/       自演化状态：诊断记忆、技能、检索索引
   server/          MCP（stdio + HTTP）与 REST 服务端
   vfs/             会话级内存文件系统
@@ -359,7 +351,7 @@ go test -tags metrics ./...   # 启用 Prometheus 指标
 
 `codegen/local_e2e_test.go` 中的端到端套件会编译示例工程并用**真实工具链实际运行**产物（Ruby、Lua、PHP、Java……）。缺少某语言工具链时会自动跳过，因此本地环境不全也能跑出全绿。
 
-`compiler/conformance_test.go` 问的是更难的那个问题：不是每个后端有没有生成**一个**程序，而是它们生成的是不是**同一个**程序。它拿一批输出已知的示例，在本机能跑的每种语言里实际运行，逐行比对 stdout。「一份 AST，46 个目标」只能是这个意思。八个后端的 range 循环多跑一轮——Go 里 panic、Python 里 `IndexError`、JavaScript 里 `NaN`，而 C 和 Lua 打印的是对的——正是靠它才终于暴露出来。
+`compiler/conformance_test.go` 问的是更难的那个问题：不是每个后端有没有生成**一个**程序，而是它们生成的是不是**同一个**程序。它拿一批输出已知的示例，在本机能跑的每种语言里实际运行，逐行比对 stdout。「一份 AST，38 个目标」只能是这个意思。八个后端的 range 循环多跑一轮——Go 里 panic、Python 里 `IndexError`、JavaScript 里 `NaN`，而 C 和 Lua 打印的是对的——正是靠它才终于暴露出来。
 
 以库的形式引入编译器：
 

@@ -4,7 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/Freecode100Year/xiaoqinli)](go.mod)
 
-**One AST, 46 target languages.** An AST-First transpiler with type checking, effect inference, and capability-based security enforced at compile time.
+**One AST, 38 target languages.** An AST-First transpiler with type checking, effect inference, and capability-based security enforced at compile time.
 
 *[中文文档](README.zh-CN.md)*
 
@@ -41,9 +41,9 @@ You do not write text source code. You write a `.xql.json` file — an explicit 
 }
 ```
 
-The compiler type-checks it, infers effects, verifies capability grants, links imported modules, and then emits source code for any of 46 backends.
+The compiler type-checks it, infers effects, verifies capability grants, links imported modules, and then emits source code for any of 38 backends.
 
-**Why this shape?** Writing one AST instead of 46 dialects keeps semantics identical across targets. And for LLM-driven code generation, emitting a structured tree that a compiler will *reject* when wrong is far more reliable than emitting 46 flavours of surface syntax that only fail at runtime.
+**Why this shape?** Writing one AST instead of 38 dialects keeps semantics identical across targets. And for LLM-driven code generation, emitting a structured tree that a compiler will *reject* when wrong is far more reliable than emitting 38 flavours of surface syntax that only fail at runtime.
 
 ---
 
@@ -189,22 +189,22 @@ extern identically are merged; declarations that disagree are rejected
 
 ---
 
-## Supported targets (46)
+## Supported targets (38)
 
 | Category | Targets |
 |---|---|
-| Systems | `go` `rust` `c` `cpp` `zig` `nim` `d` `v` `ada` `fortran` `pascal` |
-| JVM / .NET | `java` `kotlin` `scala` `groovy` `clojure` `csharp` `fsharp` |
+| Systems | `go` `rust` `c` `cpp` `zig` `nim` `d` `fortran` `pascal` |
+| JVM / .NET | `java` `kotlin` `groovy` `csharp` |
 | Scripting | `py` `js` `ts` `ruby` `php` `perl` `lua` `tcl` `awk` |
 | Functional | `haskell` `ocaml` `elixir` `julia` `crystal` |
-| Apple | `swift` `objc` `ios` `shortcut` |
+| Apple | `swift` `ios` `shortcut` |
 | Shell | `bash` `powershell` `bat` |
 | Mobile / Web | `android` `chrome` |
-| Domain-specific | `mql4` `mql5` `vala` `tccli` |
+| Domain-specific | `vala` `tccli` |
 
 `android` and `ios` emit multi-file project scaffolds (Gradle / Swift Package Manager) rather than a single source file.
 
-**How each target is verified.** Advertising forty-six backends says nothing
+**How each target is verified.** Advertising thirty-eight backends says nothing
 about how well any one of them works. This table is generated from
 `compiler/verification.go`, and the test suite fails if it drifts from the tier
 the tests actually enforce.
@@ -214,7 +214,7 @@ the tests actually enforce.
 |---|---|---|
 | **executed** (32) | `awk` `bash` `c` `cpp` `crystal` `csharp` `d` `dart` `elixir` `fortran` `go` `groovy` `haskell` `java` `js` `julia` `kotlin` `lua` `nim` `ocaml` `pascal` `perl` `php` `powershell` `py` `ruby` `rust` `swift` `tcl` `ts` `vala` `zig` | compiled and run, stdout asserted |
 | **compiled** (1) | `tccli` | compiled by a real toolchain |
-| **smoke** (13) | `ada` `android` `bat` `chrome` `clojure` `fsharp` `ios` `mql4` `mql5` `objc` `scala` `shortcut` `v` | codegen returns output; never compiled |
+| **smoke** (5) | `android` `bat` `chrome` `ios` `shortcut` | codegen returns output; never compiled |
 
 The executed tier needs 32 toolchains, which CI installs or inherits from the
 runner image, and it sets `XQL_E2E_REQUIRE=1` so a missing one fails the run
@@ -222,37 +222,29 @@ instead of skipping quietly.
 
 Per-target caveats:
 
-- `ada` — rejects Result<T>; gnat also rejects the generated source — see compiled_tier_test.go
 - `android` — Gradle scaffold; structure checked, never assembled
 - `awk` — rejects Result<T> and struct literals
 - `bash` — rejects Result<T>
 - `bat` — rejects struct literals
 - `c` — rejects Result<T>
 - `chrome` — emits an extension bundle; rejects Result<T>
-- `clojure` — rejects Result<T>
 - `cpp` — rejects Result<T>
 - `crystal` — rejects Result<T>
 - `d` — rejects Result<T>
 - `elixir` — rejects Result<T>
 - `fortran` — rejects for-each loops
-- `fsharp` — rejects Result<T>
 - `groovy` — rejects Result<T>
 - `haskell` — rejects Result<T>
 - `ios` — SwiftPM scaffold; built only when swift is present
 - `js` — rejects Result<T>
-- `mql4` — rejects Result<T>, maps, Option, for-each
-- `mql5` — rejects Result<T>, maps, Option, for-each
 - `nim` — rejects Result<T>
-- `objc` — rejects Result<T>
 - `ocaml` — rejects Result<T>
 - `pascal` — rejects for-each loops
 - `perl` — rejects Result<T>
 - `powershell` — rejects Result<T>
-- `scala` — rejects Result<T>
 - `shortcut` — emits an Apple Shortcuts plist, not source; rejects Result<T>
 - `tccli` — emits Tencent Cloud CLI shell; no arithmetic, comparisons or structs
 - `tcl` — rejects Result<T>
-- `v` — rejects Result<T>
 - `vala` — rejects Result<T>
 <!-- verification:end -->
 
@@ -366,7 +358,7 @@ xiaoqinli/
   ast/             AST node definitions, JSON parser, stable binary codec
   check/           Type checker, effect inference, capability verifier
   compiler/        Public library API: parse → check → link → codegen
-  codegen/         46 language backends + dispatch
+  codegen/         38 language backends + dispatch
   evolution/       Self-evolution state: diagnostic memory, skills, search index
   server/          MCP (stdio + HTTP) and REST servers
   vfs/             Session-scoped in-memory filesystem
@@ -389,7 +381,7 @@ go test -tags metrics ./...   # with Prometheus metrics enabled
 
 The end-to-end suite in `codegen/local_e2e_test.go` compiles the sample workspace and *executes* the result with real toolchains (Ruby, Lua, PHP, Java, …). Each language is skipped automatically when its toolchain is absent, so a partial local environment still yields a green run.
 
-`compiler/conformance_test.go` asks the harder question: not whether each backend produced *a* program, but whether they all produced the *same* one. It runs a corpus of examples with known output in every language a toolchain here can run, and compares stdout line by line. That is what one AST across forty-six targets has to mean, and it is how a range loop that iterated one step too far in eight backends — panicking in Go, `IndexError` in Python, `NaN` in JavaScript, while C and Lua printed the right answer — was finally visible.
+`compiler/conformance_test.go` asks the harder question: not whether each backend produced *a* program, but whether they all produced the *same* one. It runs a corpus of examples with known output in every language a toolchain here can run, and compares stdout line by line. That is what one AST across thirty-eight targets has to mean, and it is how a range loop that iterated one step too far in eight backends — panicking in Go, `IndexError` in Python, `NaN` in JavaScript, while C and Lua printed the right answer — was finally visible.
 
 Importing the compiler as a library:
 

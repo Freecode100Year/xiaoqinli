@@ -6,10 +6,18 @@ import (
 	"strings"
 )
 
-// The transpiler advertises 46 targets. What that sentence is worth depends
+// The transpiler advertises 38 targets. What that sentence is worth depends
 // entirely on how each one was checked, and those checks are not equal: some
 // backends have their output compiled and run against an expected stdout,
 // others have only ever been asked to produce bytes.
+//
+// It advertised 46 until eight of them were removed rather than described. ada,
+// clojure, fsharp, mql4, mql5, objc, scala and v had never had their output
+// read by a compiler for the language they claimed to emit, and ada's had been
+// read and rejected — gnat refuses an unconstrained `String` declaration, an
+// `array of T` without bounds, and `%`, which opens a string literal in Ada
+// rather than taking a remainder. A target nobody can check is a claim, and the
+// honest way to stop making it is to stop shipping it.
 //
 // Until this registry existed the difference lived in prose, and prose drifts.
 // The android backend spent a release emitting Kotlin that could not compile —
@@ -136,14 +144,6 @@ var targetVerification = map[string]TargetVerification{
 	// A smoke entry means codegen ran over the full example corpus without
 	// erroring or panicking — and that no compiler for the language has ever
 	// seen the result.
-	"mql4":     {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>, maps, Option, for-each"},
-	"mql5":     {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>, maps, Option, for-each"},
-	"scala":    {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"fsharp":   {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"ada":      {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>; gnat also rejects the generated source — see compiled_tier_test.go"},
-	"objc":     {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"v":        {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
-	"clojure":  {TierSmoke, "TestExampleTargetMatrix", "", "rejects Result<T>"},
 	"bat":      {TierSmoke, "TestExampleTargetMatrix", "", "rejects struct literals"},
 	"shortcut": {TierSmoke, "TestExampleTargetMatrix", "", "emits an Apple Shortcuts plist, not source; rejects Result<T>"},
 	"chrome":   {TierSmoke, "TestExampleTargetMatrix", "", "emits an extension bundle; rejects Result<T>"},

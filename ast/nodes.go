@@ -529,7 +529,7 @@ func parseNode(raw map[string]interface{}, depth ...int) (Node, error) {
 		// ArrayLit and ArrayLiteral are the same node (ElemType + Elements)
 		// under two historical spellings. Normalizing both to *ArrayLit here
 		// means every backend that implements one implements both, instead of
-		// requiring each of the 45 codegen backends to carry two identical
+		// requiring each of the codegen backends to carry two identical
 		// emit functions to stay in sync.
 		return parseArrayLit(raw, curDepth)
 	case "MapLiteral":

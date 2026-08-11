@@ -8,7 +8,7 @@ import (
 	"testing"
 )
 
-// The advertised claim is one AST, forty-six targets. The test that used to
+// The advertised claim is one AST, thirty-eight targets. The test that used to
 // stand behind it compiled an empty `main` to each backend, which every
 // backend manages. This one runs the whole example corpus through every
 // target and pins the result of all 460 combinations.
@@ -38,10 +38,10 @@ var expectedRejections = map[string][]string{
 
 		// No Result<T>. Everything outside this list and the twelve that
 		// implement it should be treated as unexamined, not as working.
-		"ada", "awk", "bash", "c", "chrome", "clojure", "cpp", "crystal", "d",
-		"elixir", "fsharp", "groovy", "haskell", "js", "mql4", "mql5", "nim",
-		"objc", "ocaml", "perl", "powershell", "scala", "shortcut", "tccli",
-		"tcl", "v", "vala",
+		"awk", "bash", "c", "chrome", "cpp", "crystal", "d",
+		"elixir", "groovy", "haskell", "js", "nim",
+		"ocaml", "perl", "powershell", "shortcut", "tccli",
+		"tcl", "vala",
 	},
 
 	// A struct literal is the one thing the batch-file backend cannot fake.
@@ -67,11 +67,10 @@ var expectedRejections = map[string][]string{
 
 	// The each form, which is the line the matrix splits along here. c has no
 	// array length to iterate; fortran and pascal declare the limit outright;
-	// mql4 and mql5 have no for-each; and bat has no array *values* at all —
-	// it fakes arrays with variables named nums[0], nums[1], which indexing can
-	// reach by writing the index into the name and iteration cannot reach at
-	// all.
-	"for_each.xql.json": {"bat", "c", "fortran", "mql4", "mql5", "pascal", "tccli"},
+	// and bat has no array *values* at all — it fakes arrays with variables
+	// named nums[0], nums[1], which indexing can reach by writing the index
+	// into the name and iteration cannot reach at all.
+	"for_each.xql.json": {"bat", "c", "fortran", "pascal", "tccli"},
 
 	// `!` is a UnaryExpr, which the batch and tccli backends have never
 	// emitted; both decline it rather than guess.
@@ -90,7 +89,7 @@ var expectedRejections = map[string][]string{
 	// a compiler bug for what is a capability limit — the distinction the two
 	// codes exist to draw.
 	"control_flow.xql.json": {
-		"bat", "clojure", "elixir", "fsharp", "haskell", "ocaml",
+		"bat", "elixir", "haskell", "ocaml",
 		"tccli", // no while loop either
 	},
 
@@ -203,8 +202,8 @@ func TestExampleTargetMatrix(t *testing.T) {
 // GetSupportedTargets is what the matrix iterates, so a target dropped from
 // there would vanish from the test with nothing to show for it.
 func TestMatrixCoversEveryAdvertisedTarget(t *testing.T) {
-	if n := len(GetSupportedTargets()); n < 46 {
-		t.Fatalf("the matrix should cover all 46 advertised targets, GetSupportedTargets returned %d", n)
+	if n := len(GetSupportedTargets()); n < 38 {
+		t.Fatalf("the matrix should cover all 38 advertised targets, GetSupportedTargets returned %d", n)
 	}
 }
 

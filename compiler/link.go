@@ -15,7 +15,7 @@ import (
 // Backends generate one output file and none of them emit the source of an
 // imported module, so a program split across files used to compile to code that
 // referenced declarations that were never written. Flattening removes the
-// problem at the AST level instead of teaching all 45 backends to walk imports:
+// problem at the AST level instead of teaching every backend to walk imports:
 // after this pass every backend sees a single self-contained Program with no
 // ImportDecl, which is the path they already handle.
 //
