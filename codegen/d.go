@@ -633,8 +633,11 @@ func (g *dGen) emitLiteral(lit *ast.Literal) error {
 		s, _ := lit.Value.(string)
 		g.write(fmt.Sprintf("%q", s))
 	case "Int":
+		// D's long is 64-bit everywhere, so the variables were right and the
+		// arithmetic was not: `100000 * 100000` is int times int, and it
+		// overflowed to 1410065408 before the long ever saw it.
 		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%d", int64(f)))
+		g.write(fmt.Sprintf("%dL", int64(f)))
 	case "Float":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%g", f))

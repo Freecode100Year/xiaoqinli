@@ -131,6 +131,32 @@ func (t *typeKinds) isIntRemainder(be *ast.BinaryExpr) bool {
 	return t.isIntOp(be, "%")
 }
 
+// widenIntLiteral reports whether this operand of an arithmetic expression is
+// an Int literal that needs its width stated.
+//
+// A language whose Int maps to a 64-bit type still evaluates `100000 * 100000`
+// in whatever type its *literals* have, which is the narrow one — the product
+// overflows and the wide destination receives a number that was already wrong.
+// A variable operand carries the declared width and needs nothing; a literal
+// carries only its value.
+//
+// Backends that can suffix a literal (c, cpp, d, groovy) mark every one and
+// never consult this. It is for the ones that have to write a cast, where
+// casting subscripts and array bounds too would be a syntax problem rather than
+// a verbosity one.
+func widenIntLiteral(t *typeKinds, be *ast.BinaryExpr, operand ast.Node) bool {
+	switch be.Op {
+	case "+", "-", "*", "/", "%":
+	default:
+		return false
+	}
+	lit, ok := operand.(*ast.Literal)
+	if !ok || lit.ValueType != "Int" {
+		return false
+	}
+	return t.kindOf(be.Left) == "Int" && t.kindOf(be.Right) == "Int"
+}
+
 func (t *typeKinds) isIntOp(be *ast.BinaryExpr, op string) bool {
 	if t == nil || be == nil || be.Op != op {
 		return false

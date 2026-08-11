@@ -674,8 +674,12 @@ func (g *groovyGen) emitLiteral(lit *ast.Literal) error {
 		s, _ := lit.Value.(string)
 		g.write(fmt.Sprintf("%q", s))
 	case "Int":
+		// `def` takes its type from the value, so a bare 2147483647 makes an
+		// Integer and `big + 1` wrapped to -2147483648. The L suffix is the only
+		// place the width can come from. Subscripts are safe because
+		// emitIndexExpr casts them back to int, which is all List.getAt takes.
 		f, _ := lit.Value.(float64)
-		g.write(fmt.Sprintf("%d", int64(f)))
+		g.write(fmt.Sprintf("%dL", int64(f)))
 	case "Float":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%g", f))

@@ -50,7 +50,10 @@ func (g *pascalGen) writeIndent() {
 func typeToPascal(t ast.TypeExpr) string {
 	switch t.KindName {
 	case "Int":
-		return "Integer"
+		// Integer is 32-bit in Free Pascal, so 2147483647 + 1 wrapped to
+		// -2147483648 with no complaint from the compiler. Int64 is the type
+		// that means what this AST means.
+		return "Int64"
 	case "Float":
 		return "Real"
 	case "String":
@@ -588,8 +591,23 @@ func (g *pascalGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Widening the variables is not enough: `100000 * 100000` is evaluated
+		// in the literals' own type and overflowed to 1410065408 before the
+		// Int64 was assigned. Only literal operands are cast, which leaves
+		// subscripts and `for` bounds alone.
+		emit := func(operand ast.Node) error {
+			if widenIntLiteral(g.types, node, operand) {
+				g.write("Int64(")
+				if err := g.emitExpr(operand); err != nil {
+					return err
+				}
+				g.write(")")
+				return nil
+			}
+			return g.emitExpr(operand)
+		}
 		g.write("(")
-		if err := g.emitExpr(node.Left); err != nil {
+		if err := emit(node.Left); err != nil {
 			return err
 		}
 		op := node.Op
@@ -612,7 +630,7 @@ func (g *pascalGen) emitExpr(n ast.Node) error {
 			}
 		}
 		g.write(" " + op + " ")
-		if err := g.emitExpr(node.Right); err != nil {
+		if err := emit(node.Right); err != nil {
 			return err
 		}
 		g.write(")")

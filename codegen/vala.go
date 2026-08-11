@@ -12,6 +12,7 @@ import (
 // the "main" function is emitted as `static int main(string[] args)`.
 func GenerateVala(root ast.Node) ([]byte, error) {
 	g := &valaGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -74,6 +75,7 @@ func GenerateVala(root ast.Node) ([]byte, error) {
 }
 
 type valaGen struct {
+	types  *typeKinds
 	buf    *strings.Builder
 	indent int
 }
@@ -230,6 +232,7 @@ func (g *valaGen) emitMainFunction(fd *ast.FunctionDecl) error {
 }
 
 func (g *valaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeIndent()
 	rt := typeToVala(fd.ReturnType)
 	g.write("static " + rt + " " + fd.Name + "(")
@@ -267,6 +270,7 @@ func (g *valaGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *valaGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	g.writeIndent()
 	if vd.Value != nil {
 		g.write(typeToVala(vd.Type) + " " + vd.Name + " = ")
@@ -445,12 +449,24 @@ func (g *valaGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
+		// Vala compiles to C, and it hands C the literals as written: `int64
+		// wide = (100000 * 100000)` becomes int arithmetic assigned to a gint64,
+		// so it printed 1410065408. The variables were never the problem — the
+		// declared type is already int64 — so only literal operands are cast,
+		// which leaves subscripts and array bounds as ints, where Vala wants
+		// them.
+		emit := func(operand ast.Node) error {
+			if widenIntLiteral(g.types, node, operand) {
+				g.write("(int64) ")
+			}
+			return g.emitExpr(operand)
+		}
 		g.write("(")
-		if err := g.emitExpr(node.Left); err != nil {
+		if err := emit(node.Left); err != nil {
 			return err
 		}
 		g.write(" " + node.Op + " ")
-		if err := g.emitExpr(node.Right); err != nil {
+		if err := emit(node.Right); err != nil {
 			return err
 		}
 		g.write(")")
