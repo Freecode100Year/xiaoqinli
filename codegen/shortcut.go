@@ -11,6 +11,7 @@ import (
 // The output is a JSON file (.shortcut) that can be imported into the Shortcuts app.
 func GenerateShortcut(root ast.Node) ([]byte, error) {
 	g := &scGen{
+		types:   newTypeKinds(root),
 		actions: make([]map[string]interface{}, 0),
 		funcs:   make(map[string]*ast.FunctionDecl),
 	}
@@ -79,6 +80,7 @@ func GenerateShortcut(root ast.Node) ([]byte, error) {
 }
 
 type scGen struct {
+	types     *typeKinds
 	actions   []map[string]interface{}
 	funcs     map[string]*ast.FunctionDecl
 	groupSeq  int
@@ -573,7 +575,7 @@ func (g *scGen) emitLiteral(lit *ast.Literal) error {
 }
 
 func (g *scGen) emitBinary(be *ast.BinaryExpr) error {
-	if be.Op == "+" && containsStringExpr(be) {
+	if be.Op == "+" && stringValued(g.types, be) {
 		return g.emitStringConcat(be)
 	}
 

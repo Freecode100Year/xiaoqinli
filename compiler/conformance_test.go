@@ -115,6 +115,22 @@ var conformanceExpect = map[string][]string{
 	// reads its fields in the same scope, which never asks how the thing is
 	// passed.
 	"struct_arg.xql.json": {"7"},
+
+	// Two String *variables* joined, with no literal anywhere in the
+	// expression. Every other concatenation in this corpus has a literal on one
+	// side, and containsStringExpr — the helper most backends use to tell
+	// concatenation from addition — only looks at literals. So this shape was
+	// systematically invisible: perl and awk added the strings numerically and
+	// printed 0, lua raised at run time, and fortran and rust would not compile.
+	"string_vars.xql.json": {"abcd"},
+
+	// A while loop that counts and accumulates, with no `break`.
+	// control_flow.xql.json is the corpus's only while program and it breaks
+	// early, which bat, elixir, haskell, ocaml and tccli all decline — so their
+	// while loops had never been compiled or run at all. Elixir's was an
+	// infinite recursion: the body rebinds names that vanish each iteration, so
+	// the condition kept reading the outer binding.
+	"while_accumulate.xql.json": {"3"},
 }
 
 // conformanceRunner says how to turn one target's output into a running
@@ -210,9 +226,16 @@ var conformanceRunners = []conformanceRunner{
 
 	// rust was executed-tier through the dogfood workspace alone, and that
 	// workspace has neither a range loop nor integer division — the two things
-	// this backend was changed for. -Awarnings because an unused variable is a
-	// remark about the generated style, not about whether the program means what
-	// the AST says.
+	// this backend was changed for.
+	//
+	// -Awarnings, and the reason matters because it is not the reason given
+	// elsewhere. Every warning rustc emits over this corpus is "unnecessary
+	// parentheses": the backends parenthesise deliberately, so that the source
+	// means what the tree does rather than what the target language's precedence
+	// table says, and the go backend was fixed *into* doing it. Suppressing a
+	// style lint that contradicts a deliberate correctness decision is a
+	// different act from suppressing "you bound a variable and never used it",
+	// which swift and elixir were fixed rather than silenced for.
 	//
 	// On Windows with the msvc toolchain this needs a real link.exe: an MSYS or
 	// mingw bin directory earlier on PATH supplies coreutils' `link`, which

@@ -425,7 +425,7 @@ func (g *psGen) emitExpr(n ast.Node) error {
 		case "||":
 			op = "-or"
 		}
-		if op == "+" && containsStringExpr(node) {
+		if op == "+" && stringValued(g.types, node) {
 			op = "+"
 		}
 		g.write(" " + op + " ")

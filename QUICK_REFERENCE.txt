@@ -112,11 +112,11 @@
 ══════════════════════════════════════════════════════════════════════
 
   系统级       go, rust, c, cpp, zig, d, v, nim, vala
-  JVM/CLR      java, kotlin, scala, csharp, dart, groovy
+  JVM/CLR      java, kotlin, csharp, dart, groovy
   脚本         py, ts, ruby, lua, php, perl, julia, crystal, awk
-  函数式       haskell, ocaml, fsharp, elixir, clojure
+  函数式       haskell, ocaml, elixir
   Shell        bash, bat, powershell, tcl
-  领域         ada, fortran, pascal, objc, mql4, mql5
+  领域         fortran, pascal, vala, tccli
   专属         shortcut (iOS 快捷指令), chrome (浏览器插件)
 
 

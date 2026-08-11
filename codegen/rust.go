@@ -11,6 +11,7 @@ import (
 // GenerateRust produces Rust source code from the given typed AST.
 func GenerateRust(root ast.Node) ([]byte, error) {
 	g := &rsGen{
+		types:       newTypeKinds(root),
 		buf:         &strings.Builder{},
 		funcReturns: make(map[string]string),
 		imports:     make(map[string]bool),
@@ -52,6 +53,7 @@ func GenerateRust(root ast.Node) ([]byte, error) {
 }
 
 type rsGen struct {
+	types       *typeKinds
 	buf         *strings.Builder
 	indent      int
 	muts        map[string]bool
@@ -264,6 +266,7 @@ func (g *rsGen) emitStructDecl(sd *ast.StructDecl) error {
 }
 
 func (g *rsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.muts = collectMutables(fd.Body)
 	g.currentFunc = fd
 	g.scope = make(map[string]string)
@@ -319,6 +322,7 @@ func (g *rsGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *rsGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	if g.scope != nil {
 		g.scope[vd.Name] = vd.Type.KindName
 	}
@@ -498,7 +502,7 @@ func (g *rsGen) emitExpr(n ast.Node) error {
 		g.write(node.Name)
 		return nil
 	case *ast.BinaryExpr:
-		isStrConcat := node.Op == "+" && (containsStringExpr(node.Left) || containsStringExpr(node.Right))
+		isStrConcat := node.Op == "+" && (stringValued(g.types, node.Left) || stringValued(g.types, node.Right))
 		g.write("(")
 		if isStrConcat {
 			if err := g.emitOwnedExpr(node.Left); err != nil {

@@ -447,7 +447,7 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 				op = "//"
 			}
 		}
-		if op == "+" && containsStringExpr(node) {
+		if op == "+" && stringValued(g.types, node) {
 			op = ".."
 		}
 		g.write(" " + op + " ")

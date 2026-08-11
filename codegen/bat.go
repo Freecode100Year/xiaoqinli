@@ -10,6 +10,7 @@ import (
 
 func GenerateBat(root ast.Node) ([]byte, error) {
 	g := &batGen{buf: &strings.Builder{}, savedTmps: make(map[ast.Node]string), forVars: make(map[string]bool)}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -60,6 +61,7 @@ func GenerateBat(root ast.Node) ([]byte, error) {
 }
 
 type batGen struct {
+	types     *typeKinds
 	buf       *strings.Builder
 	indent    int
 	whileID   int
@@ -112,6 +114,7 @@ func (g *batGen) emitNode(n ast.Node) error {
 }
 
 func (g *batGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.writeln(":" + fd.Name)
 	g.indent++
 	g.writeIndent()
@@ -181,6 +184,7 @@ func (g *batGen) emitReturn(rs *ast.ReturnStmt) error {
 }
 
 func (g *batGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	if vd.Value != nil {
 		// Handle IfExpr as if-else block
 		if ie, ok := vd.Value.(*ast.IfExpr); ok {
@@ -268,7 +272,7 @@ func (g *batGen) emitAssign(as *ast.AssignStmt) error {
 	} else {
 		return fmt.Errorf("XQL_E401: bat only supports simple variable assignment targets")
 	}
-	if containsStringExpr(as.Value) {
+	if stringValued(g.types, as.Value) {
 		g.write("set \"" + varName + "=")
 		if err := g.emitValExpr(as.Value); err != nil {
 			return err
@@ -288,7 +292,7 @@ func (g *batGen) emitAssign(as *ast.AssignStmt) error {
 func (g *batGen) isArithExpr(n ast.Node) bool {
 	switch node := n.(type) {
 	case *ast.BinaryExpr:
-		return !containsStringExpr(node)
+		return !stringValued(g.types, node)
 	case *ast.Literal:
 		return node.ValueType == "Int" || node.ValueType == "Float"
 	case *ast.CallExpr:
@@ -571,7 +575,7 @@ func (g *batGen) precomputeArith(arg ast.Node) (string, error) {
 	// `set /a` over a string yields 0. `println(greet("World"))` printed 0 the
 	// one time this was written the other way round.
 	be, ok := arg.(*ast.BinaryExpr)
-	if !ok || containsStringExpr(be) || containsCall(be) {
+	if !ok || stringValued(g.types, be) || containsCall(be) {
 		return "", nil
 	}
 	g.tmpID++
@@ -646,7 +650,7 @@ func (g *batGen) emitValExpr(n ast.Node) error {
 		g.write("!" + node.Name + "!")
 		return nil
 	case *ast.BinaryExpr:
-		if node.Op == "+" && containsStringExpr(node) {
+		if node.Op == "+" && stringValued(g.types, node) {
 			if err := g.emitValExpr(node.Left); err != nil {
 				return err
 			}

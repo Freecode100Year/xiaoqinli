@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted inside a `program main ... end program main` block.
 func GenerateFortran(root ast.Node) ([]byte, error) {
 	g := &fortranGen{buf: &strings.Builder{}}
+	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -32,6 +33,7 @@ func GenerateFortran(root ast.Node) ([]byte, error) {
 }
 
 type fortranGen struct {
+	types  *typeKinds
 	buf    *strings.Builder
 	indent int
 }
@@ -120,6 +122,9 @@ func (g *fortranGen) emitMainBlock(fd *ast.FunctionDecl, prog *ast.Program) erro
 	declaredNames := map[string]bool{}
 	for _, vd := range vars {
 		declaredNames[vd.Name] = true
+		// Declarations are hoisted here, so recording the types now means a use
+		// can never be emitted before its type is known.
+		g.types.noteVar(vd)
 		g.writeIndent()
 		g.writeln(typeToFortran(vd.Type) + " :: " + vd.Name)
 	}
@@ -227,6 +232,7 @@ func (g *fortranGen) emitEnumDecl(ed *ast.EnumDecl) error {
 }
 
 func (g *fortranGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	rt := typeToFortran(fd.ReturnType)
 	isSubroutine := rt == ""
 
@@ -275,6 +281,9 @@ func (g *fortranGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	declaredNames := map[string]bool{}
 	for _, vd := range vars {
 		declaredNames[vd.Name] = true
+		// Declarations are hoisted here, so recording the types now means a use
+		// can never be emitted before its type is known.
+		g.types.noteVar(vd)
 		g.writeIndent()
 		g.writeln(typeToFortran(vd.Type) + " :: " + vd.Name)
 	}
@@ -499,7 +508,7 @@ func (g *fortranGen) emitExpr(n ast.Node) error {
 			g.write(")")
 			return nil
 		}
-		if node.Op == "+" && containsStringExpr(node) {
+		if node.Op == "+" && stringValued(g.types, node) {
 			return g.emitConcat(node)
 		}
 		g.write("(")
@@ -626,7 +635,7 @@ func (g *fortranGen) emitConcatOperand(n ast.Node) error {
 	if lit, ok := n.(*ast.Literal); ok && lit.ValueType == "String" {
 		return g.emitLiteral(lit)
 	}
-	if be, ok := n.(*ast.BinaryExpr); ok && be.Op == "+" && containsStringExpr(be) {
+	if be, ok := n.(*ast.BinaryExpr); ok && be.Op == "+" && stringValued(g.types, be) {
 		return g.emitConcat(be)
 	}
 	g.write("trim(")

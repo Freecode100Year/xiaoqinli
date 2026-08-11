@@ -1432,8 +1432,8 @@ const breakContinueProgram = `{
 }`
 
 func TestBreakContinueCodegenAll(t *testing.T) {
-	// Excluded: ocaml, haskell, fsharp (no break/continue), bat (limited control flow),
-	// lua, ada (no continue), elixir, clojure (functional — no break/continue)
+	// Excluded: ocaml, haskell (no break/continue), bat (limited control flow),
+	// lua (no continue), elixir (functional — no break/continue)
 	targets := []string{
 		"go", "rust", "ts", "kotlin", "swift", "py",
 		"java", "csharp", "dart", "ruby", "php",

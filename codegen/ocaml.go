@@ -9,6 +9,7 @@ import (
 
 func GenerateOCaml(root ast.Node) ([]byte, error) {
 	g := &ocamlGen{
+		types:    newTypeKinds(root),
 		buf:      &strings.Builder{},
 		funcRets: make(map[string]string),
 		varTypes: make(map[string]string),
@@ -62,6 +63,7 @@ func GenerateOCaml(root ast.Node) ([]byte, error) {
 }
 
 type ocamlGen struct {
+	types    *typeKinds
 	buf      *strings.Builder
 	indent   int
 	funcRets map[string]string
@@ -140,6 +142,7 @@ func (g *ocamlGen) emitEnumDecl(ed *ast.EnumDecl) error {
 }
 
 func (g *ocamlGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
+	g.types.noteParams(fd)
 	g.muts = collectMutables(fd.Body)
 	for _, p := range fd.Params {
 		if p.Type.KindName != "" {
@@ -258,6 +261,7 @@ func (g *ocamlGen) emitStmt(n ast.Node) error {
 }
 
 func (g *ocamlGen) emitVarDecl(vd *ast.VarDecl) error {
+	g.types.noteVar(vd)
 	if vd.Type.KindName != "" {
 		g.varTypes[vd.Name] = vd.Type.KindName
 	}
@@ -510,7 +514,7 @@ func (g *ocamlGen) emitLiteral(lit *ast.Literal) error {
 }
 
 func (g *ocamlGen) emitBinary(be *ast.BinaryExpr) error {
-	if be.Op == "+" && containsStringExpr(be) {
+	if be.Op == "+" && stringValued(g.types, be) {
 		g.write("(")
 		if err := g.emitExpr(be.Left); err != nil {
 			return err
@@ -713,7 +717,7 @@ func (g *ocamlGen) isStringExpr(n ast.Node) bool {
 	if g.declaredType(n) == "String" {
 		return true
 	}
-	if containsStringExpr(n) {
+	if stringValued(g.types, n) {
 		return true
 	}
 	if ce, ok := n.(*ast.CallExpr); ok {

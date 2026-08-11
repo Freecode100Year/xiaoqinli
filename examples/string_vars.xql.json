@@ -1,0 +1,77 @@
+{
+    "kind": "Program",
+    "declarations": [
+        {
+            "kind": "FunctionDecl",
+            "name": "main",
+            "params": [],
+            "returnType": {
+                "kind": "Void"
+            },
+            "effects": [
+                "state"
+            ],
+            "grant": [
+                "io"
+            ],
+            "body": [
+                {
+                    "kind": "VarDecl",
+                    "name": "a",
+                    "type": {
+                        "kind": "String"
+                    },
+                    "value": {
+                        "kind": "Literal",
+                        "valueType": "String",
+                        "value": "ab"
+                    }
+                },
+                {
+                    "kind": "VarDecl",
+                    "name": "b",
+                    "type": {
+                        "kind": "String"
+                    },
+                    "value": {
+                        "kind": "Literal",
+                        "valueType": "String",
+                        "value": "cd"
+                    }
+                },
+                {
+                    "kind": "VarDecl",
+                    "name": "c",
+                    "type": {
+                        "kind": "String"
+                    },
+                    "value": {
+                        "kind": "BinaryExpr",
+                        "op": "+",
+                        "left": {
+                            "kind": "Ident",
+                            "name": "a"
+                        },
+                        "right": {
+                            "kind": "Ident",
+                            "name": "b"
+                        }
+                    }
+                },
+                {
+                    "kind": "ExprStmt",
+                    "expr": {
+                        "kind": "CallExpr",
+                        "callee": "println",
+                        "args": [
+                            {
+                                "kind": "Ident",
+                                "name": "c"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

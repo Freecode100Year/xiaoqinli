@@ -417,7 +417,7 @@ func (g *perlGen) emitExpr(n ast.Node) error {
 			return err
 		}
 		op := node.Op
-		if op == "+" && containsStringExpr(node) {
+		if op == "+" && stringValued(g.types, node) {
 			op = "."
 		}
 		if s, ok := perlStringOps[op]; ok && g.isStringComparison(node) {

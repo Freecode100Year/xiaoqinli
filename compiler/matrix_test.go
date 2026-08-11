@@ -83,6 +83,12 @@ var expectedRejections = map[string][]string{
 	// example; bat has no struct literals; tccli has no member access.
 	"struct_arg.xql.json": {"awk", "bat", "tccli"},
 
+	// A while loop with no early exit. control_flow.xql.json is declined by six
+	// backends for its `break`, so this is the first corpus program that asks
+	// most of them whether their while loop works at all — tccli has no loop of
+	// any kind.
+	"while_accumulate.xql.json": {"tccli"},
+
 	// `break` is the construct that splits the matrix along a different line
 	// than Result does: a language without an early loop exit cannot fake one.
 	// All six declined with XQL_E401 until this example existed, which claimed

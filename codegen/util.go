@@ -372,6 +372,25 @@ func walkTypes(n ast.Node, fn func(ast.TypeExpr, string)) {
 	}
 }
 
+// stringValued reports whether an expression produces a String. It supersedes
+// containsStringExpr, which could only see literals — so `a + b` over two
+// String *variables* looked like arithmetic to every backend that asked, and
+// most of them ask in order to choose between concatenation and addition. perl
+// and awk added the two strings numerically and printed 0, lua raised at run
+// time, bat echoed the text "(a + b)", and fortran and rust would not compile
+// at all. Every concatenation in the corpus had a literal on one side until
+// string_vars.xql.json, which is why none of it was visible.
+//
+// The type table has been able to answer this the whole time. containsStringExpr
+// stays as the fallback for a caller with no table and for sprintf, whose
+// result is a String regardless of what its arguments are.
+func stringValued(t *typeKinds, n ast.Node) bool {
+	if t != nil && t.kindOf(n) == "String" {
+		return true
+	}
+	return containsStringExpr(n)
+}
+
 func containsStringExpr(n ast.Node) bool {
 	switch node := n.(type) {
 	case *ast.Literal:

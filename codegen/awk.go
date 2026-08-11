@@ -409,7 +409,7 @@ func (g *awkGen) emitExpr(n ast.Node) error {
 			return err
 		}
 		op := node.Op
-		if op == "+" && containsStringExpr(node) {
+		if op == "+" && stringValued(g.types, node) {
 			// AWK string concatenation: use space
 			g.write(" ")
 			if err := g.emitExpr(node.Right); err != nil {

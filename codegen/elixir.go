@@ -386,23 +386,48 @@ func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
 	return nil
 }
 
+// emitWhileStmt threads the loop's mutated variables through the recursion, for
+// the same reason emitForStmt does — and with a worse failure if it does not.
+//
+// The old shape rebound names inside the anonymous function, where they vanish
+// each time round, so the recursive call re-evaluated the condition against the
+// *outer* binding. A loop that counts `i` up to a bound therefore never
+// advanced: it was not a wrong answer, it was an infinite recursion. Nothing
+// caught it because control_flow.xql.json is the corpus's only while program
+// and it uses `break`, which this backend declines — so elixir's while loop had
+// never been compiled or run at all.
 func (g *exGen) emitWhileStmt(ws *ast.WhileStmt) error {
 	loopName := fmt.Sprintf("xql_loop%d", g.loopCount)
 	g.loopCount++
 	loopFn := loopName + "_fn"
 
+	mutated := exMutatedNames(ws.Body)
+	acc := exTuple(mutated)
+	threaded := len(mutated) > 0
+
+	recurse := loopFn + ".(" + loopFn + ")"
+	if threaded {
+		recurse = loopFn + ".(" + loopFn + ", " + acc + ")"
+	}
+
 	g.writeIndent()
-	g.writeln(loopName + " = fn " + loopFn + " ->")
+	if threaded {
+		g.writeln(loopName + " = fn " + loopFn + ", " + acc + " ->")
+	} else {
+		g.writeln(loopName + " = fn " + loopFn + " ->")
+	}
 	g.indent++
 
 	if lit, ok := ws.Cond.(*ast.Literal); ok && lit.ValueType == "Bool" && lit.Value == true {
+		// `while true` can only end through break, which this backend declines,
+		// so there is no exit branch to write.
 		for _, s := range ws.Body {
 			if err := g.emitNode(s); err != nil {
 				return err
 			}
 		}
 		g.writeIndent()
-		g.writeln(loopFn + ".(" + loopFn + ")")
+		g.writeln(recurse)
 	} else {
 		g.writeIndent()
 		g.write("if ")
@@ -417,8 +442,18 @@ func (g *exGen) emitWhileStmt(ws *ast.WhileStmt) error {
 			}
 		}
 		g.writeIndent()
-		g.writeln(loopFn + ".(" + loopFn + ")")
+		g.writeln(recurse)
 		g.indent--
+		if threaded {
+			// The accumulator has to survive the loop ending, which means the
+			// else branch has to hand it back.
+			g.writeIndent()
+			g.writeln("else")
+			g.indent++
+			g.writeIndent()
+			g.writeln(acc)
+			g.indent--
+		}
 		g.writeIndent()
 		g.writeln("end")
 	}
@@ -427,7 +462,11 @@ func (g *exGen) emitWhileStmt(ws *ast.WhileStmt) error {
 	g.writeIndent()
 	g.writeln("end")
 	g.writeIndent()
-	g.writeln(loopName + ".(" + loopName + ")")
+	if threaded {
+		g.writeln(acc + " = " + loopName + ".(" + loopName + ", " + acc + ")")
+	} else {
+		g.writeln(loopName + ".(" + loopName + ")")
+	}
 	return nil
 }
 
@@ -555,7 +594,7 @@ func (g *exGen) emitBinaryExpr(be *ast.BinaryExpr) error {
 		op = "!="
 	case "+":
 		// Check for string concatenation
-		if containsStringExpr(be.Left) || containsStringExpr(be.Right) {
+		if stringValued(g.types, be.Left) || stringValued(g.types, be.Right) {
 			g.write("(")
 			if err := g.emitExpr(be.Left); err != nil {
 				return err

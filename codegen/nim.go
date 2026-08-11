@@ -452,7 +452,7 @@ func (g *nimGen) emitExpr(n ast.Node) error {
 				op = "div"
 			}
 		}
-		if op == "+" && containsStringExpr(node) {
+		if op == "+" && stringValued(g.types, node) {
 			op = "&"
 		}
 		g.write(" " + op + " ")

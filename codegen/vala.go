@@ -662,7 +662,7 @@ func (g *valaGen) emitCall(ce *ast.CallExpr) error {
 		if err := g.emitExpr(ce.Args[0]); err != nil {
 			return err
 		}
-		if !containsStringExpr(ce.Args[0]) {
+		if !stringValued(g.types, ce.Args[0]) {
 			g.write(".to_string()")
 		}
 		g.write(")")

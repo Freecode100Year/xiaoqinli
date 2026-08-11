@@ -459,7 +459,7 @@ func (g *jlGen) emitExpr(n ast.Node) error {
 			return err
 		}
 		op := node.Op
-		if op == "+" && containsStringExpr(node) {
+		if op == "+" && stringValued(g.types, node) {
 			op = "*"
 		}
 		g.write(" " + op + " ")
