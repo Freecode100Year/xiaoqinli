@@ -266,11 +266,74 @@ func (g *exGen) emitIf(is *ast.IfStmt) error {
 	return nil
 }
 
+// exMutatedNames lists, in first-seen order, the variables a loop body assigns
+// to without declaring them there. Those are the ones a comprehension loses.
+func exMutatedNames(body []ast.Node) []string {
+	declared := map[string]bool{}
+	seen := map[string]bool{}
+	var out []string
+
+	var walk func(nodes []ast.Node)
+	walk = func(nodes []ast.Node) {
+		for _, n := range nodes {
+			switch node := n.(type) {
+			case *ast.VarDecl:
+				declared[node.Name] = true
+			case *ast.AssignStmt:
+				id, ok := node.Target.(*ast.Ident)
+				if !ok || declared[id.Name] || seen[id.Name] {
+					continue
+				}
+				seen[id.Name] = true
+				out = append(out, id.Name)
+			case *ast.IfStmt:
+				walk(node.Then)
+				walk(node.Else)
+			case *ast.ForStmt:
+				// A nested loop compiles to an assignment of its own accumulator,
+				// so what it mutates the enclosing loop must carry too.
+				walk(node.Body)
+			case *ast.WhileStmt:
+				walk(node.Body)
+			}
+		}
+	}
+	walk(body)
+	return out
+}
+
+// exTuple renders one name, or several as a tuple pattern.
+func exTuple(names []string) string {
+	if len(names) == 1 {
+		return names[0]
+	}
+	return "{" + strings.Join(names, ", ") + "}"
+}
+
 func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
+	// `for` in Elixir is a comprehension, and Elixir has no mutable bindings: an
+	// assignment inside the block rebinds a variable that ceases to exist at
+	// `end`. loop.xql.json accumulated into `sum` and printed 0 — the language
+	// even said so ("variable sum is unused... there is a variable with the same
+	// name in the context") and the message went nowhere, because nothing ran
+	// the program. Every accumulating loop this backend ever emitted was wrong.
+	//
+	// Enum.reduce is the same loop with the mutated variables threaded through
+	// as an accumulator, which is how one writes it by hand.
+	mutated := exMutatedNames(fs.Body)
+
 	g.writeIndent()
+	if len(mutated) > 0 {
+		acc := exTuple(mutated)
+		g.write(acc + " = Enum.reduce(")
+	} else {
+		// Nothing escapes the body, so the comprehension is honest — and reads
+		// better than a reduce over an accumulator no one wants.
+		g.write("for " + fs.Var + " <- ")
+	}
+
 	switch fs.Form {
 	case "range":
-		g.write("for " + fs.Var + " <- ")
 		if err := g.emitExpr(fs.Start); err != nil {
 			return err
 		}
@@ -278,25 +341,40 @@ func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
 		if err := g.emitExpr(fs.End); err != nil {
 			return err
 		}
-		g.writeln(" - 1) do")
+		g.write(" - 1)")
 	case "each":
-		g.write("for " + fs.Var + " <- ")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
 		}
-		g.writeln(" do")
 	default:
 		return fmt.Errorf("XQL_E401: unknown ForStmt form %q", fs.Form)
 	}
+
+	if len(mutated) > 0 {
+		acc := exTuple(mutated)
+		g.writeln(", " + acc + ", fn " + fs.Var + ", " + acc + " ->")
+	} else {
+		g.writeln(" do")
+	}
+
 	g.indent++
 	for _, s := range fs.Body {
 		if err := g.emitNode(s); err != nil {
 			return err
 		}
 	}
+	if len(mutated) > 0 {
+		// The accumulator has to be the block's value, whatever the body ended on.
+		g.writeIndent()
+		g.writeln(exTuple(mutated))
+	}
 	g.indent--
 	g.writeIndent()
-	g.writeln("end")
+	if len(mutated) > 0 {
+		g.writeln("end)")
+	} else {
+		g.writeln("end")
+	}
 	return nil
 }
 

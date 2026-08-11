@@ -134,32 +134,17 @@ func (g *hsGen) isIOFunc(fd *ast.FunctionDecl) bool {
 	return false
 }
 
+// inferTypeKind answers what kind of value an expression has, which decides
+// putStrLn against print. Getting it wrong is visible: `print` goes through
+// Show, so a String comes out wearing quotes.
+//
+// This used to be a local copy of the idea typeKinds implements, and the copy
+// answered "" for every Ident — it never learned what a variable held. So
+// `println(s)` on a String variable printed "big" rather than big for as long
+// as the backend existed, and the shared table that could have said so was
+// already built, already fed by noteVar and noteParams, and never asked.
 func (g *hsGen) inferTypeKind(n ast.Node) string {
-	switch node := n.(type) {
-	case *ast.Literal:
-		return node.ValueType
-	case *ast.CallExpr:
-		if node.Callee == "sprintf" {
-			return "String"
-		}
-		if rt, ok := g.funcRets[node.Callee]; ok {
-			return rt
-		}
-		return ""
-	case *ast.BinaryExpr:
-		if node.Op == "+" && (g.inferTypeKind(node.Left) == "String" || g.inferTypeKind(node.Right) == "String") {
-			return "String"
-		}
-		switch node.Op {
-		case "==", "!=", "<", ">", "<=", ">=", "&&", "||":
-			return "Bool"
-		}
-		return g.inferTypeKind(node.Left)
-	case *ast.Ident:
-		return ""
-	default:
-		return ""
-	}
+	return g.types.kindOf(n)
 }
 
 func (g *hsGen) emitStructDecl(sd *ast.StructDecl) {
@@ -597,7 +582,10 @@ func (g *hsGen) emitBinary(be *ast.BinaryExpr) error {
 	case "!=":
 		op = "/="
 	case "%":
-		op = "`mod`"
+		// `mod` floors, so it takes the divisor's sign: -7 `mod` 2 is 1 where
+		// C, Go, Java and Rust answer -1. `rem` is `quot`'s partner — the two
+		// have to be chosen together, and the line below already chose `quot`.
+		op = "`rem`"
 	case "/":
 		// `/` belongs to Fractional, so dividing two Ints does not merely give
 		// the wrong answer in Haskell — it does not typecheck. `quot`

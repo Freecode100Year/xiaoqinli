@@ -587,11 +587,17 @@ func (g *groovyGen) emitIndexExpr(ie *ast.IndexExpr) error {
 	if err := g.emitExpr(ie.Target); err != nil {
 		return err
 	}
-	g.write("[")
+	// Groovy's List.getAt takes an int and nothing else. Ints are Long here, and
+	// a range loop declares `long i`, so `nums[i]` threw MissingMethodException
+	// at runtime — "No signature of method: java.util.ArrayList.getAt() is
+	// applicable for argument types: (java.lang.Long)". The compiler cannot see
+	// it: getAt is dispatched dynamically. The java backend already casts here
+	// for the same reason.
+	g.write("[(int) (")
 	if err := g.emitExpr(ie.Index); err != nil {
 		return err
 	}
-	g.write("]")
+	g.write(")]")
 	return nil
 }
 

@@ -399,7 +399,16 @@ func (g *crystalGen) emitExpr(n ast.Node) error {
 		// and it typechecks, so the compiled tier could never have caught it.
 		// `//` is the integer division.
 		if g.types.isIntDivision(node) {
-			op = "//"
+			// `//` is the integer division, and it *floors*: -7 // 2 is -4 where
+			// C, Go, Java and Rust answer -3. tdiv is the truncating one, and it
+			// is what the rest of this matrix means by `/`.
+			return g.emitIntMethod("tdiv", node.Left, node.Right)
+		}
+		// `%` floors to match `//`, so it carried the divisor's sign — -7 % 2
+		// was 1 where the majority answer is -1. remainder is `tdiv`'s partner
+		// and keeps the dividend's.
+		if g.types.isIntRemainder(node) {
+			return g.emitIntMethod("remainder", node.Left, node.Right)
 		}
 		g.write("(")
 		if err := g.emitExpr(node.Left); err != nil {
@@ -508,6 +517,22 @@ func (g *crystalGen) emitIndexExpr(ie *ast.IndexExpr) error {
 		return err
 	}
 	g.write("]")
+	return nil
+}
+
+// emitIntMethod writes `(left).name(right)`, the call form Crystal's truncating
+// integer operators take. The parentheses are not decoration: the left operand
+// can be a negative literal, and -7.tdiv(2) parses as -(7.tdiv 2).
+func (g *crystalGen) emitIntMethod(name string, left, right ast.Node) error {
+	g.write("(")
+	if err := g.emitExpr(left); err != nil {
+		return err
+	}
+	g.write(")." + name + "(")
+	if err := g.emitExpr(right); err != nil {
+		return err
+	}
+	g.write(")")
 	return nil
 }
 

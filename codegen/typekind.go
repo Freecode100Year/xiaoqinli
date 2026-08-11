@@ -96,6 +96,13 @@ func (t *typeKinds) kindOf(n ast.Node) string {
 			return "Bool"
 		}
 		return t.kindOf(node.Operand)
+	case *ast.IfExpr:
+		// Both arms have to agree for the expression to have a type at all, so
+		// either one answers. Then is asked first only because it is first.
+		if k := t.kindOf(node.Then); k != "" {
+			return k
+		}
+		return t.kindOf(node.Else)
 	case *ast.IndexExpr:
 		// An element of an Int array is an Int; anything else is unknown.
 		if arr := t.kindOf(node.Target); arr == "Array" {
