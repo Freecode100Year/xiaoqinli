@@ -311,17 +311,32 @@ func (g *bashGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	return nil
 }
 
+// emitReturn hands the value back on stdout, because a shell function's exit
+// status is one byte and every call site here reads `$(...)`. The echo is not
+// the whole statement, though, and for one release it was: without a `return`
+// after it, control fell through to whatever followed. A return inside a loop
+// echoed its value and then kept looping, so early_return.xql.json's
+// firstOver(20) printed "5 6 7 8 9 0" where every other target printed 5, and
+// the caller captured all of it as one string.
+//
+// main is emitted at top level rather than as a function (see GenerateBash),
+// and `return` outside a function is an error in a script bash was told to
+// run, so there the statement has to be `exit`.
 func (g *bashGen) emitReturn(rs *ast.ReturnStmt) error {
+	if rs.Value != nil {
+		g.writeIndent()
+		g.write("echo ")
+		if err := g.emitExpr(rs.Value); err != nil {
+			return err
+		}
+		g.writeln("")
+	}
 	g.writeIndent()
-	if rs.Value == nil {
+	if g.inFunc {
 		g.writeln("return")
-		return nil
+	} else {
+		g.writeln("exit 0")
 	}
-	g.write("echo ")
-	if err := g.emitExpr(rs.Value); err != nil {
-		return err
-	}
-	g.writeln("")
 	return nil
 }
 

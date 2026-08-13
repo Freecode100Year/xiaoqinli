@@ -131,6 +131,25 @@ var conformanceExpect = map[string][]string{
 	// infinite recursion: the body rebinds names that vanish each iteration, so
 	// the condition kept reading the outer binding.
 	"while_accumulate.xql.json": {"3"},
+
+	// `continue`, in both loop forms. Thirty-two backends emit a statement for
+	// ContinueStmt and six decline it, and until this program nothing in the
+	// corpus contained one — the node had been translated thirty-eight ways
+	// and executed zero times. The shape it asks about is what a target's
+	// `continue` skips *to*: a backend that lowers a range loop to a
+	// hand-rolled while has to run the increment on the way, and one that
+	// lowers it to a closure has to spell the statement the way that closure
+	// understands rather than the way its `while` does.
+	"continue_skip.xql.json": {"20", "27"},
+
+	// A return from inside a loop, and a second return the loop falls through
+	// to. Every other return in this corpus is the last statement of its
+	// function, which asks only that the value arrive — not that the statement
+	// stop anything. bash's did not: a return is `echo`, because a shell
+	// function's exit status is one byte, and without a `return` after the echo
+	// the loop kept going. firstOver(20) echoed 5, then 6, 7, 8, 9, then the
+	// fall-through 0, and `$(firstOver 20)` captured the lot.
+	"early_return.xql.json": {"5", "0"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

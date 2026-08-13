@@ -677,3 +677,52 @@ func CollectImports(root ast.Node) map[string]bool {
 	}
 	return imports
 }
+
+// loopBodyReturns reports whether a loop body contains a `return` — one that
+// would have to leave the enclosing function from inside the loop.
+//
+// Three backends lower a loop to a form with no way out of it: haskell to
+// mapM_, ocaml to a `for ... done` whose body has to be unit, elixir to a `for`
+// comprehension. For those an early return is not a hard case, it is an
+// impossible one, and all three used to emit something anyway.
+// early_return.xql.json returns the first i whose square passes a limit, and
+// haskell produced a lambda returning Int where mapM_ wants an action, ocaml a
+// for body evaluating to int where it must be unit — neither compiles — while
+// elixir compiled, threw the comprehension's result away, and printed the
+// fall-through 0 for both calls.
+//
+// It does not descend into a Lambda: a return inside one belongs to the lambda,
+// not to the function around the loop.
+func loopBodyReturns(body []ast.Node) bool {
+	for _, s := range body {
+		switch node := s.(type) {
+		case *ast.ReturnStmt:
+			return true
+		case *ast.IfStmt:
+			if loopBodyReturns(node.Then) || loopBodyReturns(node.Else) {
+				return true
+			}
+		case *ast.ForStmt:
+			if loopBodyReturns(node.Body) {
+				return true
+			}
+		case *ast.WhileStmt:
+			if loopBodyReturns(node.Body) {
+				return true
+			}
+		case *ast.MatchExpr:
+			for _, arm := range node.Arms {
+				if loopBodyReturns(arm.Body) {
+					return true
+				}
+			}
+		case *ast.SwitchStmt:
+			for _, c := range node.Cases {
+				if loopBodyReturns(c.Body) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
