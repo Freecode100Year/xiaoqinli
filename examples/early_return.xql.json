@@ -1,0 +1,94 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "firstOver",
+      "params": [{ "name": "limit", "type": { "kind": "Int" } }],
+      "returnType": { "kind": "Int" },
+      "effects": [],
+      "body": [
+        {
+          "kind": "ForStmt",
+          "form": "range",
+          "var": "i",
+          "start": { "kind": "Literal", "valueType": "Int", "value": 0 },
+          "end": { "kind": "Literal", "valueType": "Int", "value": 10 },
+          "body": [
+            {
+              "kind": "IfStmt",
+              "condition": {
+                "kind": "BinaryExpr",
+                "op": ">",
+                "left": {
+                  "kind": "BinaryExpr",
+                  "op": "*",
+                  "left": { "kind": "Ident", "name": "i" },
+                  "right": { "kind": "Ident", "name": "i" }
+                },
+                "right": { "kind": "Ident", "name": "limit" }
+              },
+              "then": [
+                {
+                  "kind": "ReturnStmt",
+                  "value": { "kind": "Ident", "name": "i" }
+                }
+              ],
+              "else": []
+            }
+          ]
+        },
+        {
+          "kind": "ReturnStmt",
+          "value": { "kind": "Literal", "valueType": "Int", "value": 0 }
+        }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "early",
+          "type": { "kind": "Int" },
+          "value": {
+            "kind": "CallExpr",
+            "callee": "firstOver",
+            "args": [{ "kind": "Literal", "valueType": "Int", "value": 20 }]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "never",
+          "type": { "kind": "Int" },
+          "value": {
+            "kind": "CallExpr",
+            "callee": "firstOver",
+            "args": [{ "kind": "Literal", "valueType": "Int", "value": 200 }]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "early" }]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "never" }]
+          }
+        }
+      ]
+    }
+  ]
+}

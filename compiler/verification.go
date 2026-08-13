@@ -130,13 +130,20 @@ var targetVerification = map[string]TargetVerification{
 	// that produces a running binary are the same install, so these joined the
 	// corpus as soon as anyone asked them to; the compiled tier entries below
 	// stay, because they cover the examples with no assertable stdout.
-	"nim":     {TierExecuted, "TestCrossTargetConformance/nim", "nim", "rejects Result<T>"},
-	"haskell": {TierExecuted, "TestCrossTargetConformance/haskell", "ghc", "rejects Result<T>"},
-	"ocaml":   {TierExecuted, "TestCrossTargetConformance/ocaml", "ocaml", "rejects Result<T>"},
+	"nim": {TierExecuted, "TestCrossTargetConformance/nim", "nim", "rejects Result<T>"},
+
+	// The three functional backends carry one more caveat than the rest, and it
+	// is the same caveat three times: each lowers a loop to a form that runs to
+	// the end — mapM_, a `for ... done` whose body must be unit, Enum.reduce —
+	// so break, continue and a return from inside a loop are all early exits
+	// none of them has. They emitted all three anyway until a corpus program
+	// contained one.
+	"haskell": {TierExecuted, "TestCrossTargetConformance/haskell", "ghc", "rejects Result<T>, and break, continue or return from inside a loop"},
+	"ocaml":   {TierExecuted, "TestCrossTargetConformance/ocaml", "ocaml", "rejects Result<T>, and break, continue or return from inside a loop"},
 	"crystal": {TierExecuted, "TestCrossTargetConformance/crystal", "crystal", "rejects Result<T>"},
 	"d":       {TierExecuted, "TestCrossTargetConformance/d", "gdc", "rejects Result<T>"},
 	"pascal":  {TierExecuted, "TestCrossTargetConformance/pascal", "fpc", "rejects for-each loops"},
-	"elixir":  {TierExecuted, "TestCrossTargetConformance/elixir", "elixir", "rejects Result<T>"},
+	"elixir":  {TierExecuted, "TestCrossTargetConformance/elixir", "elixir", "rejects Result<T>, and break, continue or return from inside a loop"},
 	"vala":    {TierExecuted, "TestCrossTargetConformance/vala", "valac", "rejects Result<T>"},
 	"groovy":  {TierExecuted, "TestCrossTargetConformance/groovy", "groovy", "rejects Result<T>"},
 
@@ -170,7 +177,14 @@ var targetVerification = map[string]TargetVerification{
 	// checks that it parses and that every action carries a namespaced
 	// identifier. Only Apple's Shortcuts app can say more, and it has no
 	// command-line form.
-	"shortcut": {TierSmoke, "TestShortcutBundle", "", "emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>"},
+	//
+	// Which is why the loop limits below are stated rather than approximated.
+	// A smoke-tier backend has nothing that could catch a wrong translation,
+	// so the only defence it has is declining what it cannot say: Shortcuts'
+	// Repeat takes a count or a list and there is no action that leaves one
+	// early, and this backend used to answer `while` with Repeat 1000 and
+	// `break` with a comment.
+	"shortcut": {TierSmoke, "TestShortcutBundle", "", "emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>, while, break and continue"},
 
 	// cmd.exe exists on one platform, so this one is earned on a Windows runner
 	// rather than the Linux one every other target uses. The exclusion is real

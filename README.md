@@ -231,18 +231,18 @@ Per-target caveats:
 - `cpp` — rejects Result<T>
 - `crystal` — rejects Result<T>
 - `d` — rejects Result<T>
-- `elixir` — rejects Result<T>
+- `elixir` — rejects Result<T>, and break, continue or return from inside a loop
 - `fortran` — rejects for-each loops
 - `groovy` — rejects Result<T>
-- `haskell` — rejects Result<T>
+- `haskell` — rejects Result<T>, and break, continue or return from inside a loop
 - `ios` — SwiftPM package; `swift build` succeeds, nothing is run
 - `js` — rejects Result<T>
 - `nim` — rejects Result<T>
-- `ocaml` — rejects Result<T>
+- `ocaml` — rejects Result<T>, and break, continue or return from inside a loop
 - `pascal` — rejects for-each loops
 - `perl` — rejects Result<T>
 - `powershell` — rejects Result<T>
-- `shortcut` — emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>
+- `shortcut` — emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>, while, break and continue
 - `tccli` — emits Tencent Cloud CLI shell; no arithmetic, comparisons or structs
 - `tcl` — rejects Result<T>
 - `vala` — rejects Result<T>

@@ -191,3 +191,86 @@ range 循环由闭区间改为半开区间。`kotlin` 之前生成的 `for (i in
 结果会变。规范一侧没有变过——`ast/nodes.go` 一直写的是向零截断。
 
 `examples/negative_arithmetic.xql.json` 把四种符号组合全部钉进 conformance 语料，十一个 runner 逐行比对。
+
+---
+
+## `shortcut` 现在拒绝 `while` / `break` / `continue`
+
+**改成什么：** `shortcut` 后端对以下三个构造由「编译成功」改为以 `XQL_E402` 拒绝：
+
+| 构造 | 之前发射的东西 | 现在 |
+|---|---|---|
+| `WhileStmt` | `Repeat 1000`，条件被整个丢弃 | `XQL_E402` |
+| `BreakStmt` | 一条注释 | `XQL_E402` |
+| `ContinueStmt` | 一条注释 | `XQL_E402` |
+
+另外，range 形式的 `for` 若上下界不是字面量，此前会静默按 10 轮生成，现在同样拒绝。
+
+**受影响的示例：** `control_flow.xql.json` 与 `while_accumulate.xql.json` 从 `shortcut` 编译成功变为被拒绝，
+`TestExampleTargetMatrix` 的期望表已同步。
+
+**为什么：** Shortcuts 的循环只有 Repeat（给次数）和 Repeat With Each（给列表），没有读条件的形式，
+也没有任何提前离开 Repeat 的动作。`Repeat 1000` 不是 `while cond` 的翻译：`while_accumulate.xql.json`
+本该跑 3 轮，会跑 1000 轮；`control_flow.xql.json` 唯一的出口是 `break`，本该跑 7 轮，同样会跑 1000 轮。
+两者都会「编译成功」。
+
+注释更直接——注释不是跳转，循环照跑不误。这正是 `XQL_E402` 存在的理由，README 那句「后端表达不了就拒绝，
+不静默降级」在这里此前是不成立的。
+
+`shortcut` 是 smoke 等级：产物从来没有被 Shortcuts 导入过，也没有命令行工具能导入它。
+一个没有任何东西能验证其行为的后端，唯一的防线就是不去说自己说不出的话。
+
+**需要你做什么：** 如果有 AST 依赖 `shortcut` 接受这三个构造，那份产物本来就是错的。
+用 range 形式的 `for` 改写循环，或换一个目标。
+
+---
+
+## `bash` 与 `bat` 的提前 `return` 此前不会返回
+
+**改成什么：** 函数体中间的 `return`（典型是循环里命中条件就返回）在 `bash` 和 `bat` 上现在真的结束函数。
+
+| 目标 | 之前 | 现在 |
+|---|---|---|
+| `bash` | `echo <值>`，然后继续往下执行 | `echo <值>` 后跟 `return`（`main` 在顶层，用 `exit`） |
+| `bat` | 只 `set "_return=..."`，块内不 `exit /b` | 一律 `endlocal` 传值后 `exit /b 0` |
+
+**影响：** `examples/early_return.xql.json` 的 `firstOver(20)` 应当返回 5。此前 `bash` 把 5、6、7、8、9
+以及循环后那句 `return 0` 的 0 依次 echo 出来，调用方 `$(firstOver 20)` 捕获到的是 `"5 6 7 8 9 0"`；
+`bat` 则被后面的 `set /a "_return=0"` 覆盖成 0。
+
+**为什么之前没发现：** 语料里每一个 `return` 都是所在函数的最后一句。那种形状只要求值送达，
+不要求这条语句停下任何东西。
+
+**同批修掉的两处 `bat` 缺陷**（都由同一个示例暴露）：
+
+- `if` 的操作数是算式时会写成 `if (%%i * %%i) GTR !limit!`。cmd 的 `if` 只比较两个词、不做任何求值，
+  这一行是语法错误（`* 不应出现在此时`），脚本当场死掉。现在算式先由 `set /a` 落到临时变量。
+- 值上下文与条件上下文读标识符时不看 `forVars`，`for /L` 的循环变量被写成 `!i!`（一个从未设置过的
+  环境变量，展开为空）而不是 `%%i`。`emitArithExpr` 和 `emitIndexExpr` 早就知道这件事，另两条路径不知道。
+
+**需要你做什么：** 大概率什么都不用做——之前的行为没有一种用法是对的。
+
+---
+
+## `haskell` / `ocaml` / `elixir` 现在拒绝循环体内的 `return`
+
+**改成什么：** 若一个 `ForStmt` 或 `WhileStmt` 的循环体（含其中嵌套的 `if` / `match` / 内层循环）里出现
+`ReturnStmt`，这三个后端由「编译成功」改为以 `XQL_E402` 拒绝。
+
+**为什么：** 三者都把循环降级成一个跑到底的形式，没有提前离开的办法：
+
+| 目标 | 循环降级成 | 此前的产物 |
+|---|---|---|
+| `haskell` | `mapM_` | lambda 返回 `Int`，而 `mapM_` 要的是 action——**编译不过** |
+| `ocaml` | `for ... done`（循环体必须是 unit） | 循环体求值为 `int`——**编译不过** |
+| `elixir` | `Enum.reduce` | **编译得过、跑得通、答案是错的**：推导式的结果被丢弃 |
+
+`examples/early_return.xql.json` 里 `firstOver(20)` 应当返回 5。elixir 两次调用都返回循环之后那句
+`return 0` 的 0，安静地。这三个后端拒绝 `break` 和 `continue` 已经很久了，理由完全相同——
+循环体内的 `return` 只是第三种提前退出，此前漏掉了。
+
+**需要你做什么：** 把「循环里命中就返回」改写成「用一个变量记住结果、循环结束后再返回」。
+这个形状这三个后端都能表达。
+
+**已知残留：** 判定用 `codegen/util.go` 的 `loopBodyReturns`，它不会走进 `Lambda`——
+lambda 里的 `return` 属于 lambda 自己。

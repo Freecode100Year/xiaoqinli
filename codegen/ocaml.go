@@ -345,6 +345,9 @@ func (g *ocamlGen) emitIfStmt(is *ast.IfStmt) error {
 }
 
 func (g *ocamlGen) emitWhileStmt(ws *ast.WhileStmt) error {
+	if loopBodyReturns(ws.Body) {
+		return fmt.Errorf("XQL_E402: an OCaml while body must evaluate to unit and the loop has no early exit, so a return inside one cannot be expressed")
+	}
 	outer := g.valuePosition
 	g.valuePosition = false
 	defer func() { g.valuePosition = outer }()
@@ -368,6 +371,9 @@ func (g *ocamlGen) emitWhileStmt(ws *ast.WhileStmt) error {
 }
 
 func (g *ocamlGen) emitForStmt(fs *ast.ForStmt) error {
+	if loopBodyReturns(fs.Body) {
+		return fmt.Errorf("XQL_E402: an OCaml for body must evaluate to unit and the loop has no early exit, so a return inside one cannot be expressed")
+	}
 	outer := g.valuePosition
 	g.valuePosition = false
 	defer func() { g.valuePosition = outer }()

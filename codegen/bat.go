@@ -9,7 +9,12 @@ import (
 )
 
 func GenerateBat(root ast.Node) ([]byte, error) {
-	g := &batGen{buf: &strings.Builder{}, savedTmps: make(map[ast.Node]string), forVars: make(map[string]bool)}
+	g := &batGen{
+		buf:       &strings.Builder{},
+		savedTmps: make(map[ast.Node]string),
+		forVars:   make(map[string]bool),
+		condTmps:  make(map[ast.Node]string),
+	}
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -69,6 +74,24 @@ type batGen struct {
 	savedTmps map[ast.Node]string
 	inBlock   bool
 	forVars   map[string]bool
+
+	// condTmps maps a comparison operand to the temp holding its value, for
+	// the operands precomputeCond had to evaluate before the `if` could
+	// compare them.
+	condTmps map[ast.Node]string
+}
+
+// identRef is how a name is read in a value or a condition. A `for /L` variable
+// is not an environment variable: cmd substitutes %%i textually before the line
+// runs, so `!i!` reads an environment variable nothing ever set and expands to
+// nothing. emitArithExpr and emitIndexExpr already knew this; the two paths
+// here did not, and `return i` from inside a range loop came out as
+// `set "_return=!i!"`, which sets it to empty.
+func (g *batGen) identRef(name string) string {
+	if g.forVars[name] {
+		return "%%" + name
+	}
+	return "!" + name + "!"
 }
 
 func (g *batGen) write(s string)   { g.buf.WriteString(s) }
@@ -145,16 +168,20 @@ func (g *batGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	return nil
 }
 
+// emitReturn parks the value in _return, lifts it out through the subroutine's
+// `setlocal`, and leaves.
+//
+// The leaving used to be conditional on not being inside an `if` or `for`
+// block, which made every early return a no-op: it set _return and then carried
+// on. early_return.xql.json returns from inside a loop, so firstOver kept
+// looping past the answer and then ran the fall-through `return 0` on top of
+// it. `exit /b` inside a parenthesised block leaves the whole subroutine, which
+// is exactly what a return means, so there is nothing the guard was protecting.
 func (g *batGen) emitReturn(rs *ast.ReturnStmt) error {
 	if rs.Value == nil {
 		g.writeIndent()
 		g.writeln("set \"_return=\"")
-		if !g.inBlock {
-			g.writeIndent()
-			g.writeln("for /f \"delims=\" %%r in (\"!_return!\") do endlocal & set \"_return=%%r\"")
-			g.writeIndent()
-			g.writeln("exit /b 0")
-		}
+		g.emitReturnExit()
 		return nil
 	}
 	if err := g.emitNestedCalls(rs.Value); err != nil {
@@ -174,13 +201,19 @@ func (g *batGen) emitReturn(rs *ast.ReturnStmt) error {
 		}
 		g.writeln("\"")
 	}
-	if !g.inBlock {
-		g.writeIndent()
-		g.writeln("for /f \"delims=\" %%r in (\"!_return!\") do endlocal & set \"_return=%%r\"")
-		g.writeIndent()
-		g.writeln("exit /b 0")
-	}
+	g.emitReturnExit()
 	return nil
+}
+
+// emitReturnExit carries _return across the `endlocal` that ends the
+// subroutine's scope. `endlocal & set` on one line is the standard way: the
+// whole line is parsed, and so `%%r` is already substituted, before endlocal
+// discards the environment the value lived in.
+func (g *batGen) emitReturnExit() {
+	g.writeIndent()
+	g.writeln("for /f \"delims=\" %%r in (\"!_return!\") do endlocal & set \"_return=%%r\"")
+	g.writeIndent()
+	g.writeln("exit /b 0")
 }
 
 func (g *batGen) emitVarDecl(vd *ast.VarDecl) error {
@@ -303,6 +336,9 @@ func (g *batGen) isArithExpr(n ast.Node) bool {
 }
 
 func (g *batGen) emitIf(is *ast.IfStmt) error {
+	if err := g.precomputeCond(is.Cond); err != nil {
+		return err
+	}
 	prev := g.inBlock
 	g.inBlock = true
 	g.writeIndent()
@@ -343,6 +379,9 @@ func (g *batGen) emitWhile(ws *ast.WhileStmt) error {
 
 	g.writeIndent()
 	g.writeln(":" + label)
+	if err := g.precomputeCond(ws.Cond); err != nil {
+		return err
+	}
 	g.writeIndent()
 	g.write("if not ")
 	if err := g.emitCondExpr(ws.Cond); err != nil {
@@ -647,7 +686,7 @@ func (g *batGen) emitValExpr(n ast.Node) error {
 	case *ast.Literal:
 		return g.emitLiteral(node)
 	case *ast.Ident:
-		g.write("!" + node.Name + "!")
+		g.write(g.identRef(node.Name))
 		return nil
 	case *ast.BinaryExpr:
 		if node.Op == "+" && stringValued(g.types, node) {
@@ -758,15 +797,59 @@ func (g *batGen) emitCondExpr(n ast.Node) error {
 }
 
 func (g *batGen) emitCondVal(n ast.Node) error {
+	if ref, ok := g.condTmps[n]; ok {
+		g.write(ref)
+		return nil
+	}
 	switch node := n.(type) {
 	case *ast.Literal:
 		return g.emitLiteral(node)
 	case *ast.Ident:
-		g.write("!" + node.Name + "!")
+		g.write(g.identRef(node.Name))
 		return nil
 	default:
 		return g.emitValExpr(n)
 	}
+}
+
+// precomputeCond evaluates, on lines of their own, the parts of a condition
+// that cmd's `if` cannot evaluate itself. `if` compares two tokens and computes
+// neither: `if (%%i * %%i) GTR !limit!` is not a comparison but a syntax error —
+// cmd reports "* was unexpected at this time" and the script dies at that line.
+// So every operand that is arithmetic goes through `set /a` first and the
+// comparison reads the temp back.
+//
+// It runs per evaluation of the condition, which is why emitWhile calls it
+// after the loop label rather than before: the operands have to be recomputed
+// each time round.
+func (g *batGen) precomputeCond(n ast.Node) error {
+	switch node := n.(type) {
+	case *ast.UnaryExpr:
+		return g.precomputeCond(node.Operand)
+	case *ast.BinaryExpr:
+		switch node.Op {
+		case "&&", "||":
+			if err := g.precomputeCond(node.Left); err != nil {
+				return err
+			}
+			return g.precomputeCond(node.Right)
+		case "==", "!=", "<", ">", "<=", ">=":
+			for _, side := range []ast.Node{node.Left, node.Right} {
+				// precomputeArith returns "" for anything `if` can already
+				// read as a token — a literal, a variable, a call whose result
+				// is in !_return! — so the simple comparisons keep their
+				// simple output.
+				ref, err := g.precomputeArith(side)
+				if err != nil {
+					return err
+				}
+				if ref != "" {
+					g.condTmps[side] = ref
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (g *batGen) isSimpleValue(n ast.Node) bool {
