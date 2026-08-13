@@ -152,12 +152,16 @@ func (g *scGen) emitStmt(n ast.Node) error {
 		return g.emitWhile(node)
 	case *ast.ForStmt:
 		return g.emitFor(node)
+
+	// Shortcuts has Repeat and Repeat With Each and nothing that leaves either
+	// early. These two used to become comments, which is the shape XQL_E402
+	// exists to prevent: a comment is not a jump, so the loop ran every
+	// iteration and the workflow reported success. Declining says the same
+	// thing lua, bat, elixir, haskell and ocaml already say about `continue`.
 	case *ast.BreakStmt:
-		g.addComment("break")
-		return nil
+		return fmt.Errorf("XQL_E402: Shortcuts has no way to leave a Repeat early, so break cannot be expressed")
 	case *ast.ContinueStmt:
-		g.addComment("continue")
-		return nil
+		return fmt.Errorf("XQL_E402: Shortcuts has no way to skip to the next Repeat iteration, so continue cannot be expressed")
 	case *ast.MatchExpr:
 		return g.emitMatch(node)
 	case *ast.StructDecl:
@@ -380,37 +384,33 @@ func (g *scGen) setConditionValue(params map[string]interface{}, n ast.Node) {
 	}
 }
 
+// emitWhile declines. Shortcuts' only loops are Repeat, which takes a count,
+// and Repeat With Each, which takes a list; neither reads a condition, and
+// there is no action that ends a Repeat early. This backend used to emit
+// `Repeat 1000` and throw the condition away, which is not a while loop —
+// while_accumulate.xql.json would have run 1000 times instead of 3, and
+// control_flow.xql.json, whose only exit is a `break`, would have run 1000
+// times instead of 7. Both compiled, and the smoke tier could not see it.
 func (g *scGen) emitWhile(ws *ast.WhileStmt) error {
-	groupID := g.nextGroupID()
-	g.addAction("is.workflow.actions.repeat.count", map[string]interface{}{
-		"WFControlFlowMode":  0,
-		"WFRepeatCount":      1000,
-		"GroupingIdentifier": groupID,
-	})
-	for _, s := range ws.Body {
-		if err := g.emitStmt(s); err != nil {
-			return err
-		}
-	}
-	g.addAction("is.workflow.actions.repeat.count", map[string]interface{}{
-		"WFControlFlowMode":  2,
-		"GroupingIdentifier": groupID,
-	})
-	return nil
+	return fmt.Errorf("XQL_E402: Shortcuts' Repeat actions take a count or a list, not a condition, so a while loop cannot be expressed")
 }
 
 func (g *scGen) emitFor(fs *ast.ForStmt) error {
 	groupID := g.nextGroupID()
 	switch fs.Form {
 	case "range":
-		count := 10
-		if startLit, ok := fs.Start.(*ast.Literal); ok {
-			if endLit, ok := fs.End.(*ast.Literal); ok {
-				startF, _ := startLit.Value.(float64)
-				endF, _ := endLit.Value.(float64)
-				count = int(endF - startF)
-			}
+		// A Repeat count is written into the workflow, so it has to be known
+		// here. The fallback used to be 10 — a range whose bounds were anything
+		// but literals silently became ten iterations, which is a wrong answer
+		// wearing a successful compile.
+		startLit, okStart := fs.Start.(*ast.Literal)
+		endLit, okEnd := fs.End.(*ast.Literal)
+		if !okStart || !okEnd {
+			return fmt.Errorf("XQL_E402: a Shortcuts Repeat needs a literal count, and this range's bounds are computed")
 		}
+		startF, _ := startLit.Value.(float64)
+		endF, _ := endLit.Value.(float64)
+		count := int(endF - startF)
 		g.addAction("is.workflow.actions.repeat.count", map[string]interface{}{
 			"WFControlFlowMode":  0,
 			"WFRepeatCount":      count,

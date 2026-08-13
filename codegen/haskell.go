@@ -424,6 +424,9 @@ func (g *hsGen) emitPureBranch(body []ast.Node) error {
 }
 
 func (g *hsGen) emitForStmt(fs *ast.ForStmt) error {
+	if loopBodyReturns(fs.Body) {
+		return fmt.Errorf("XQL_E402: Haskell lowers a for loop to mapM_, which has no early exit, so a return inside one cannot be expressed")
+	}
 	if fs.Form == "range" {
 		g.writeIndent()
 		g.write("mapM_ (\\")
@@ -826,6 +829,9 @@ func (g *hsGen) emitEnumDecl(ed *ast.EnumDecl) error {
 }
 
 func (g *hsGen) emitWhileStmt(ws *ast.WhileStmt) error {
+	if loopBodyReturns(ws.Body) {
+		return fmt.Errorf("XQL_E402: Haskell lowers a while loop to a recursive action, which cannot return out of the function around it")
+	}
 	loopName := fmt.Sprintf("xqlLoop%d", g.loopCount)
 	g.loopCount++
 

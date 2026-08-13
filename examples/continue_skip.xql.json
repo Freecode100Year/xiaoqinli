@@ -1,0 +1,126 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "evens",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 0 }
+        },
+        {
+          "kind": "ForStmt",
+          "form": "range",
+          "var": "i",
+          "start": { "kind": "Literal", "valueType": "Int", "value": 0 },
+          "end": { "kind": "Literal", "valueType": "Int", "value": 10 },
+          "body": [
+            {
+              "kind": "IfStmt",
+              "condition": {
+                "kind": "BinaryExpr",
+                "op": "==",
+                "left": {
+                  "kind": "BinaryExpr",
+                  "op": "%",
+                  "left": { "kind": "Ident", "name": "i" },
+                  "right": { "kind": "Literal", "valueType": "Int", "value": 2 }
+                },
+                "right": { "kind": "Literal", "valueType": "Int", "value": 1 }
+              },
+              "then": [{ "kind": "ContinueStmt" }],
+              "else": []
+            },
+            {
+              "kind": "AssignStmt",
+              "target": "evens",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": { "kind": "Ident", "name": "evens" },
+                "right": { "kind": "Ident", "name": "i" }
+              }
+            }
+          ]
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "evens" }]
+          }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "n",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 0 }
+        },
+        {
+          "kind": "VarDecl",
+          "name": "tail",
+          "type": { "kind": "Int" },
+          "value": { "kind": "Literal", "valueType": "Int", "value": 0 }
+        },
+        {
+          "kind": "WhileStmt",
+          "condition": {
+            "kind": "BinaryExpr",
+            "op": "<",
+            "left": { "kind": "Ident", "name": "n" },
+            "right": { "kind": "Literal", "valueType": "Int", "value": 10 }
+          },
+          "body": [
+            {
+              "kind": "AssignStmt",
+              "target": "n",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": { "kind": "Ident", "name": "n" },
+                "right": { "kind": "Literal", "valueType": "Int", "value": 1 }
+              }
+            },
+            {
+              "kind": "IfStmt",
+              "condition": {
+                "kind": "BinaryExpr",
+                "op": "<",
+                "left": { "kind": "Ident", "name": "n" },
+                "right": { "kind": "Literal", "valueType": "Int", "value": 8 }
+              },
+              "then": [{ "kind": "ContinueStmt" }],
+              "else": []
+            },
+            {
+              "kind": "AssignStmt",
+              "target": "tail",
+              "value": {
+                "kind": "BinaryExpr",
+                "op": "+",
+                "left": { "kind": "Ident", "name": "tail" },
+                "right": { "kind": "Ident", "name": "n" }
+              }
+            }
+          ]
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [{ "kind": "Ident", "name": "tail" }]
+          }
+        }
+      ]
+    }
+  ]
+}

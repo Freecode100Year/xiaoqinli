@@ -353,6 +353,13 @@ func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
 	//
 	// Enum.reduce is the same loop with the mutated variables threaded through
 	// as an accumulator, which is how one writes it by hand.
+	//
+	// What it still cannot do is stop early. A return inside the body used to
+	// become the last expression of one iteration, which Enum.reduce keeps as
+	// the accumulator and the function around it never sees.
+	if loopBodyReturns(fs.Body) {
+		return fmt.Errorf("XQL_E402: Elixir lowers a for loop to Enum.reduce, which runs to the end, so a return inside one cannot be expressed")
+	}
 	mutated := exMutatedNames(fs.Body)
 
 	// Elixir warns about a bound variable the body never mentions, and asks for
@@ -429,6 +436,9 @@ func (g *exGen) emitForStmt(fs *ast.ForStmt) error {
 // and it uses `break`, which this backend declines — so elixir's while loop had
 // never been compiled or run at all.
 func (g *exGen) emitWhileStmt(ws *ast.WhileStmt) error {
+	if loopBodyReturns(ws.Body) {
+		return fmt.Errorf("XQL_E402: Elixir lowers a while loop to a recursive function, which cannot return out of the function around it")
+	}
 	loopName := fmt.Sprintf("xql_loop%d", g.loopCount)
 	g.loopCount++
 	loopFn := loopName + "_fn"

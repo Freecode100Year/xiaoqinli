@@ -87,7 +87,10 @@ var expectedRejections = map[string][]string{
 	// backends for its `break`, so this is the first corpus program that asks
 	// most of them whether their while loop works at all — tccli has no loop of
 	// any kind.
-	"while_accumulate.xql.json": {"tccli"},
+	"while_accumulate.xql.json": {
+		"tccli",
+		"shortcut", // Repeat takes a count, not a condition
+	},
 
 	// `break` is the construct that splits the matrix along a different line
 	// than Result does: a language without an early loop exit cannot fake one.
@@ -97,7 +100,30 @@ var expectedRejections = map[string][]string{
 	"control_flow.xql.json": {
 		"bat", "elixir", "haskell", "ocaml",
 		"tccli", // no while loop either
+
+		// shortcut is the seventh, and it was absent from this list because it
+		// used to accept the program and mistranslate it: the `break` became a
+		// comment and the while became Repeat 1000. See emitWhile in
+		// codegen/shortcut.go.
+		"shortcut",
 	},
+
+	// `continue`, which splits the matrix along the same line `break` does and
+	// not quite in the same place. bat, elixir, haskell, lua, ocaml and
+	// shortcut have no way to skip an iteration; tccli has no loop. lua is the
+	// one that appears here and not in control_flow: it has `break` and, until
+	// `goto` arrived in 5.2, deliberately no `continue`.
+	"continue_skip.xql.json": {
+		"bat", "elixir", "haskell", "lua", "ocaml", "shortcut", "tccli",
+	},
+
+	// A return from inside a loop, which splits the matrix along the same seam
+	// `break` does — the three functional backends lower a loop to something
+	// that runs to the end (mapM_, a unit-bodied `for ... done`, Enum.reduce)
+	// and cannot leave it. All three used to accept this and emit nonsense:
+	// two would not compile and elixir printed the fall-through value twice.
+	// tccli declines for the loop rather than the return.
+	"early_return.xql.json": {"elixir", "haskell", "ocaml", "tccli"},
 
 	// The chrome examples declare host externs restricted to browser targets,
 	// so every backend that cannot provide them is refused by design. This is
