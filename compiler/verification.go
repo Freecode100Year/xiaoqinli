@@ -184,7 +184,13 @@ var targetVerification = map[string]TargetVerification{
 	// Repeat takes a count or a list and there is no action that leaves one
 	// early, and this backend used to answer `while` with Repeat 1000 and
 	// `break` with a comment.
-	"shortcut": {TierSmoke, "TestShortcutBundle", "", "emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>, while, break and continue"},
+	//
+	// `return` was the fourth and it was missed the first time, because it does
+	// not look like a jump: it emitted the value and the Repeat carried on to
+	// the end. What the loops do have now is a loop variable — Repeat Index and
+	// Repeat Item, which nothing had read, so every `i` inside a generated
+	// Repeat named a variable no action ever set.
+	"shortcut": {TierSmoke, "TestShortcutBundle", "", "emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>, while, and break, continue or return inside a loop"},
 
 	// cmd.exe exists on one platform, so this one is earned on a Windows runner
 	// rather than the Linux one every other target uses. The exclusion is real

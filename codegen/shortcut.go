@@ -395,7 +395,24 @@ func (g *scGen) emitWhile(ws *ast.WhileStmt) error {
 	return fmt.Errorf("XQL_E402: Shortcuts' Repeat actions take a count or a list, not a condition, so a while loop cannot be expressed")
 }
 
+// A Repeat publishes exactly two variables to its body: Repeat Index, which
+// counts from 1, and Repeat Item, which is the current element of a Repeat With
+// Each. They are the only way a body can see which iteration it is running.
+const (
+	scRepeatIndex = "Repeat Index"
+	scRepeatItem  = "Repeat Item"
+)
+
 func (g *scGen) emitFor(fs *ast.ForStmt) error {
+	// A Repeat runs its body to the end, which is why `break` and `continue`
+	// are declined above. A `return` inside one is the same statement carrying
+	// a value, and it was not declined: it emitted the value and kept looping,
+	// so early_return.xql.json's firstOver(20) ran all ten iterations and
+	// answered with the fall-through 0 that follows the loop. Two calls, two
+	// zeroes, where every executed backend prints 5 and 0.
+	if loopBodyReturns(fs.Body) {
+		return fmt.Errorf("XQL_E402: Shortcuts has no way to leave a Repeat early, so a return inside one cannot be expressed")
+	}
 	groupID := g.nextGroupID()
 	switch fs.Form {
 	case "range":
@@ -411,11 +428,18 @@ func (g *scGen) emitFor(fs *ast.ForStmt) error {
 		startF, _ := startLit.Value.(float64)
 		endF, _ := endLit.Value.(float64)
 		count := int(endF - startF)
+		if count < 0 {
+			// An empty range. Every other backend runs the body zero times;
+			// `Repeat -3 times` is not a smaller number of iterations, it is a
+			// number the app has no meaning for.
+			count = 0
+		}
 		g.addAction("is.workflow.actions.repeat.count", map[string]interface{}{
 			"WFControlFlowMode":  0,
 			"WFRepeatCount":      count,
 			"GroupingIdentifier": groupID,
 		})
+		g.bindRepeatIndex(fs.Var, int64(startF))
 		for _, s := range fs.Body {
 			if err := g.emitStmt(s); err != nil {
 				return err
@@ -435,6 +459,7 @@ func (g *scGen) emitFor(fs *ast.ForStmt) error {
 			"WFControlFlowMode":  0,
 			"GroupingIdentifier": groupID,
 		})
+		g.bindRepeatItem(fs.Var)
 		for _, s := range fs.Body {
 			if err := g.emitStmt(s); err != nil {
 				return err
@@ -444,8 +469,54 @@ func (g *scGen) emitFor(fs *ast.ForStmt) error {
 			"WFControlFlowMode":  2,
 			"GroupingIdentifier": groupID,
 		})
+	default:
+		// What rust's emitForStmt says for the same case. This switch used to
+		// fall off the end and return nil, so an unrecognised form emitted a
+		// Repeat-shaped nothing — no open action, no body, no close — and
+		// reported success.
+		return fmt.Errorf("XQL_E401: unknown ForStmt form %q", fs.Form)
 	}
 	return nil
+}
+
+// bindRepeatIndex writes the loop variable at the top of a Repeat body.
+//
+// Nothing did before, and the body read it anyway: every loop this backend
+// compiled — loop.xql.json's `i`, nested_loop's `i` and `j`, for_each's `n` —
+// got a variable no action had set. The Repeat ran the right number of times
+// and every reference inside it was empty.
+//
+// Repeat Index counts from 1 and an XQL range counts from its start, so the
+// binding is `Repeat Index - 1 + start`, which is also where the start bound
+// went: it had been subtracted into the count and then dropped.
+func (g *scGen) bindRepeatIndex(name string, start int64) {
+	g.addAction("is.workflow.actions.getvariable", map[string]interface{}{
+		"WFVariable": scVarRef(scRepeatIndex),
+	})
+	if offset := start - 1; offset != 0 {
+		op := "+"
+		if offset < 0 {
+			op, offset = "-", -offset
+		}
+		g.addAction("is.workflow.actions.math", map[string]interface{}{
+			"WFMathOperation": op,
+			"WFMathOperand":   scTextToken(fmt.Sprintf("%d", offset)),
+		})
+	}
+	g.addAction("is.workflow.actions.setvariable", map[string]interface{}{
+		"WFVariableName": name,
+	})
+}
+
+// bindRepeatItem does the same for a Repeat With Each, where the element is
+// published as Repeat Item and needs no arithmetic.
+func (g *scGen) bindRepeatItem(name string) {
+	g.addAction("is.workflow.actions.getvariable", map[string]interface{}{
+		"WFVariable": scVarRef(scRepeatItem),
+	})
+	g.addAction("is.workflow.actions.setvariable", map[string]interface{}{
+		"WFVariableName": name,
+	})
 }
 
 func (g *scGen) emitMatch(me *ast.MatchExpr) error {
