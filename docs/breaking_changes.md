@@ -335,6 +335,26 @@ struct 和 enum 都带 `#[derive(Debug, Clone)]`。
 **需要你做什么：** 不需要。没有任何程序因此从「能编译」变成「不能编译」——
 之前能过 rustc 的形状只有「把元素加起来」，它现在照样过。
 
-**已知残留（不在这次改动里）：** `Vec<String>` 的数组字面量发射成 `vec!["a", "b"]`，
-元素是 `&str` 而不是 `String`，rustc 在到达循环之前就拒绝了。这是数组字面量的问题，不是循环的，
-语料里还没有任何一个示例是字符串数组——按本项目的规矩，它应该由自己的语料程序带着自己的提交来修。
+**当时的已知残留，已在下一节修掉：** `Vec<String>` 的数组字面量发射成 `vec!["a", "b"]`，
+元素是 `&str` 而不是 `String`，rustc 在到达循环之前就拒绝了。
+
+---
+
+## `rust` 的字符串数组此前根本编译不过
+
+**改成什么：** 数组字面量里的字符串元素改为发射成 owned String——`vec!["ada", "bob"]` 变成
+`vec!["ada".to_string(), "bob".to_string()]`。会被转换的只有两种形状：字符串字面量，
+以及类型为 String 的函数参数（这个后端按设计把它发射成 `&str`）。其余元素本来就是 owned。
+
+**为什么：** XQL 只有一种字符串类型，这个后端把它拼作 `String`，于是变量声明写的是 `Vec<String>`，
+而 `vec!["ada", "bob"]` 是 `Vec<&str>`。**这个后端生成过的每一个字符串数组都在第 2 行就被 rustc 拒绝**，
+`expected String, found &str`——连循环都到不了。
+
+**为什么之前没发现：** 语料里的数组全是整型数组。`for_each.xql.json`、`collections.xql.json`、
+`nested_loop.xql.json` 都是 `Int`，整型字面量在 `Vec<i64>` 里正好合适，于是数组字面量看起来是个已经解决的问题。
+新增的 `examples/string_array.xql.json` 是语料里第一个字符串数组。
+
+**需要你做什么：** 不需要。之前的产物无法编译，没有可依赖的行为。
+
+**验证：** 本机用 gnu 工具链（msvc 缺 link.exe）把整个语料的 rust 产物真的编译并运行了一遍，
+24 个示例逐条对上了 `conformanceExpect`，`string_array` 输出 `ada-bob-cy-`。

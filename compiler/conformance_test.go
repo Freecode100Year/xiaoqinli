@@ -157,6 +157,13 @@ var conformanceExpect = map[string][]string{
 	// asked it to add — but not to compare and not to return: rustc refused
 	// both, `expected i64, found &i64`, twice.
 	"each_return.xql.json": {"8", "0"},
+
+	// An array of strings, which the corpus had never contained — every array
+	// in it held ints. rust's array literal emitted the elements as they came,
+	// so `vec!["ada", "bob", "cy"]` is a Vec<&str> under a declaration that
+	// says Vec<String>, and rustc stopped at line 2 of every string array this
+	// backend has ever produced.
+	"string_array.xql.json": {"ada-bob-cy-"},
 }
 
 // conformanceRunner says how to turn one target's output into a running
@@ -216,6 +223,15 @@ var conformanceRunners = []conformanceRunner{
 		steps: [][]string{{"{tool}", "{file}"}}},
 	{target: "perl", ext: ".pl", tools: []string{"perl"},
 		steps: [][]string{{"{tool}", "{file}"}}},
+
+	// On Windows the `bash` this finds is usually WSL's, at
+	// C:\windows\system32\bash.exe, and WSL cannot open the Windows path the
+	// runner hands it — it wants /mnt/c/... — so every example fails with
+	// "No such file or directory" and the target verifies nothing. That is the
+	// harness meeting a Linux shell through a Windows path, not the backend:
+	// running the generated .sh under the same bash by hand prints the expected
+	// stdout. CI is Linux and unaffected; a Windows checkout that wants this
+	// tier needs Git Bash ahead of WSL on PATH.
 	{target: "bash", ext: ".sh", tools: []string{"bash"},
 		steps: [][]string{{"{tool}", "{file}"}}},
 	{target: "tcl", ext: ".tcl", tools: []string{"tclsh"},
