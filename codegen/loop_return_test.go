@@ -140,6 +140,48 @@ const eachReturnProgram = `{
 	]
 }`
 
+// A Vec<String> holds Strings and a bare "ada" is a &str, so an array literal
+// has to say which it is. rust's said neither: it emitted the elements as they
+// came, and `let names: Vec<String> = vec!["ada", "bob"]` does not compile.
+// Every array in the corpus held ints until string_array.xql.json, so an array
+// literal had looked like a solved problem.
+const stringArrayProgram = `{
+	"kind": "Program",
+	"declarations": [{
+		"kind": "FunctionDecl",
+		"name": "main",
+		"params": [],
+		"returnType": {"kind": "Void"},
+		"effects": ["state"],
+		"grant": ["io"],
+		"body": [{
+			"kind": "VarDecl",
+			"name": "names",
+			"type": {"kind": "Array", "elem": {"kind": "String"}},
+			"value": {
+				"kind": "ArrayLit",
+				"elemType": {"kind": "String"},
+				"elements": [
+					{"kind": "Literal", "valueType": "String", "value": "ada"},
+					{"kind": "Literal", "valueType": "String", "value": "bob"}
+				]
+			}
+		}]
+	}]
+}`
+
+func TestRustStringArrayElementsAreOwned(t *testing.T) {
+	root := mustParse(t, stringArrayProgram)
+	out, err := Generate(root, "rust")
+	if err != nil {
+		t.Fatalf("rust declined a string array: %v", err)
+	}
+	code := string(out)
+	if !strings.Contains(code, `vec!["ada".to_string(), "bob".to_string()]`) {
+		t.Errorf("rust array literal must own its string elements, or Vec<String> will not accept them:\n%s", code)
+	}
+}
+
 func TestRustForEachBindsByValue(t *testing.T) {
 	root := mustParse(t, eachReturnProgram)
 	out, err := Generate(root, "rust")

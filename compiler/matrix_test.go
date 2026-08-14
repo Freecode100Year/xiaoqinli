@@ -72,6 +72,12 @@ var expectedRejections = map[string][]string{
 	// into the name and iteration cannot reach at all.
 	"for_each.xql.json": {"bat", "c", "fortran", "pascal", "tccli"},
 
+	// The same five decline a string array for the same reason — it is a
+	// for-each over an array literal, and the element type changes nothing
+	// about what they cannot iterate. What it does change is the element:
+	// every array in the corpus before this one held ints.
+	"string_array.xql.json": {"bat", "c", "fortran", "pascal", "tccli"},
+
 	// `!` is a UnaryExpr, which the batch and tccli backends have never
 	// emitted; both decline it rather than guess.
 	"bool_logic.xql.json":   {"bat", "tccli"},

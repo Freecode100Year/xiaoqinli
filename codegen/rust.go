@@ -583,11 +583,34 @@ func (g *rsGen) emitArrayLit(al *ast.ArrayLit) error {
 		if i > 0 {
 			g.write(", ")
 		}
-		if err := g.emitExpr(elem); err != nil {
+		if err := g.emitArrayElem(elem); err != nil {
 			return err
 		}
 	}
 	g.write("]")
+	return nil
+}
+
+// emitArrayElem writes one element of an array literal, owned.
+//
+// `vec!["ada", "bob"]` is a Vec<&str>, and the declaration around it says
+// Vec<String>, because XQL has one string type and this backend spells it
+// String. So rustc refused every string array it was ever handed —
+// string_array.xql.json does not reach its loop, it stops at line 2 with
+// "expected String, found &str". Nothing in the corpus had been a string array
+// until then; the int arrays it did have were fine, which is why an array
+// literal looked like a solved problem.
+//
+// The two shapes that arrive as &str are a literal and a String parameter,
+// which is emitted as &str by design. Everything else is already owned, and
+// `.to_string()` on it would only be a copy.
+func (g *rsGen) emitArrayElem(n ast.Node) error {
+	if err := g.emitExpr(n); err != nil {
+		return err
+	}
+	if exprIsStrLiteral(n) || g.isStrRef(n) {
+		g.write(".to_string()")
+	}
 	return nil
 }
 
@@ -850,13 +873,15 @@ func (g *rsGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
 	return nil
 }
 
+// emitArrayLiteral is the same node under the other name the codec accepts, and
+// it needs the same owned elements — see emitArrayLit.
 func (g *rsGen) emitArrayLiteral(al *ast.ArrayLiteral) error {
 	g.write("vec![")
 	for i, elem := range al.Elements {
 		if i > 0 {
 			g.write(", ")
 		}
-		if err := g.emitExpr(elem); err != nil {
+		if err := g.emitArrayElem(elem); err != nil {
 			return err
 		}
 	}
