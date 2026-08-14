@@ -692,12 +692,35 @@ func CollectImports(root ast.Node) map[string]bool {
 // fall-through 0 for both calls.
 //
 // It does not descend into a Lambda: a return inside one belongs to the lambda,
-// not to the function around the loop.
+// not to the function around the loop. That is also why the value positions
+// below are followed by handing the value back to this same switch rather than
+// by walking the whole expression: the switch matches statements and MatchExpr
+// and nothing else, so a Lambda in value position falls through to false.
+//
+// A MatchExpr can sit in a body directly or wrapped in an ExprStmt, and for one
+// release only the direct form was checked. The wrapped form is the same tree
+// with one more node on it, and it walked straight past this guard: ocaml
+// emitted `for ... do (match i with 3 -> limit | _ -> ...) done`, which is an
+// int where the body must be unit and does not compile, and elixir compiled a
+// case expression whose value the comprehension threw away and returned the
+// fall-through.
 func loopBodyReturns(body []ast.Node) bool {
 	for _, s := range body {
 		switch node := s.(type) {
 		case *ast.ReturnStmt:
 			return true
+		case *ast.ExprStmt:
+			if loopBodyReturns([]ast.Node{node.Expr}) {
+				return true
+			}
+		case *ast.VarDecl:
+			if node.Value != nil && loopBodyReturns([]ast.Node{node.Value}) {
+				return true
+			}
+		case *ast.AssignStmt:
+			if node.Value != nil && loopBodyReturns([]ast.Node{node.Value}) {
+				return true
+			}
 		case *ast.IfStmt:
 			if loopBodyReturns(node.Then) || loopBodyReturns(node.Else) {
 				return true

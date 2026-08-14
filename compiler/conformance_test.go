@@ -150,6 +150,13 @@ var conformanceExpect = map[string][]string{
 	// the loop kept going. firstOver(20) echoed 5, then 6, 7, 8, 9, then the
 	// fall-through 0, and `$(firstOver 20)` captured the lot.
 	"early_return.xql.json": {"5", "0"},
+
+	// The same shape over a for-each, which is a different question for any
+	// backend whose each form is not its range form. rust's was `for n in
+	// &nums`, and a reference is enough to add — for_each.xql.json only ever
+	// asked it to add — but not to compare and not to return: rustc refused
+	// both, `expected i64, found &i64`, twice.
+	"each_return.xql.json": {"8", "0"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

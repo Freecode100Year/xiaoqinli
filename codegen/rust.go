@@ -428,11 +428,25 @@ func (g *rsGen) emitForStmt(fs *ast.ForStmt) error {
 			return err
 		}
 	case "each":
-		// for v in &iterable {
-		g.write("for " + fs.Var + " in &")
+		// for v in iterable.iter().cloned() {
+		//
+		// It used to be `for v in &iterable`, which binds &T. That survived the
+		// corpus for as long as the only for-each in it was for_each.xql.json,
+		// whose body is `total = total + n` — and `i64 + &i64` is one of the
+		// few things a reference does without being asked. Everything else it
+		// does not: each_return.xql.json compares the element to a parameter
+		// and returns it, and rustc refused both (`expected i64, found &i64`).
+		//
+		// .iter().cloned() binds T instead and leaves the collection alone,
+		// which .clone() on a slice would not — that clones the reference and
+		// iterates references again. Every element type this backend emits is
+		// Clone: the scalars are Copy, String is Clone, and structs and enums
+		// are emitted with #[derive(Debug, Clone)].
+		g.write("for " + fs.Var + " in ")
 		if err := g.emitExpr(fs.Iterable); err != nil {
 			return err
 		}
+		g.write(".iter().cloned()")
 	default:
 		return fmt.Errorf("XQL_E401: unknown ForStmt form %q", fs.Form)
 	}

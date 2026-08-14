@@ -144,3 +144,92 @@ func TestShortcutBundle(t *testing.T) {
 		}
 	}
 }
+
+// TestShortcutLoopVariableIsBound is the one thing about a generated Repeat
+// that can be checked without the app: that the loop variable exists.
+//
+// It did not. A Repeat publishes Repeat Index and Repeat Item and this backend
+// read neither, so the body of every loop it ever emitted referred to a
+// variable no action set — loop.xql.json's `i`, nested_loop's `i` and `j`. The
+// smoke tier is exactly the tier that cannot notice: the JSON parsed, every
+// action was namespaced, and the workflow computed with an empty variable.
+func TestShortcutLoopVariableIsBound(t *testing.T) {
+	corpus := exampleCorpus(t)
+
+	cases := []struct {
+		example string
+		open    string // the action that opens the loop
+		source  string // the variable Shortcuts publishes to its body
+		bound   string // the variable the XQL program reads
+	}{
+		{"loop.xql.json", "is.workflow.actions.repeat.count", "Repeat Index", "i"},
+		{"for_each.xql.json", "is.workflow.actions.repeat.each", "Repeat Item", "n"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.example, func(t *testing.T) {
+			res := CompileFromFile(corpus[tc.example], "shortcut", "")
+			if !res.Success {
+				t.Fatalf("shortcut declined %s: %s", tc.example, res.Error)
+			}
+
+			var workflow struct {
+				Actions []struct {
+					Identifier string                 `json:"WFWorkflowActionIdentifier"`
+					Params     map[string]interface{} `json:"WFWorkflowActionParameters"`
+				} `json:"WFWorkflowActions"`
+			}
+			if err := json.Unmarshal(res.Code, &workflow); err != nil {
+				t.Fatalf("the shortcut is not valid JSON: %v", err)
+			}
+
+			open := -1
+			for i, a := range workflow.Actions {
+				if a.Identifier == tc.open && a.Params["WFControlFlowMode"] == float64(0) {
+					open = i
+					break
+				}
+			}
+			if open < 0 {
+				t.Fatalf("no %s action opens a loop", tc.open)
+			}
+
+			// The binding is the first thing in the body: read the published
+			// variable, adjust it if the range does not start at 1, store it
+			// under the name the program uses.
+			body := workflow.Actions[open+1:]
+			if len(body) == 0 || body[0].Identifier != "is.workflow.actions.getvariable" {
+				t.Fatalf("the loop body does not start by reading a variable, so %q is never bound", tc.bound)
+			}
+			if got := shortcutVarName(body[0].Params["WFVariable"]); got != tc.source {
+				t.Errorf("loop body reads %q, want the published %q", got, tc.source)
+			}
+
+			set := false
+			for _, a := range body[:min(4, len(body))] {
+				if a.Identifier == "is.workflow.actions.setvariable" && a.Params["WFVariableName"] == tc.bound {
+					set = true
+					break
+				}
+			}
+			if !set {
+				t.Errorf("no action near the top of the loop sets %q, so the body reads an empty variable", tc.bound)
+			}
+		})
+	}
+}
+
+// shortcutVarName digs the name out of a WFTextTokenAttachment, which is how
+// every variable reference in a workflow is serialized.
+func shortcutVarName(ref interface{}) string {
+	m, ok := ref.(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	value, ok := m["Value"].(map[string]interface{})
+	if !ok {
+		return ""
+	}
+	name, _ := value["VariableName"].(string)
+	return name
+}

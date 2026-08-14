@@ -223,6 +223,8 @@ range 循环由闭区间改为半开区间。`kotlin` 之前生成的 `for (i in
 **需要你做什么：** 如果有 AST 依赖 `shortcut` 接受这三个构造，那份产物本来就是错的。
 用 range 形式的 `for` 改写循环，或换一个目标。
 
+**漏掉的第四个：** 见下一节——`return` 也离不开 Repeat，而它不长得像跳转，所以上面这一轮没有拒绝它。
+
 ---
 
 ## `bash` 与 `bat` 的提前 `return` 此前不会返回
@@ -274,3 +276,65 @@ range 循环由闭区间改为半开区间。`kotlin` 之前生成的 `for (i in
 
 **已知残留：** 判定用 `codegen/util.go` 的 `loopBodyReturns`，它不会走进 `Lambda`——
 lambda 里的 `return` 属于 lambda 自己。
+
+**补记（后一次审计）：** 这个预扫描当时只认作为语句直接出现的 `MatchExpr`，不认被 `ExprStmt`
+包起来的同一棵树。少认这一层的后果和上表一模一样：`ocaml` 生成 `for ... do (match i with 3 -> limit | _ -> ...) done`，
+循环体求值为 int 而非 unit，编译不过；`elixir` 编译得过，`case` 的值被推导式丢掉，返回落空的 0。
+现在 `ExprStmt`、`VarDecl` 与 `AssignStmt` 的值位置一并下降，`Lambda` 仍然不进——
+值位置是把节点交回同一个 switch，而那个 switch 不认 `Lambda`。
+
+---
+
+## `shortcut` 现在也拒绝 Repeat 里的 `return`，并且循环变量终于有人赋值了
+
+**改成什么：**
+
+| 构造 | 之前发射的东西 | 现在 |
+|---|---|---|
+| 循环体内的 `ReturnStmt` | 取值的动作，Repeat 照跑到底 | `XQL_E402` |
+| range 循环的循环变量 `i` | 什么都没有 | `Repeat Index` 减 1 加 start，存进 `i` |
+| each 循环的循环变量 `n` | 什么都没有 | `Repeat Item` 存进 `n` |
+| `end < start` 的 range | `Repeat -3 次` | `Repeat 0 次` |
+| 不认识的 `ForStmt.Form` | 静默产出空 | `XQL_E401` |
+
+**受影响的示例：** `early_return.xql.json` 与新增的 `each_return.xql.json` 从 `shortcut`
+编译成功变为被拒绝，`TestExampleTargetMatrix` 的期望表已同步。
+
+**为什么：** 上一轮拒绝了 `while` / `break` / `continue`，理由是 Repeat 没有任何提前离开的动作。
+`return` 是同一件事，只是它带着一个值，看起来不像跳转，于是漏了：`early_return.xql.json` 的
+`firstOver(20)` 应当返回 5，这份工作流会把十轮全跑完，再取循环后那句 `return 0` 的 0。两次调用，两个 0。
+
+循环变量是同一场审计翻出来的第二件事，而且更早就在那里了。Repeat 只发布两个变量——`Repeat Index`（从 1 数起）
+和 `Repeat Item`——这个后端一个都没读过。`loop.xql.json` 的 `i`、`nested_loop.xql.json` 的 `i` 和 `j`，
+在生成的工作流里都是没有任何动作设置过的名字。range 的 start 也一起丢在这里：它被减进了次数里，然后就没了。
+这正是 smoke 等级看不见的东西——JSON 解析得过，每个动作的标识符都带命名空间，然后拿一个空变量去算。
+
+**需要你做什么：** 如果有 AST 靠 `shortcut` 接受循环里的 `return`，那份产物本来就是错的。
+把它改写成「用变量记住结果、循环后再返回」。已经生成过的工作流值得重新生成一次——
+循环变量的绑定是新加的，旧产物里没有。
+
+**未变：** 仍然是 smoke 等级。`TestShortcutLoopVariableIsBound` 能断言的是绑定动作存在、读的是
+`Repeat Index` / `Repeat Item`、写的是程序用的那个名字。Shortcuts app 会不会接受这份工作流，
+仍然没有任何东西能在 CI 里回答。
+
+---
+
+## `rust` 的 for-each 由绑定引用改为绑定值
+
+**改成什么：** `for n in &nums` 改为 `for n in nums.iter().cloned()`。
+
+**为什么：** `&Vec<T>` 迭代出来的是 `&T`。语料里唯一的 for-each 是 `for_each.xql.json`，
+它对元素做的唯一一件事是相加，而 `i64 + &i64` 恰好是引用不用打招呼就能做的少数几件事之一。
+其他事都不行：新增的 `each_return.xql.json` 把元素和参数比一下再返回它，rustc 两处都拒绝，
+`expected i64, found &i64`。
+
+`.iter().cloned()` 绑定 `T` 且不动原集合——`.clone()` 在切片上做不到这件事，它克隆的是那个引用，
+迭代出来还是引用。这个后端发射的元素类型都是 Clone：标量是 Copy，String 是 Clone，
+struct 和 enum 都带 `#[derive(Debug, Clone)]`。
+
+**需要你做什么：** 不需要。没有任何程序因此从「能编译」变成「不能编译」——
+之前能过 rustc 的形状只有「把元素加起来」，它现在照样过。
+
+**已知残留（不在这次改动里）：** `Vec<String>` 的数组字面量发射成 `vec!["a", "b"]`，
+元素是 `&str` 而不是 `String`，rustc 在到达循环之前就拒绝了。这是数组字面量的问题，不是循环的，
+语料里还没有任何一个示例是字符串数组——按本项目的规矩，它应该由自己的语料程序带着自己的提交来修。

@@ -123,7 +123,26 @@ var expectedRejections = map[string][]string{
 	// and cannot leave it. All three used to accept this and emit nonsense:
 	// two would not compile and elixir printed the fall-through value twice.
 	// tccli declines for the loop rather than the return.
-	"early_return.xql.json": {"elixir", "haskell", "ocaml", "tccli"},
+	//
+	// shortcut is the fifth and it was missed when this line was written: a
+	// Repeat cannot be left early either, which is why break and continue are
+	// already refused, and a return did not look like a jump — it emitted the
+	// value and the loop carried on to the end.
+	"early_return.xql.json": {"elixir", "haskell", "ocaml", "shortcut", "tccli"},
+
+	// The same return, in the other loop form, because early_return.xql.json is
+	// a range loop and that is not the same question. Every backend whose each
+	// form differs from its range form answers it here for the first time: rust
+	// bound `&T` and rustc refused both the comparison and the return, and
+	// shortcut is in this list rather than the one above because a Repeat
+	// cannot be left early either — it used to emit the value and keep going.
+	// The five backends that already decline for-each decline it earlier, for
+	// the loop rather than the return.
+	"each_return.xql.json": {
+		"bat", "c", "fortran", "pascal", // no for-each
+		"elixir", "haskell", "ocaml", "shortcut", // no early exit from a loop
+		"tccli", // no arrays
+	},
 
 	// The chrome examples declare host externs restricted to browser targets,
 	// so every backend that cannot provide them is refused by design. This is

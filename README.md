@@ -242,7 +242,7 @@ Per-target caveats:
 - `pascal` — rejects for-each loops
 - `perl` — rejects Result<T>
 - `powershell` — rejects Result<T>
-- `shortcut` — emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>, while, break and continue
+- `shortcut` — emits a Shortcuts workflow as JSON; structure checked, never imported; rejects Result<T>, while, and break, continue or return inside a loop
 - `tccli` — emits Tencent Cloud CLI shell; no arithmetic, comparisons or structs
 - `tcl` — rejects Result<T>
 - `vala` — rejects Result<T>
