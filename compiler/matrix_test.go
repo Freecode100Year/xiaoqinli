@@ -85,6 +85,13 @@ var expectedRejections = map[string][]string{
 	// having no mutable binding outside IO.
 	"match_arms.xql.json": {"android", "haskell", "tccli"},
 
+	// The same match over an enum, which is what finally asked whether the
+	// declaration side and the reference side of an EnumDecl agree. They did
+	// not, in twenty-two targets. bat is the fourth decline here and not in
+	// match_arms: it has no MemberExpr at all, which is how a variant is
+	// written.
+	"enum_match.xql.json": {"android", "bat", "haskell", "tccli"},
+
 	// `!` is a UnaryExpr, which the batch and tccli backends have never
 	// emitted; both decline it rather than guess.
 	"bool_logic.xql.json":   {"bat", "tccli"},

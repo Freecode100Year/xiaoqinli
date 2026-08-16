@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted at top level (like Ruby).
 func GenerateCrystal(root ast.Node) ([]byte, error) {
 	g := &crystalGen{buf: &strings.Builder{}}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -76,6 +77,7 @@ type crystalGen struct {
 	types  *typeKinds
 	buf    *strings.Builder
 	indent int
+	enums  map[string]*ast.EnumDecl
 }
 
 func (g *crystalGen) write(s string)   { g.buf.WriteString(s) }
@@ -426,6 +428,11 @@ func (g *crystalGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// Crystal scopes enum members with `::`.
+		if enum, variant, ok := enumRef(g.enums, node); ok {
+			g.write(enum + "::" + variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

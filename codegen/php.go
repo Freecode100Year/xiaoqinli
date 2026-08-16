@@ -12,6 +12,7 @@ import (
 // The "main" function's body is emitted at top level after other functions.
 func GeneratePHP(root ast.Node) ([]byte, error) {
 	g := &phpGen{buf: &strings.Builder{}, imports: make(map[string]bool)}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -113,6 +114,7 @@ type phpGen struct {
 	buf     *strings.Builder
 	indent  int
 	imports map[string]bool
+	enums   map[string]*ast.EnumDecl
 }
 
 func (g *phpGen) write(s string)   { g.buf.WriteString(s) }
@@ -214,6 +216,16 @@ func (g *phpGen) emitImportDecl(id *ast.ImportDecl) error {
 	return nil
 }
 
+// emitEnumDecl writes plain integer constants, so a parameter typed by the
+// enum has to be typed int. `function describe(Color $c)` declares a class
+// type that does not exist, and PHP raises a TypeError on the first call.
+func (g *phpGen) typeName(t ast.TypeExpr) string {
+	if _, ok := g.enums[t.KindName]; ok {
+		return "int"
+	}
+	return typeToPHP(t)
+}
+
 func (g *phpGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	for i, v := range ed.Variants {
 		g.writeIndent()
@@ -294,10 +306,10 @@ func (g *phpGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(typeToPHP(p.Type) + " $" + p.Name)
+		g.write(g.typeName(p.Type) + " $" + p.Name)
 	}
 	g.write(")")
-	rt := typeToPHP(fd.ReturnType)
+	rt := g.typeName(fd.ReturnType)
 	g.write(": " + rt)
 	g.writeln(" {")
 	g.indent++
@@ -488,6 +500,11 @@ func (g *phpGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// emitEnumDecl writes plain `const Red = 0;` at file scope.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write(variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

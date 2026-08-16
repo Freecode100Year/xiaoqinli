@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted inside a `program Main; begin ... end.` block.
 func GeneratePascal(root ast.Node) ([]byte, error) {
 	g := &pascalGen{buf: &strings.Builder{}}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -37,6 +38,7 @@ type pascalGen struct {
 	buf        *strings.Builder
 	indent     int
 	needIfThen bool
+	enums      map[string]*ast.EnumDecl
 }
 
 func (g *pascalGen) write(s string)   { g.buf.WriteString(s) }
@@ -645,6 +647,11 @@ func (g *pascalGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// Pascal enum values are plain identifiers in the enclosing scope.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write(variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

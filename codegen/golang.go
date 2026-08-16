@@ -16,6 +16,7 @@ func GenerateGo(root ast.Node) ([]byte, error) {
 		needFmt:     false,
 		structTable: make(map[string]*ast.StructDecl),
 		classTable:  make(map[string]*ast.ClassDecl),
+		enums:       collectEnums(root),
 	}
 
 	walkTypes(root, func(t ast.TypeExpr, context string) {
@@ -130,6 +131,7 @@ type goGen struct {
 	currentFunc *ast.FunctionDecl
 	structTable map[string]*ast.StructDecl
 	classTable  map[string]*ast.ClassDecl
+	enums       map[string]*ast.EnumDecl
 }
 
 func (g *goGen) write(s string) {
@@ -677,6 +679,15 @@ func (g *goGen) emitMatchExpr(me *ast.MatchExpr) error {
 }
 
 func (g *goGen) emitMemberExpr(me *ast.MemberExpr) error {
+	// `Color.Red` is not a field access — Go has no scoped enum, so emitEnumDecl
+	// writes the variants as ColorRed, ColorGreen, ColorBlue and the reference
+	// has to say the same thing. It used to fall through to the code below and
+	// emit `Color.red`: a dot Go does not allow on a type, and a lowercase field
+	// name from the visibility rule, which is two ways wrong in one expression.
+	if enum, variant, ok := enumRef(g.enums, me); ok {
+		g.write(enum + variant)
+		return nil
+	}
 	if err := g.emitExpr(me.Object); err != nil {
 		return err
 	}

@@ -13,6 +13,7 @@ import (
 // If the program is a module (no "main" function), declarations are exported via a module table 'M'.
 func GenerateLua(root ast.Node) ([]byte, error) {
 	g := &luaGen{buf: &strings.Builder{}}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 	g.types = newTypeKinds(root)
 
@@ -121,6 +122,7 @@ type luaGen struct {
 	needIntDiv bool
 	buf        *strings.Builder
 	indent     int
+	enums      map[string]*ast.EnumDecl
 }
 
 func (g *luaGen) write(s string)   { g.buf.WriteString(s) }
@@ -466,6 +468,11 @@ func (g *luaGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// emitEnumDecl writes `Red = 0` as a global; there is no Color table to index.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write(variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

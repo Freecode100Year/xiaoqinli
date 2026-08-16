@@ -1,0 +1,101 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "EnumDecl",
+      "name": "Color",
+      "variants": ["Red", "Green", "Blue"]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "describe",
+      "params": [{ "name": "c", "type": { "kind": "Color" } }],
+      "returnType": { "kind": "String" },
+      "effects": [],
+      "grant": [],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "out",
+          "type": { "kind": "String" },
+          "value": { "kind": "Literal", "valueType": "String", "value": "none" }
+        },
+        {
+          "kind": "MatchExpr",
+          "value": { "kind": "Ident", "name": "c" },
+          "arms": [
+            {
+              "pattern": { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "Color" }, "field": "Red" },
+              "body": [
+                {
+                  "kind": "AssignStmt",
+                  "target": "out",
+                  "value": { "kind": "Literal", "valueType": "String", "value": "red" }
+                }
+              ]
+            },
+            {
+              "pattern": { "kind": "MemberExpr", "object": { "kind": "Ident", "name": "Color" }, "field": "Green" },
+              "body": [
+                {
+                  "kind": "AssignStmt",
+                  "target": "out",
+                  "value": { "kind": "Literal", "valueType": "String", "value": "green" }
+                }
+              ]
+            },
+            {
+              "pattern": { "kind": "Ident", "name": "_" },
+              "body": [
+                {
+                  "kind": "AssignStmt",
+                  "target": "out",
+                  "value": { "kind": "Literal", "valueType": "String", "value": "other" }
+                }
+              ]
+            }
+          ]
+        },
+        { "kind": "ReturnStmt", "value": { "kind": "Ident", "name": "out" } }
+      ]
+    },
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": { "kind": "Void" },
+      "effects": ["state"],
+      "grant": ["io"],
+      "body": [
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "CallExpr",
+                "callee": "describe",
+                "args": [{ "kind": "MemberExpr", "object": { "kind": "Ident", "name": "Color" }, "field": "Green" }]
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "CallExpr",
+                "callee": "describe",
+                "args": [{ "kind": "MemberExpr", "object": { "kind": "Ident", "name": "Color" }, "field": "Blue" }]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

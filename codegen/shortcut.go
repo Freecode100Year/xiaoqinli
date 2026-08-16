@@ -14,6 +14,7 @@ func GenerateShortcut(root ast.Node) ([]byte, error) {
 		types:   newTypeKinds(root),
 		actions: make([]map[string]interface{}, 0),
 		funcs:   make(map[string]*ast.FunctionDecl),
+		enums:   collectEnums(root),
 	}
 
 	prog, ok := root.(*ast.Program)
@@ -80,6 +81,7 @@ func GenerateShortcut(root ast.Node) ([]byte, error) {
 }
 
 type scGen struct {
+	enums     map[string]*ast.EnumDecl
 	types     *typeKinds
 	actions   []map[string]interface{}
 	funcs     map[string]*ast.FunctionDecl
@@ -583,6 +585,15 @@ func (g *scGen) emitExpr(n ast.Node) error {
 	case *ast.IfExpr:
 		return g.emitExpr(node.Then)
 	case *ast.MemberExpr:
+		// emitEnumDecl sets one variable per variant, named Color_Red — so a
+		// reference has to get that variable and not one named Color, which
+		// nothing ever set.
+		if enum, variant, ok := enumRef(g.enums, node); ok {
+			g.addAction("is.workflow.actions.getvariable", map[string]interface{}{
+				"WFVariable": scVarRef(enum + "_" + variant),
+			})
+			return nil
+		}
 		if ident, ok := node.Object.(*ast.Ident); ok {
 			g.addAction("is.workflow.actions.getvariable", map[string]interface{}{
 				"WFVariable": scVarRef(ident.Name),

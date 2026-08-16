@@ -11,6 +11,7 @@ import (
 // A main() call is appended at the bottom if main is defined.
 func GenerateJulia(root ast.Node) ([]byte, error) {
 	g := &jlGen{buf: &strings.Builder{}, imports: make(map[string]bool)}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -92,6 +93,7 @@ type jlGen struct {
 	buf     *strings.Builder
 	indent  int
 	imports map[string]bool
+	enums   map[string]*ast.EnumDecl
 }
 
 // stripImportAlias removes a leading import-alias qualifier from a symbol name.
@@ -474,6 +476,11 @@ func (g *jlGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// `@enum Color Red Green Blue` binds Red in the enclosing scope; Color is a type, not a module.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write(variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

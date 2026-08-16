@@ -10,6 +10,7 @@ import (
 // GenerateZig produces Zig source code from the given typed AST.
 func GenerateZig(root ast.Node) ([]byte, error) {
 	g := &zigGen{buf: &strings.Builder{}, funcReturns: make(map[string]string)}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -99,6 +100,7 @@ type zigGen struct {
 	scope       map[string]string // variable/param name → type kind
 	funcReturns map[string]string // function name → return type kind
 	needConcat  bool
+	enums       map[string]*ast.EnumDecl
 }
 
 // zigConcatFn is the helper `+` on Strings compiles to, and zigConcatHelper is
@@ -231,6 +233,16 @@ func (g *zigGen) emitNode(n ast.Node) error {
 	}
 }
 
+// emitEnumDecl writes the variants as i64 constants rather than declaring a
+// type, so a signature that names the enum has to say i64 — `c: Color` names
+// nothing this backend ever emits.
+func (g *zigGen) typeName(t ast.TypeExpr) string {
+	if _, ok := g.enums[t.KindName]; ok {
+		return "i64"
+	}
+	return typeToZig(t)
+}
+
 func (g *zigGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	for i, v := range ed.Variants {
 		g.writeIndent()
@@ -299,9 +311,9 @@ func (g *zigGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		if i > 0 {
 			g.write(", ")
 		}
-		g.write(p.Name + ": " + typeToZig(p.Type))
+		g.write(p.Name + ": " + g.typeName(p.Type))
 	}
-	g.write(") " + typeToZig(fd.ReturnType))
+	g.write(") " + g.typeName(fd.ReturnType))
 	g.writeln(" {")
 	g.indent++
 	for _, stmt := range fd.Body {
@@ -340,7 +352,7 @@ func (g *zigGen) emitVarDecl(vd *ast.VarDecl) error {
 	} else {
 		g.write("const ")
 	}
-	g.write(vd.Name + ": " + typeToZig(vd.Type))
+	g.write(vd.Name + ": " + g.typeName(vd.Type))
 	if vd.Value != nil {
 		g.write(" = ")
 		if err := g.emitExpr(vd.Value); err != nil {
@@ -533,6 +545,11 @@ func (g *zigGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// emitEnumDecl writes the variants as ColorRed constants, not as a namespace.
+		if enum, variant, ok := enumRef(g.enums, node); ok {
+			g.write(enum + variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

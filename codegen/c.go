@@ -13,6 +13,7 @@ func GenerateC(root ast.Node) ([]byte, error) {
 		funcRets: make(map[string]string),
 		varTypes: make(map[string]string),
 	}
+	g.enums = collectEnums(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -107,6 +108,7 @@ type cGen struct {
 	needStrcat bool
 	funcRets   map[string]string
 	varTypes   map[string]string
+	enums      map[string]*ast.EnumDecl
 }
 
 func (g *cGen) write(s string)   { g.buf.WriteString(s) }
@@ -448,6 +450,11 @@ func (g *cGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// C has no scoped enum: emitEnumDecl writes Color_Red, and the reference has to agree.
+		if enum, variant, ok := enumRef(g.enums, node); ok {
+			g.write(enum + "_" + variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

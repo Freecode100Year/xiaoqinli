@@ -177,6 +177,20 @@ var conformanceExpect = map[string][]string{
 	// dart, zig and nim — declared the assigned variable `const`, `val`,
 	// `final` or `let`, because the mutability scan had no case for a match.
 	"match_arms.xql.json": {"one", "two", "many"},
+
+	// An enum, and a match over one. EnumDecl had a backend behind it in
+	// thirty-five targets and a *reference* to a variant in none of them: the
+	// declaration side picked a spelling — ColorRed, Color_Red, Color::Red, a
+	// bare Red, a `set Red 0` — and `Color.Red` went through emitMemberExpr,
+	// which is written for field access on a value. Twenty-two targets emitted
+	// something their own declaration had not defined, and each failed in its
+	// own way: go wrote `Color.red`, lowercased by the field-visibility rule;
+	// perl and tcl dereferenced a variable that does not exist; bash indexed an
+	// array nobody assigned; elixir called into a module it never emitted;
+	// powershell read `$Color` and matched nothing. Three more were wrong about
+	// the enum as a *type*: fortran declared `type(Color)`, zig `c: Color` and
+	// php `Color $c`, none of which those backends ever define.
+	"enum_match.xql.json": {"green", "other"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

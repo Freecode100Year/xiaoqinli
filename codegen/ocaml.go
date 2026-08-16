@@ -14,6 +14,7 @@ func GenerateOCaml(root ast.Node) ([]byte, error) {
 		funcRets: make(map[string]string),
 		varTypes: make(map[string]string),
 	}
+	g.enums = collectEnums(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -78,6 +79,7 @@ type ocamlGen struct {
 	// that returns something. There the statement is the function's value, not
 	// one more step in a sequence, so it must not be followed by ";".
 	valuePosition bool
+	enums         map[string]*ast.EnumDecl
 }
 
 // stmtEnd is the separator after a statement: absent in value position,
@@ -487,6 +489,11 @@ func (g *ocamlGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// A variant constructor is a name in the enclosing scope; `Color.Red` would be a module path.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write(variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

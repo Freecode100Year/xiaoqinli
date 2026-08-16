@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted at top level after sub definitions.
 func GeneratePerl(root ast.Node) ([]byte, error) {
 	g := &perlGen{buf: &strings.Builder{}}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -79,6 +80,7 @@ type perlGen struct {
 	types      *typeKinds
 	buf        *strings.Builder
 	indent     int
+	enums      map[string]*ast.EnumDecl
 }
 
 func (g *perlGen) write(s string)   { g.buf.WriteString(s) }
@@ -438,6 +440,11 @@ func (g *perlGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// `use constant { Red => 0 }` makes a bareword, not a hashref field.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write(variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

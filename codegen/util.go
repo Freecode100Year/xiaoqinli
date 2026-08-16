@@ -248,6 +248,54 @@ func scanExpr(expr ast.Node, muts map[string]bool, localVars map[string]bool) {
 	}
 }
 
+// collectEnums indexes a program's enum declarations by name.
+//
+// Every backend that emits an EnumDecl chooses a spelling for its variants —
+// Go prefixes them onto the type, C joins them with an underscore, Rust and C++
+// scope them, Julia and OCaml put them in the surrounding namespace — and until
+// examples/enum_match.xql.json nothing in the corpus ever referred to one. The
+// reference side went through emitMemberExpr, which is written for field access
+// on a value, so `Color.Red` came out as `Color.Red` in twenty-two targets
+// whose declaration side had called it something else. See docs/adr_enum_ref.md.
+func collectEnums(root ast.Node) map[string]*ast.EnumDecl {
+	enums := map[string]*ast.EnumDecl{}
+	prog, ok := root.(*ast.Program)
+	if !ok {
+		return enums
+	}
+	for _, d := range prog.Decls {
+		if ed, ok := d.(*ast.EnumDecl); ok && ed.Name != "" {
+			enums[ed.Name] = ed
+		}
+	}
+	return enums
+}
+
+// enumRef reports whether a MemberExpr names an enum variant rather than a
+// field on a value: the object has to be a bare identifier that is a declared
+// enum, and the field has to be one of its variants. A struct field that
+// happens to share a name with a variant is unaffected, because its object is
+// not an enum name.
+func enumRef(enums map[string]*ast.EnumDecl, me *ast.MemberExpr) (string, string, bool) {
+	if me == nil || len(enums) == 0 {
+		return "", "", false
+	}
+	ident, ok := me.Object.(*ast.Ident)
+	if !ok {
+		return "", "", false
+	}
+	ed, ok := enums[ident.Name]
+	if !ok {
+		return "", "", false
+	}
+	for _, v := range ed.Variants {
+		if v == me.Field {
+			return ed.Name, v, true
+		}
+	}
+	return "", "", false
+}
+
 func forkLocalVars(parent map[string]bool) map[string]bool {
 	child := make(map[string]bool, len(parent))
 	for k, v := range parent {

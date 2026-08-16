@@ -408,3 +408,42 @@ IO 上下文里的赋值照旧走 `IORef`，未受影响。
 2. **`py` 后端的 `match` 要求 Python ≥ 3.10**（结构化模式匹配），此前没有任何地方写过这件事。
    3.9 会把 `match n:` 当成对未定义名字的调用，在冒号处报语法错误。
    本机与 CI 镜像都在 3.10 之后，所以这里只是把要求写下来，没有改代码绕开它。
+
+---
+
+## enum 的变体引用此前在 22 个后端里根本不能用
+
+**改成什么：** 22 个后端对 `Color.Red` 这种变体引用的产物变了。语料里新增了
+`examples/enum_match.xql.json`——一个三变体的 enum，一个按变体分支的 match，以及把变体当实参传进去的调用。
+它是语料里第一个**引用**过 enum 变体的程序。
+
+**为什么之前没发现：** `EnumDecl` 有 35 个后端写了发射代码，但没有任何一个语料程序引用过变体，
+所以声明侧和引用侧从未被放在一起看过。声明侧各挑各的拼法（`ColorRed`、`Color_Red`、`Color::Red`、
+裸 `Red`、`set Red 0`……），引用侧走的是为「值上的字段访问」写的 `emitMemberExpr`。
+
+**各后端此前生成的是什么：**
+
+| 后端 | 之前 | 症状 |
+|---|---|---|
+| `go` | `Color.red` | 点是 Go 不允许的，小写来自字段可见性规则——两处错在同一个表达式里 |
+| `c` `fortran` | `Color.Red` / `Color%Red` | 声明的是 `Color_Red` |
+| `rust` `cpp` `ruby` `crystal` | `Color.Red` | 变体作用域是 `::` |
+| `zig` | `Color.Red`，且 `c: Color` | 声明的是 `ColorRed` 常量，`Color` 这个类型从来不存在 |
+| `julia` `php` `lua` `perl` `awk` `ocaml` `pascal` | `Color.Red` | 变体是外层作用域的名字，`Color` 不是模块 |
+| `tcl` | `[dict get $Color Red]` | 声明的是 `set Red 0`；且 proc 不继承全局变量 |
+| `bash` | `${Color[Red]}` | 索引一个没人赋过值的数组 |
+| `powershell` | `$Color.Red` | 要走类型字面量 `[Color]::Red` |
+| `elixir` | `Color.Red` | 它根本没生成过 `Color` 模块；变体是 atom |
+| `java` | `case Color.Red:` | Java 21 之前 switch 标签不能用限定名 |
+| `shortcut` | 取变量 `Color` | 声明设的是 `Color_Red` |
+
+**顺带修掉的三处，都是同一个程序照出来的：**
+
+- `fortran` 的变体是 `integer, parameter`，即 INTEGER(4)，传给 INTEGER(8) 的形参是类型不匹配，gfortran 拒编。现在是 `integer(8)`。
+- `powershell` 的函数调用参数现在各自加括号：命令调用语法下 `describe [Color]::Green` 会把 `[Color]::Green` 当裸词按字符串传，参数绑定报转换失败。之前语料里的实参不是变量就是字面量，正好躲过。
+- `powershell` 与 `tcl` 的 match：两者的 `switch` 分支标签都不求值（PowerShell 当裸词，Tcl 当字面词），
+  所以非字面量的分支一个也匹配不上，全部落到默认分支。现在 PowerShell 用脚本块条件，Tcl 降级成 if/elseif 链。
+
+**需要你做什么：** 不需要。之前这些产物要么编译不过，要么运行时报错，要么静默走错分支，没有可依赖的行为。
+
+**规范：** 变体引用的唯一 AST 形式写在 `docs/adr_enum_ref.md` 里。
