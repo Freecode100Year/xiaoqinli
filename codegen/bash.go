@@ -18,6 +18,7 @@ func GenerateBash(root ast.Node) ([]byte, error) {
 		structNames: make(map[string]bool),
 		refNames:    make(map[string]string),
 	}
+	g.enums = collectEnums(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -115,6 +116,7 @@ type bashGen struct {
 	// use; the local has to be called something else, and every mention of the
 	// parameter in the body has to follow.
 	refNames map[string]string
+	enums    map[string]*ast.EnumDecl
 }
 
 // varName is the shell name for an XQL variable, which differs from its own
@@ -503,6 +505,12 @@ func (g *bashGen) emitExprUnquoted(n ast.Node) error {
 	case *ast.Literal:
 		return g.emitLiteralRaw(node)
 	case *ast.MemberExpr:
+		// A variant is a readonly scalar named after itself — see emitEnumDecl —
+		// not a key in an associative array named after the enum.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write("$" + variant)
+			return nil
+		}
 		if err := g.emitExprUnquoted(node.Object); err != nil {
 			return err
 		}
@@ -641,6 +649,10 @@ func (g *bashGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write("\"${" + variant + "}\"")
+			return nil
+		}
 		// Associative array access: ${obj[field]}
 		g.write("\"${")
 		if ident, ok := node.Object.(*ast.Ident); ok {
@@ -717,6 +729,10 @@ func (g *bashGen) emitInterpolated(n ast.Node) error {
 		g.write("${" + g.varName(node.Name) + "}")
 		return nil
 	case *ast.MemberExpr:
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write("${" + variant + "}")
+			return nil
+		}
 		ident, ok := node.Object.(*ast.Ident)
 		if !ok {
 			return fmt.Errorf("XQL_E401: Bash member access requires simple identifier as object")

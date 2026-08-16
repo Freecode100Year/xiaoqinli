@@ -12,6 +12,7 @@ import (
 func GenerateRuby(root ast.Node) ([]byte, error) {
 	strat := InspectCodegenStrategy("ruby")
 	g := &rbGen{buf: &strings.Builder{}, strat: strat, imports: make(map[string]bool)}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -152,6 +153,7 @@ type rbGen struct {
 	indent     int
 	strat      *CodegenStrategyConfig
 	imports    map[string]bool
+	enums      map[string]*ast.EnumDecl
 }
 
 // stripImportAlias removes a leading import-alias qualifier from a symbol
@@ -525,6 +527,11 @@ func (g *rbGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// emitEnumDecl writes a module; `Color.Red` would be a method call on it.
+		if enum, variant, ok := enumRef(g.enums, node); ok {
+			g.write(enum + "::" + variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

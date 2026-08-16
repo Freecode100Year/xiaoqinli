@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted inside a `program main ... end program main` block.
 func GenerateFortran(root ast.Node) ([]byte, error) {
 	g := &fortranGen{buf: &strings.Builder{}}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -36,6 +37,7 @@ type fortranGen struct {
 	types  *typeKinds
 	buf    *strings.Builder
 	indent int
+	enums  map[string]*ast.EnumDecl
 }
 
 func (g *fortranGen) write(s string)   { g.buf.WriteString(s) }
@@ -126,7 +128,7 @@ func (g *fortranGen) emitMainBlock(fd *ast.FunctionDecl, prog *ast.Program) erro
 		// can never be emitted before its type is known.
 		g.types.noteVar(vd)
 		g.writeIndent()
-		g.writeln(typeToFortran(vd.Type) + " :: " + vd.Name)
+		g.writeln(g.typeName(vd.Type) + " :: " + vd.Name)
 	}
 	for _, name := range forVars {
 		if !declaredNames[name] {
@@ -214,7 +216,7 @@ func (g *fortranGen) emitStructDecl(sd *ast.StructDecl) error {
 	g.indent++
 	for _, f := range sd.Fields {
 		g.writeIndent()
-		g.writeln(typeToFortran(f.Type) + " :: " + f.Name)
+		g.writeln(g.typeName(f.Type) + " :: " + f.Name)
 	}
 	g.indent--
 	g.writeIndent()
@@ -222,18 +224,40 @@ func (g *fortranGen) emitStructDecl(sd *ast.StructDecl) error {
 	return nil
 }
 
+// An enum is a set of integer parameters in this backend, not a derived type,
+// so a declaration that names one has to say integer. `type(Color)` is a
+// forward reference to a type nothing ever defines, and gfortran stops on the
+// first parameter declared with it.
+func (g *fortranGen) typeName(t ast.TypeExpr) string {
+	if _, ok := g.enums[t.KindName]; ok {
+		return "integer(8)"
+	}
+	return typeToFortran(t)
+}
+
+func (g *fortranGen) paramTypeName(t ast.TypeExpr) string {
+	if _, ok := g.enums[t.KindName]; ok {
+		return "integer(8)"
+	}
+	return fortranParamType(t)
+}
+
 func (g *fortranGen) emitEnumDecl(ed *ast.EnumDecl) error {
-	// Modern Fortran uses integer parameters for enum-like behavior.
+	// Modern Fortran uses integer parameters for enum-like behavior. The kind
+	// has to be 8: a plain `integer` is INTEGER(4) in every compiler anyone
+	// uses, and a function whose dummy argument is INTEGER(8) — which is what
+	// Int maps to here — will not accept it. gfortran calls that a type
+	// mismatch and refuses the call.
 	for i, v := range ed.Variants {
 		g.writeIndent()
-		g.writeln(fmt.Sprintf("integer, parameter :: %s_%s = %d", ed.Name, v, i))
+		g.writeln(fmt.Sprintf("integer(8), parameter :: %s_%s = %d", ed.Name, v, i))
 	}
 	return nil
 }
 
 func (g *fortranGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.types.noteParams(fd)
-	rt := typeToFortran(fd.ReturnType)
+	rt := g.typeName(fd.ReturnType)
 	isSubroutine := rt == ""
 
 	g.writeIndent()
@@ -266,7 +290,7 @@ func (g *fortranGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	// Emit parameter type declarations.
 	for _, p := range fd.Params {
 		g.writeIndent()
-		g.writeln(fortranParamType(p.Type) + ", intent(in) :: " + p.Name)
+		g.writeln(g.paramTypeName(p.Type) + ", intent(in) :: " + p.Name)
 	}
 
 	// Emit result type declaration for functions.
@@ -285,7 +309,7 @@ func (g *fortranGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		// can never be emitted before its type is known.
 		g.types.noteVar(vd)
 		g.writeIndent()
-		g.writeln(typeToFortran(vd.Type) + " :: " + vd.Name)
+		g.writeln(g.typeName(vd.Type) + " :: " + vd.Name)
 	}
 	for _, name := range forVars {
 		if !declaredNames[name] {
@@ -542,6 +566,11 @@ func (g *fortranGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// emitEnumDecl writes integer parameters named Color_Red; `%` is derived-type component access.
+		if enum, variant, ok := enumRef(g.enums, node); ok {
+			g.write(enum + "_" + variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

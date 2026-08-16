@@ -14,6 +14,7 @@ func GenerateJava(root ast.Node) ([]byte, error) {
 		structTable: make(map[string]*ast.StructDecl),
 		imports:     CollectImports(root),
 	}
+	g.enums = collectEnums(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -138,6 +139,7 @@ type javaGen struct {
 	structTable map[string]*ast.StructDecl
 	imports     map[string]bool
 	className   string
+	enums       map[string]*ast.EnumDecl
 }
 
 func (g *javaGen) write(s string)   { g.buf.WriteString(s) }
@@ -273,7 +275,14 @@ func (g *javaGen) emitMatchExpr(me *ast.MatchExpr) error {
 			g.writeln("default:")
 		} else {
 			g.write("case ")
-			if err := g.emitExpr(arm.Pattern); err != nil {
+			// A switch label naming an enum constant must be unqualified:
+			// `case Color.Red:` is a compile error before Java 21, and every
+			// other position wants the qualified form. So the label is the one
+			// place this backend spells a variant without its enum.
+			me, isMember := arm.Pattern.(*ast.MemberExpr)
+			if _, variant, ok := enumRef(g.enums, me); isMember && ok {
+				g.write(variant)
+			} else if err := g.emitExpr(arm.Pattern); err != nil {
 				return err
 			}
 			g.writeln(":")
@@ -575,6 +584,11 @@ func (g *javaGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// Java qualifies an enum constant everywhere except a switch label, which emitMatchExpr handles.
+		if enum, variant, ok := enumRef(g.enums, node); ok {
+			g.write(enum + "." + variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}

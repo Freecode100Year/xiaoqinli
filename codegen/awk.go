@@ -11,6 +11,7 @@ import (
 // All code is wrapped in a BEGIN { ... } block.
 func GenerateAwk(root ast.Node) ([]byte, error) {
 	g := &awkGen{buf: &strings.Builder{}, funcBuf: &strings.Builder{}}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -89,6 +90,7 @@ type awkGen struct {
 	buf     *strings.Builder
 	funcBuf *strings.Builder
 	indent  int
+	enums   map[string]*ast.EnumDecl
 }
 
 func (g *awkGen) write(s string)   { g.buf.WriteString(s) }
@@ -430,6 +432,13 @@ func (g *awkGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// emitEnumDecl writes `Red = 0`; awk has no namespace to qualify it with,
+		// so a reference is the bare name and not a subscript into a Color array
+		// that was never assigned.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write(variant)
+			return nil
+		}
 		// Not directly supported in AWK; use simple approach.
 		if err := g.emitExpr(node.Object); err != nil {
 			return err

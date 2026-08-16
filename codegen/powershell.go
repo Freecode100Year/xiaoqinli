@@ -11,6 +11,7 @@ import (
 // The "main" function's body is emitted at top level after function definitions.
 func GeneratePowerShell(root ast.Node) ([]byte, error) {
 	g := &psGen{buf: &strings.Builder{}}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -84,6 +85,7 @@ type psGen struct {
 	types  *typeKinds
 	buf    *strings.Builder
 	indent int
+	enums  map[string]*ast.EnumDecl
 }
 
 func (g *psGen) write(s string)   { g.buf.WriteString(s) }
@@ -190,11 +192,22 @@ func (g *psGen) emitMatchExpr(me *ast.MatchExpr) error {
 		g.writeIndent()
 		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
 			g.writeln("default {")
-		} else {
+		} else if _, isLit := arm.Pattern.(*ast.Literal); isLit {
 			if err := g.emitExpr(arm.Pattern); err != nil {
 				return err
 			}
 			g.writeln(" {")
+		} else {
+			// A switch clause that is not a constant has to be a script block.
+			// PowerShell matches a clause by value, and `[Color]::Red` in
+			// clause position is read as a bareword rather than evaluated — the
+			// switch then compared the subject against that text, matched
+			// nothing, and every input took the default arm.
+			g.write("{ $_ -eq ")
+			if err := g.emitExpr(arm.Pattern); err != nil {
+				return err
+			}
+			g.writeln(" } {")
 		}
 		g.indent++
 		for _, stmt := range arm.Body {
@@ -444,6 +457,11 @@ func (g *psGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// PowerShell reaches an enum member through the type literal, and `$Color` is an undefined variable.
+		if enum, variant, ok := enumRef(g.enums, node); ok {
+			g.write("[" + enum + "]::" + variant)
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}
@@ -587,13 +605,22 @@ func (g *psGen) emitCall(ce *ast.CallExpr) error {
 		g.write(")")
 		return nil
 	default:
+		// Each argument goes in its own parentheses. In command invocation
+		// syntax — `describe [Color]::Green` — PowerShell treats an argument
+		// that is not a variable or a quoted string as a bareword and passes
+		// the text of it: the parameter binder then reported that it could not
+		// convert the string "[Color]::Green" to type Color. A variable
+		// argument happened to work, which is every argument the corpus had
+		// until an enum variant became one, and parenthesising is what makes
+		// the general case an expression.
 		g.write("(")
 		g.write(ce.Callee)
 		for _, arg := range ce.Args {
-			g.write(" ")
+			g.write(" (")
 			if err := g.emitExpr(arg); err != nil {
 				return err
 			}
+			g.write(")")
 		}
 		g.write(")")
 		return nil

@@ -17,6 +17,7 @@ func GenerateRust(root ast.Node) ([]byte, error) {
 		imports:     make(map[string]bool),
 		structTable: make(map[string]*ast.StructDecl),
 	}
+	g.enums = collectEnums(root)
 
 	prog, ok := root.(*ast.Program)
 	if !ok {
@@ -63,6 +64,7 @@ type rsGen struct {
 	currentFunc *ast.FunctionDecl
 	imports     map[string]bool // import alias set
 	structTable map[string]*ast.StructDecl
+	enums       map[string]*ast.EnumDecl
 }
 
 func (g *rsGen) write(s string)   { g.buf.WriteString(s) }
@@ -556,6 +558,13 @@ func (g *rsGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// `Color::Red`, not `Color.Red` — a variant is scoped to its enum, and a
+		// dot is field access on a value. This is also what makes the match arm
+		// a pattern rather than a syntax error.
+		if enum, variant, ok := enumRef(g.enums, node); ok {
+			g.write(enum + "::" + variant)
+			return nil
+		}
 		if node.Field == "isOk" {
 			if err := g.emitExpr(node.Object); err != nil {
 				return err

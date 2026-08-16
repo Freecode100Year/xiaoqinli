@@ -15,6 +15,7 @@ func GenerateTcl(root ast.Node) ([]byte, error) {
 		varTypes: make(map[string]string),
 		funcRets: make(map[string]string),
 	}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -123,6 +124,7 @@ type tclGen struct {
 	// needIntDiv records that the program divides or takes a remainder of two
 	// Ints, so the preamble has to define the helpers.
 	needIntDiv bool
+	enums      map[string]*ast.EnumDecl
 }
 
 // inferTypeKind reports the AST type kind of an expression. Int is the default
@@ -298,7 +300,24 @@ func (g *tclGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	return nil
 }
 
+// Tcl does not substitute variables in a switch's pattern words: `switch $c {
+// $Red { ... } }` compares the subject against the four characters "$Red" and
+// never matches, silently, all the way to the default arm. That is harmless for
+// an Int literal — which is what every other match in the corpus is written
+// with — and wrong for an enum variant, which is a variable here. A match whose
+// patterns are not all literals lowers to an if/elseif chain instead, the way
+// perl, lua and awk lower every match.
 func (g *tclGen) emitMatchExpr(me *ast.MatchExpr) error {
+	for _, arm := range me.Arms {
+		if _, ok := arm.Pattern.(*ast.Literal); ok {
+			continue
+		}
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			continue
+		}
+		return g.emitMatchAsIfChain(me)
+	}
+
 	g.writeIndent()
 	g.write("switch $")
 	if ident, ok := me.Value.(*ast.Ident); ok {
@@ -333,6 +352,62 @@ func (g *tclGen) emitMatchExpr(me *ast.MatchExpr) error {
 		g.writeln("}")
 	}
 	g.indent--
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
+// emitMatchAsIfChain is the lowering for a match whose patterns have to be
+// evaluated rather than matched as words. The wildcard becomes the else, and a
+// match that is nothing but a wildcard emits its body with no `if` around it.
+func (g *tclGen) emitMatchAsIfChain(me *ast.MatchExpr) error {
+	var wildcard []ast.Node
+	haveWildcard := false
+	open := false
+
+	emitBody := func(body []ast.Node) error {
+		g.indent++
+		defer func() { g.indent-- }()
+		for _, s := range body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for _, arm := range me.Arms {
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			wildcard = arm.Body
+			haveWildcard = true
+			continue
+		}
+		g.writeIndent()
+		if open {
+			g.write("} elseif {")
+		} else {
+			g.write("if {")
+		}
+		if err := g.emitCondExpr(&ast.BinaryExpr{Op: "==", Left: me.Value, Right: arm.Pattern}); err != nil {
+			return err
+		}
+		g.writeln("} {")
+		open = true
+		if err := emitBody(arm.Body); err != nil {
+			return err
+		}
+	}
+
+	if !open {
+		return emitBody(wildcard)
+	}
+	if haveWildcard {
+		g.writeIndent()
+		g.writeln("} else {")
+		if err := emitBody(wildcard); err != nil {
+			return err
+		}
+	}
 	g.writeIndent()
 	g.writeln("}")
 	return nil
@@ -617,6 +692,14 @@ func (g *tclGen) emitExprInline(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// emitEnumDecl writes `set Red 0` at the top level, so a variant is read
+		// like any other variable — but a proc has its own scope and does not
+		// inherit globals, so it has to be named `$::Red`. Reaching for
+		// `dict get $Color Red` indexes a dict nobody ever set.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write("$::" + variant)
+			return nil
+		}
 		if ident, ok := node.Object.(*ast.Ident); ok {
 			g.write("[dict get $" + ident.Name + " " + node.Field + "]")
 		} else {

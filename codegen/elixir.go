@@ -11,6 +11,7 @@ import (
 // The "main" function's body is wrapped in a Main module.
 func GenerateElixir(root ast.Node) ([]byte, error) {
 	g := &exGen{buf: &strings.Builder{}}
+	g.enums = collectEnums(root)
 	g.types = newTypeKinds(root)
 
 	prog, ok := root.(*ast.Program)
@@ -97,6 +98,7 @@ type exGen struct {
 	indent          int
 	needSprintf     bool
 	loopCount       int
+	enums           map[string]*ast.EnumDecl
 }
 
 func (g *exGen) write(s string)   { g.buf.WriteString(s) }
@@ -607,6 +609,14 @@ func (g *exGen) emitExpr(n ast.Node) error {
 	case *ast.CallExpr:
 		return g.emitCall(node)
 	case *ast.MemberExpr:
+		// emitEnumDecl documents the variants as atoms and emits no module, so
+		// `Color.Red` was a call into a module that does not exist — an
+		// UndefinedFunctionError at run time, on the first line that used one.
+		// The atom is the value.
+		if _, variant, ok := enumRef(g.enums, node); ok {
+			g.write(":" + strings.ToLower(variant))
+			return nil
+		}
 		if err := g.emitExpr(node.Object); err != nil {
 			return err
 		}
