@@ -28,6 +28,7 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.25'
+        check-latest: true
         cache: true
 
     - name: Setup Java JDK 17
@@ -140,6 +141,7 @@ jobs:
       uses: actions/setup-go@v5
       with:
         go-version: '1.25'
+        check-latest: true
         cache: true
 
     # Only bat. The other runners have their evidence from Linux, and running
