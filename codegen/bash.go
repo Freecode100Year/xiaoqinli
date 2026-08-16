@@ -237,10 +237,15 @@ func (g *bashGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	return nil
 }
 
+// The subject of a `case` is a value and the patterns are words, which is why
+// the two sides are emitted differently. emitExprUnquoted writes an Ident as the
+// bare name — right for the left of an assignment and for a pattern, wrong here:
+// `case n in` matches the literal text "n" against every pattern, so every
+// program fell through to `*)` no matter what it was passed.
 func (g *bashGen) emitMatchExpr(me *ast.MatchExpr) error {
 	g.writeIndent()
 	g.write("case ")
-	if err := g.emitExprUnquoted(me.Value); err != nil {
+	if err := g.emitExpr(me.Value); err != nil {
 		return err
 	}
 	g.writeln(" in")

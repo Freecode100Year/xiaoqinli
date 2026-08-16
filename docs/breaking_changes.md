@@ -358,3 +358,53 @@ struct 和 enum 都带 `#[derive(Debug, Clone)]`。
 
 **验证：** 本机用 gnu 工具链（msvc 缺 link.exe）把整个语料的 rust 产物真的编译并运行了一遍，
 24 个示例逐条对上了 `conformanceExpect`，`string_array` 输出 `ada-bob-cy-`。
+
+---
+
+## `match` 此前从未被任何后端编译过一次
+
+**改成什么：** 十三个后端的 `MatchExpr` 产物变了。语料里新增了 `examples/match_arms.xql.json`——
+一个 match，三个分支，每个分支给一个先声明好的 String 变量赋值——它是语料里的第一个 match。
+
+**这些后端此前生成的是什么：**
+
+| 后端 | 之前 | 症状 |
+|---|---|---|
+| `rust` `ts` `js` `java` `kotlin` `swift` `dart` `zig` `nim` | 把被赋值的变量声明成 `let` / `const` / `val` / `final` | 九个后端里，编译型的编译不过，js 在运行时抛 `Assignment to constant variable` |
+| `bash` | `case n in` | 拿字面文本 `n` 去匹配，永远落到通配分支 |
+| `bat` | 默认分支写进了上一个分支的块里 | 匹配第二个分支的值会连着跑默认分支，谁都不匹配的值一个分支也不跑 |
+| `elixir` | 分支内直接赋值 | 分支是独立作用域，赋值出了 `end` 就没了，返回的是 match 之前的值 |
+| `ocaml` | 每个分支以 `;` 结尾 | `;` 后面跟 `|` 是语法错误——只有最后一个分支恰好能过 |
+
+**为什么之前没发现：** 语料里从来没有一个 match。三十五个后端各自写了 `MatchExpr` 的发射代码，
+被真正编译过的次数是零。九个「不可变绑定」后端的根因是同一处：`collectMutables` 走的是语句列表，
+而 `MatchExpr` 这个名字里带 expression 的节点，每个后端都发射在语句位置——扫描器的 switch 里没有它这一支。
+
+**需要你做什么：** 不需要。之前这些产物要么编译不过，要么打印错的东西，没有可依赖的行为。
+
+---
+
+## `haskell` 拒绝纯函数里的赋值时改报 `XQL_E402`
+
+**改成什么：**
+
+| 之前 | 现在 |
+|---|---|
+| `XQL_E401: Haskell does not support mutable assignment` | `XQL_E402: Haskell has no mutable binding outside IO, so an assignment in a pure function cannot be expressed` |
+
+**为什么：** 这是语言的限制，不是编译器摔了跟头——IO 之外没有可写的格子。按本项目的不变式，
+「目标表达不了」是 `XQL_E402`，`XQL_E401` 留给编译器自身的 bug。此前没人发现，是因为在
+`match_arms.xql.json` 之前，语料里没有任何一个程序在纯函数里给变量赋值。
+
+**需要你做什么：** 如果有代码靠 `XQL_E401` 识别 haskell 的这条拒绝，改成 `XQL_E402`。
+IO 上下文里的赋值照旧走 `IORef`，未受影响。
+
+**这次没修、但这次发现的两件事：**
+
+1. **没有任何后端对标识符做保留字转义。** 把上面那个示例里的变量名换成 `class`，
+   `validate` 照样回答 `ok: all checks passed`，而 python 产物是 `class: str = "none"`，
+   java 产物是 `String class = "none"`——都不是合法程序。这跟 match 无关，
+   38 个后端一个都没做，按本项目的规矩它该由自己的语料程序带着自己的提交来修。
+2. **`py` 后端的 `match` 要求 Python ≥ 3.10**（结构化模式匹配），此前没有任何地方写过这件事。
+   3.9 会把 `match n:` 当成对未定义名字的调用，在冒号处报语法错误。
+   本机与 CI 镜像都在 3.10 之后，所以这里只是把要求写下来，没有改代码绕开它。

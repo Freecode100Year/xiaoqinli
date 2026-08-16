@@ -420,7 +420,18 @@ func (g *ocamlGen) emitForStmt(fs *ast.ForStmt) error {
 	return nil
 }
 
+// Each arm's body goes inside begin/end, which is what emitIfStmt does with a
+// then-branch and for the same reason: every statement this backend emits ends
+// in `;`, and `;` is OCaml's sequence operator, so it needs something after it.
+// A trailing one is allowed before `end` or `)` — which is why the last arm
+// happened to parse — but not before the `|` of the next arm, so a match with
+// two arms was a syntax error and a match with one was not. Nothing in the
+// corpus had a match at all, so neither had ever been compiled.
 func (g *ocamlGen) emitMatchStmt(me *ast.MatchExpr) error {
+	outer := g.valuePosition
+	g.valuePosition = false
+	defer func() { g.valuePosition = outer }()
+
 	g.writeIndent()
 	g.write("(match ")
 	if err := g.emitExpr(me.Value); err != nil {
@@ -437,17 +448,24 @@ func (g *ocamlGen) emitMatchStmt(me *ast.MatchExpr) error {
 				return err
 			}
 		}
-		g.writeln(" ->")
+		g.writeln(" -> begin")
 		g.indent++
 		for _, s := range arm.Body {
 			if err := g.emitStmt(s); err != nil {
 				return err
 			}
 		}
+		if len(arm.Body) == 0 {
+			g.writeIndent()
+			g.writeln("()")
+		}
 		g.indent--
+		g.writeIndent()
+		g.writeln("end")
 	}
 	g.writeIndent()
-	g.writeln(");")
+	g.valuePosition = outer
+	g.writeln(")" + g.stmtEnd())
 	return nil
 }
 

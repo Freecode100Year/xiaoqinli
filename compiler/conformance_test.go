@@ -164,6 +164,19 @@ var conformanceExpect = map[string][]string{
 	// says Vec<String>, and rustc stopped at line 2 of every string array this
 	// backend has ever produced.
 	"string_array.xql.json": {"ada-bob-cy-"},
+
+	// A match, and the first one in the corpus. Thirty-five backends have a
+	// MatchExpr emitter, every one of them had translated the node zero times,
+	// and six were wrong about it: bash matched the literal text "n" against
+	// its patterns and so always took the wildcard; cmd wrote the default arm
+	// into the previous arm's block, so 2 ran two arms and 7 ran none; elixir
+	// rebound the variable inside an arm, which is a scope, and returned what
+	// was bound outside it; ocaml ended each arm with `;` and no expression
+	// after it, which parses only for the last arm. Nine more backends whose
+	// bindings are immutable by default — rust, ts, js, java, kotlin, swift,
+	// dart, zig and nim — declared the assigned variable `const`, `val`,
+	// `final` or `let`, because the mutability scan had no case for a match.
+	"match_arms.xql.json": {"one", "two", "many"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

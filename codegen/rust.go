@@ -351,6 +351,19 @@ func (g *rsGen) emitVarDecl(vd *ast.VarDecl) error {
 	return nil
 }
 
+// Assignment is the fifth place a &str can meet a String and the last one that
+// was not converting. A declaration, a return, a struct field, an array element
+// and an if-expression arm all own their value already; `label = "one"` did not,
+// so any program that declared a String and later assigned a literal to it
+// failed to compile — `expected String, found &str`, on the assignment.
+//
+// Nothing in the corpus had that shape until match_arms.xql.json: string_build
+// assigns `s + "ab"`, which concatenation has already made owned, and every
+// other String in the corpus is bound once at its declaration.
+//
+// The exception is a target that is itself a String *parameter*, which this
+// backend emits as &str by design. Assigning an owned String to one of those
+// would be the same mismatch in the other direction.
 func (g *rsGen) emitAssign(as *ast.AssignStmt) error {
 	g.writeIndent()
 	if err := g.emitExpr(as.Target); err != nil {
@@ -359,6 +372,9 @@ func (g *rsGen) emitAssign(as *ast.AssignStmt) error {
 	g.write(" = ")
 	if err := g.emitExpr(as.Value); err != nil {
 		return err
+	}
+	if !g.isStrRef(as.Target) && (exprIsStrLiteral(as.Value) || g.isStrRef(as.Value)) {
+		g.write(".to_string()")
 	}
 	g.writeln(";")
 	return nil

@@ -144,6 +144,19 @@ func collectMutables(stmts []ast.Node) map[string]bool {
 	return muts
 }
 
+// scanMutables walks a statement list. Every node that can hold a statement has
+// to be listed here, and every node that can hold an expression has to hand that
+// expression to scanExpr — a binding this misses is emitted `const`, `val`,
+// `final` or `let` by the dozen-odd backends whose languages are immutable by
+// default, and the assignment it missed then fails to compile.
+//
+// MatchExpr is the reason that paragraph is written down. It is named
+// MatchExpr and scanExpr has always handled it, but every backend emits it in
+// statement position — it arrives as an element of a body list, not inside one
+// — so scanExpr never saw one and this switch had no case for it. Assignments
+// in a match arm were therefore invisible: rust, ts, js, java, kotlin, swift,
+// dart, scala, zig and nim all declared the target immutable and then assigned
+// to it.
 func scanMutables(stmts []ast.Node, muts map[string]bool, localVars map[string]bool) {
 	for _, s := range stmts {
 		switch n := s.(type) {
@@ -155,11 +168,16 @@ func scanMutables(stmts []ast.Node, muts map[string]bool, localVars map[string]b
 			}
 			scanExpr(n.Value, muts, localVars)
 		case *ast.IfStmt:
+			scanExpr(n.Cond, muts, localVars)
 			scanMutables(n.Then, muts, localVars)
 			scanMutables(n.Else, muts, localVars)
 		case *ast.WhileStmt:
+			scanExpr(n.Cond, muts, localVars)
 			scanMutables(n.Body, muts, localVars)
 		case *ast.ForStmt:
+			scanExpr(n.Start, muts, localVars)
+			scanExpr(n.End, muts, localVars)
+			scanExpr(n.Iterable, muts, localVars)
 			if localVars != nil {
 				forLocals := forkLocalVars(localVars)
 				if n.Var != "" {
@@ -174,12 +192,18 @@ func scanMutables(stmts []ast.Node, muts map[string]bool, localVars map[string]b
 				localVars[n.Name] = true
 			}
 			scanExpr(n.Value, muts, localVars)
+		case *ast.ReturnStmt:
+			scanExpr(n.Value, muts, localVars)
 		case *ast.ExprStmt:
 			scanExpr(n.Expr, muts, localVars)
 		case *ast.SwitchStmt:
+			scanExpr(n.Value, muts, localVars)
 			for _, c := range n.Cases {
+				scanExpr(c.Value, muts, localVars)
 				scanMutables(c.Body, muts, localVars)
 			}
+		case *ast.MatchExpr:
+			scanExpr(n, muts, localVars)
 		}
 	}
 }
@@ -217,6 +241,7 @@ func scanExpr(expr ast.Node, muts map[string]bool, localVars map[string]bool) {
 			scanExpr(elem, muts, localVars)
 		}
 	case *ast.MatchExpr:
+		scanExpr(e.Value, muts, localVars)
 		for _, arm := range e.Arms {
 			scanMutables(arm.Body, muts, localVars)
 		}

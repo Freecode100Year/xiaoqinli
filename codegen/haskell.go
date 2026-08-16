@@ -308,7 +308,12 @@ func (g *hsGen) emitStmt(n ast.Node) error {
 				return nil
 			}
 		}
-		return fmt.Errorf("XQL_E401: Haskell does not support mutable assignment")
+		// E402, not E401: outside IO there is no cell to write to, which is a
+		// property of the language and not this backend falling over. The
+		// distinction had never been tested here because no corpus program
+		// assigned to a variable in a pure function until match_arms.xql.json,
+		// and the matrix requires every declined example to say E402.
+		return fmt.Errorf("XQL_E402: Haskell has no mutable binding outside IO, so an assignment in a pure function cannot be expressed")
 	case *ast.WhileStmt:
 		if g.inIO {
 			return g.emitWhileStmt(node)

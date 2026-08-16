@@ -449,6 +449,16 @@ func (g *batGen) emitForStmt(fs *ast.ForStmt) error {
 	return nil
 }
 
+// cmd has no switch, so a match becomes a chain of if / else if / else. The
+// default arm is the `else`, and it was not being given one: its body was
+// written straight into the previous arm's block, so `2` ran the two-arm and
+// then the default's, and a value matching nothing ran neither. classify(1)
+// printed "one", classify(2) printed the default, and classify(7) printed the
+// value the variable had before the match.
+//
+// Arms after a wildcard are unreachable — the first matching arm wins
+// everywhere else in the matrix — so emission stops there rather than hanging
+// another `else if` off a chain that has already been closed.
 func (g *batGen) emitMatchStmt(me *ast.MatchExpr) error {
 	g.writeIndent()
 	g.write("set \"_match_val=")
@@ -456,40 +466,53 @@ func (g *batGen) emitMatchStmt(me *ast.MatchExpr) error {
 		return err
 	}
 	g.writeln("\"")
-	for i, arm := range me.Arms {
-		g.writeIndent()
-		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
-			// Default arm — no condition needed (else branch).
-			if i > 0 {
-				// Already inside an else, just emit body.
-			}
-			g.writeln("rem default")
-			g.indent++
-			for _, stmt := range arm.Body {
-				if err := g.emitNode(stmt); err != nil {
-					return err
-				}
-			}
-			g.indent--
-		} else {
-			if i > 0 {
-				g.write(") else ")
-			}
-			g.write("if !_match_val! EQU ")
-			if err := g.emitValExpr(arm.Pattern); err != nil {
+
+	emitBody := func(body []ast.Node) error {
+		g.indent++
+		defer func() { g.indent-- }()
+		for _, stmt := range body {
+			if err := g.emitNode(stmt); err != nil {
 				return err
 			}
-			g.writeln(" (")
-			g.indent++
-			for _, stmt := range arm.Body {
-				if err := g.emitNode(stmt); err != nil {
-					return err
-				}
+		}
+		return nil
+	}
+
+	open := false
+	for _, arm := range me.Arms {
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			if open {
+				g.writeIndent()
+				g.writeln(") else (")
 			}
-			g.indent--
+			if err := emitBody(arm.Body); err != nil {
+				return err
+			}
+			// A wildcard with nothing before it needs no block at all, and
+			// nothing after it can run.
+			if open {
+				g.writeIndent()
+				g.writeln(")")
+				open = false
+			}
+			return nil
+		}
+
+		g.writeIndent()
+		if open {
+			g.write(") else ")
+		}
+		g.write("if !_match_val! EQU ")
+		if err := g.emitValExpr(arm.Pattern); err != nil {
+			return err
+		}
+		g.writeln(" (")
+		open = true
+		if err := emitBody(arm.Body); err != nil {
+			return err
 		}
 	}
-	if len(me.Arms) > 0 {
+	if open {
 		g.writeIndent()
 		g.writeln(")")
 	}

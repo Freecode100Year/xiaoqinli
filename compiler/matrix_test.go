@@ -78,6 +78,13 @@ var expectedRejections = map[string][]string{
 	// every array in the corpus before this one held ints.
 	"string_array.xql.json": {"bat", "c", "fortran", "pascal", "tccli"},
 
+	// A match, which nothing in the corpus had ever contained — thirty-five
+	// backends translate the node and none of them had ever compiled one.
+	// android has no MatchExpr at all and tccli has no branching; haskell
+	// declines the assignment inside the arms rather than the match itself,
+	// having no mutable binding outside IO.
+	"match_arms.xql.json": {"android", "haskell", "tccli"},
+
 	// `!` is a UnaryExpr, which the batch and tccli backends have never
 	// emitted; both decline it rather than guess.
 	"bool_logic.xql.json":   {"bat", "tccli"},
