@@ -16,7 +16,7 @@
       "body": [
         {
           "kind": "VarDecl",
-          "name": "out",
+          "name": "tag",
           "type": { "kind": "String" },
           "value": { "kind": "Literal", "valueType": "String", "value": "none" }
         },
@@ -29,7 +29,7 @@
               "body": [
                 {
                   "kind": "AssignStmt",
-                  "target": "out",
+                  "target": "tag",
                   "value": { "kind": "Literal", "valueType": "String", "value": "red" }
                 }
               ]
@@ -39,7 +39,7 @@
               "body": [
                 {
                   "kind": "AssignStmt",
-                  "target": "out",
+                  "target": "tag",
                   "value": { "kind": "Literal", "valueType": "String", "value": "green" }
                 }
               ]
@@ -49,14 +49,14 @@
               "body": [
                 {
                   "kind": "AssignStmt",
-                  "target": "out",
+                  "target": "tag",
                   "value": { "kind": "Literal", "valueType": "String", "value": "other" }
                 }
               ]
             }
           ]
         },
-        { "kind": "ReturnStmt", "value": { "kind": "Ident", "name": "out" } }
+        { "kind": "ReturnStmt", "value": { "kind": "Ident", "name": "tag" } }
       ]
     },
     {

@@ -99,6 +99,7 @@ type exGen struct {
 	needSprintf     bool
 	loopCount       int
 	enums           map[string]*ast.EnumDecl
+	deadInits       map[string]bool
 }
 
 func (g *exGen) write(s string)   { g.buf.WriteString(s) }
@@ -179,8 +180,10 @@ func (g *exGen) emitStructDecl(sd *ast.StructDecl) error {
 func (g *exGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 	g.types.noteParams(fd)
 	prevBody := g.currentFuncBody
+	prevDead := g.deadInits
 	g.currentFuncBody = fd.Body
-	defer func() { g.currentFuncBody = prevBody }()
+	g.deadInits = exDeadInits(fd.Body)
+	defer func() { g.currentFuncBody = prevBody; g.deadInits = prevDead }()
 	g.writeIndent()
 	g.write("def " + fd.Name + "(")
 	for i, p := range fd.Params {
@@ -215,9 +218,60 @@ func (g *exGen) emitReturn(rs *ast.ReturnStmt) error {
 	return nil
 }
 
+// exDeadInits names the variables whose initial value nothing can read: a
+// declaration immediately followed by a match that assigns to it in every arm,
+// before reading it anywhere. Elixir says so out loud — "variable tag is
+// unused" — and the conformance harness compares combined output, so the
+// warning lands in stdout next to the program's own lines and the target
+// disagrees with the other thirty-seven.
+//
+// The rule is deliberately narrow. An arm that does not assign reads the outer
+// binding to hand the accumulator back, and an underscored variable that is
+// then read draws a warning of its own.
+func exDeadInits(body []ast.Node) map[string]bool {
+	dead := map[string]bool{}
+	for i := 0; i+1 < len(body); i++ {
+		vd, ok := body[i].(*ast.VarDecl)
+		if !ok {
+			continue
+		}
+		me, ok := body[i+1].(*ast.MatchExpr)
+		if !ok || len(me.Arms) == 0 {
+			continue
+		}
+		if identCount(vd.Name, me.Value) > 0 {
+			continue
+		}
+		writesEveryArm := true
+		for _, arm := range me.Arms {
+			if len(arm.Body) == 0 {
+				writesEveryArm = false
+				break
+			}
+			as, ok := arm.Body[0].(*ast.AssignStmt)
+			if !ok {
+				writesEveryArm = false
+				break
+			}
+			id, ok := as.Target.(*ast.Ident)
+			if !ok || id.Name != vd.Name || identCount(vd.Name, as.Value) > 0 {
+				writesEveryArm = false
+				break
+			}
+		}
+		if writesEveryArm {
+			dead[vd.Name] = true
+		}
+	}
+	return dead
+}
+
 func (g *exGen) emitVarDecl(vd *ast.VarDecl) error {
 	g.types.noteVar(vd)
 	g.writeIndent()
+	if g.deadInits[vd.Name] {
+		g.write("_")
+	}
 	g.write(vd.Name)
 	if vd.Value != nil {
 		g.write(" = ")
