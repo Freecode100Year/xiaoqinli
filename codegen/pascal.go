@@ -237,7 +237,7 @@ func (g *pascalGen) emitMainBlock(fd *ast.FunctionDecl, prog *ast.Program) error
 		for _, name := range forVars {
 			if !declaredNames[name] {
 				g.writeIndent()
-				g.writeln(name + ": Integer;")
+				g.writeln(name + ": Int64;")
 			}
 		}
 		g.indent--
@@ -347,15 +347,36 @@ func (g *pascalGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 		g.writeln("): " + rt + ";")
 	}
 
-	// Collect var declarations for the function body.
+	// Collect var declarations for the function body. The loop variables belong
+	// here for the same reason they belong in the main block: Pascal declares
+	// every name up front, and a `for i := ...` whose i was never declared is
+	// three errors — "Identifier not found", "Ordinal expression expected",
+	// "Illegal counter variable". The main block collected them and a function
+	// did not, so early_return.xql.json — the corpus's first loop inside a
+	// function that is not main — did not compile at all.
 	vars := collectVarDecls(fd.Body)
-	if len(vars) > 0 {
+	forVars := collectForVars(fd.Body)
+	declared := map[string]bool{}
+	for _, vd := range vars {
+		declared[vd.Name] = true
+	}
+	if len(vars) > 0 || len(forVars) > 0 {
 		g.writeIndent()
 		g.writeln("var")
 		g.indent++
 		for _, vd := range vars {
 			g.writeIndent()
 			g.writeln(vd.Name + ": " + typeToPascal(vd.Type) + ";")
+		}
+		for _, name := range forVars {
+			if declared[name] {
+				continue
+			}
+			g.writeIndent()
+			// Int64, like every other Int here: a counter one kind narrower
+			// than the bounds it is compared against is the overflow typeToPascal
+			// already refuses, one step removed.
+			g.writeln(name + ": Int64;")
 		}
 		g.indent--
 	}

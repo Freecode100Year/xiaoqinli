@@ -262,7 +262,83 @@ func (g *javaGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	return nil
 }
 
+// Java's switch selector may be an int, a String, an enum or a boxed
+// equivalent — not a long. Int is 64-bit in this AST and this backend spells it
+// long, so a match over an Int compiled to `switch (n) { case 1L: ... }`, which
+// javac rejects twice over: "constant label of type long is not compatible with
+// switch selector type long", and then reads the labels as pattern matching, a
+// preview feature that is off by default. A match over an Int lowers to an
+// if/else-if chain; a match over an enum stays a switch, which is where the
+// unqualified case label matters.
+//
+// emitSwitchStmt has the same defect and no corpus program behind it yet.
+// emitMatchAsIfChain is the lowering for a match Java's switch cannot take.
+// The wildcard becomes the else, and a match that is only a wildcard emits its
+// body with no `if` around it.
+func (g *javaGen) emitMatchAsIfChain(me *ast.MatchExpr) error {
+	var wildcard []ast.Node
+	haveWildcard := false
+	open := false
+
+	emitBody := func(body []ast.Node) error {
+		g.indent++
+		defer func() { g.indent-- }()
+		for _, s := range body {
+			if err := g.emitNode(s); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	for _, arm := range me.Arms {
+		if ident, ok := arm.Pattern.(*ast.Ident); ok && ident.Name == "_" {
+			wildcard = arm.Body
+			haveWildcard = true
+			continue
+		}
+		g.writeIndent()
+		if open {
+			g.write("} else if (")
+		} else {
+			g.write("if (")
+		}
+		if err := g.emitExpr(me.Value); err != nil {
+			return err
+		}
+		g.write(" == ")
+		if err := g.emitExpr(arm.Pattern); err != nil {
+			return err
+		}
+		g.writeln(") {")
+		open = true
+		if err := emitBody(arm.Body); err != nil {
+			return err
+		}
+	}
+
+	if !open {
+		return emitBody(wildcard)
+	}
+	if haveWildcard {
+		g.writeIndent()
+		g.writeln("} else {")
+		if err := emitBody(wildcard); err != nil {
+			return err
+		}
+	}
+	g.writeIndent()
+	g.writeln("}")
+	return nil
+}
+
 func (g *javaGen) emitMatchExpr(me *ast.MatchExpr) error {
+	for _, arm := range me.Arms {
+		if lit, ok := arm.Pattern.(*ast.Literal); ok && lit.ValueType == "Int" {
+			return g.emitMatchAsIfChain(me)
+		}
+	}
+
 	g.writeIndent()
 	g.write("switch (")
 	if err := g.emitExpr(me.Value); err != nil {

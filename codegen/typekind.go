@@ -39,6 +39,25 @@ func newTypeKinds(root ast.Node) *typeKinds {
 			}
 		}
 	}
+
+	// A range loop counts Ints — its start and end are Int expressions — and
+	// nothing else told this table so. Every question it answers is asked about
+	// operands, and a loop variable is one of the commonest: continue_skip's
+	// `i % 2` reached the zig backend with i of unknown kind, so isIntRemainder
+	// said no and the backend emitted `%`, which zig refuses on signed integers
+	// — "must use @rem or @mod". The same blindness leaves `/` as float
+	// division in every backend that rewrites it only when both sides are known
+	// Ints.
+	//
+	// This is a pre-pass rather than a call in each emitForStmt because it is
+	// one fact about the whole tree and thirty-eight emitters would have to
+	// remember it otherwise. A later noteVar or noteParams still wins, which is
+	// what shadowing means.
+	walkNodes(root, func(n ast.Node) {
+		if fs, ok := n.(*ast.ForStmt); ok && fs.Form == "range" && fs.Var != "" {
+			t.vars[fs.Var] = "Int"
+		}
+	})
 	return t
 }
 

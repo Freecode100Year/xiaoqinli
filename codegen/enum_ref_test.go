@@ -28,7 +28,7 @@ const enumRefProgram = `{
 			"body": [
 				{
 					"kind": "VarDecl",
-					"name": "out",
+					"name": "tag",
 					"type": {"kind": "String"},
 					"value": {"kind": "Literal", "valueType": "String", "value": "none"}
 				},
@@ -40,7 +40,7 @@ const enumRefProgram = `{
 							"pattern": {"kind": "MemberExpr", "object": {"kind": "Ident", "name": "Color"}, "field": "Red"},
 							"body": [{
 								"kind": "AssignStmt",
-								"target": "out",
+								"target": "tag",
 								"value": {"kind": "Literal", "valueType": "String", "value": "red"}
 							}]
 						},
@@ -48,13 +48,13 @@ const enumRefProgram = `{
 							"pattern": {"kind": "Ident", "name": "_"},
 							"body": [{
 								"kind": "AssignStmt",
-								"target": "out",
+								"target": "tag",
 								"value": {"kind": "Literal", "valueType": "String", "value": "other"}
 							}]
 						}
 					]
 				},
-				{"kind": "ReturnStmt", "value": {"kind": "Ident", "name": "out"}}
+				{"kind": "ReturnStmt", "value": {"kind": "Ident", "name": "tag"}}
 			]
 		},
 		{
