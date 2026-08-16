@@ -242,6 +242,12 @@ func (g *pyGen) emitEnumDecl(ed *ast.EnumDecl) error {
 	return nil
 }
 
+// `match` is structural pattern matching, which arrived in 3.10 — so this is
+// the one construct that gives the python backend a minimum interpreter
+// version, and nothing said so until a corpus program contained a match. 3.9
+// reads `match n:` as a call to an undefined name and stops at the colon. Both
+// this and emitSwitchStmt emit it; the runners and CI images are all past 3.10,
+// which is why the requirement is documented rather than worked around.
 func (g *pyGen) emitMatchExpr(me *ast.MatchExpr) error {
 	g.writeIndent()
 	g.write("match ")

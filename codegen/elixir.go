@@ -301,6 +301,13 @@ func exMutatedNames(body []ast.Node) []string {
 				walk(node.Body)
 			case *ast.WhileStmt:
 				walk(node.Body)
+			case *ast.MatchExpr:
+				// A case arm is a scope like any other, and what it rebinds is
+				// threaded out the same way — so a loop containing one has to
+				// carry those names too.
+				for _, arm := range node.Arms {
+					walk(arm.Body)
+				}
 			}
 		}
 	}
@@ -521,8 +528,32 @@ func (g *exGen) emitExprStmt(es *ast.ExprStmt) error {
 	return nil
 }
 
+// A case arm is a scope and Elixir has no mutable bindings, so an assignment
+// inside one rebinds a name that ceases to exist at the arm's end. This is the
+// third time that sentence has been written about this backend — the for
+// comprehension and the while recursion were both fixed for it — and the case
+// expression was the last construct still losing what it rebound: classify(1)
+// bound "one" inside the arm and returned the "none" from outside it, for
+// every input, and the compiler's "variable tag is unused" went to nobody
+// because nothing in the corpus contained a match.
+//
+// The remedy is the loops': make the case evaluate to what it rebound, and bind
+// it back on the way out. An arm that assigns nothing still hands the tuple
+// back, reading the outer binding, which is what leaving the variable alone
+// means here.
 func (g *exGen) emitMatchExpr(me *ast.MatchExpr) error {
+	var armBodies []ast.Node
+	for _, arm := range me.Arms {
+		armBodies = append(armBodies, arm.Body...)
+	}
+	mutated := exMutatedNames(armBodies)
+	acc := exTuple(mutated)
+	threaded := len(mutated) > 0
+
 	g.writeIndent()
+	if threaded {
+		g.write(g.exResultPattern(mutated, me) + " = ")
+	}
 	g.write("case ")
 	if err := g.emitExpr(me.Value); err != nil {
 		return err
@@ -542,15 +573,17 @@ func (g *exGen) emitMatchExpr(me *ast.MatchExpr) error {
 		}
 		g.writeln("")
 		g.indent++
-		if len(arm.Body) == 0 {
+		for _, stmt := range arm.Body {
+			if err := g.emitNode(stmt); err != nil {
+				return err
+			}
+		}
+		if threaded {
+			g.writeIndent()
+			g.writeln(acc)
+		} else if len(arm.Body) == 0 {
 			g.writeIndent()
 			g.writeln("nil")
-		} else {
-			for _, stmt := range arm.Body {
-				if err := g.emitNode(stmt); err != nil {
-					return err
-				}
-			}
 		}
 		g.indent--
 	}
