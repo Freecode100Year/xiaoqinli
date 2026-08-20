@@ -85,6 +85,15 @@ var expectedRejections = map[string][]string{
 	// having no mutable binding outside IO.
 	"match_arms.xql.json": {"android", "haskell", "tccli"},
 
+	// A switch, which the corpus had never contained either. Thirteen backends
+	// emit one natively; the other twenty-five had no emitSwitchStmt at all
+	// and refused the node — five at their statement emitter's default arm,
+	// twenty at validateNodesForTarget's node allowlist. They now get the
+	// match the switch is sugar for, which is why this list is the match_arms
+	// list minus android: android has a native switch and no MatchExpr, so it
+	// is the one target that can compile this example and not that one.
+	"switch_stmt.xql.json": {"haskell", "tccli"},
+
 	// The same match over an enum, which is what finally asked whether the
 	// declaration side and the reference side of an EnumDecl agree. They did
 	// not, in twenty-two targets. bat is the fourth decline here and not in

@@ -191,6 +191,14 @@ var conformanceExpect = map[string][]string{
 	// the enum as a *type*: fortran declared `type(Color)`, zig `c: Color` and
 	// php `Color $c`, none of which those backends ever define.
 	"enum_match.xql.json": {"green", "other"},
+
+	// A switch, and the same three answers a match gives, which is the point:
+	// thirteen backends emit a native switch and the other twenty-five now
+	// lower the node to the MatchExpr it is sugar for, and this pins both
+	// paths to one expected output. The three cases assign three different
+	// strings so that a C-family backend which forgot its `break` prints
+	// "other" three times rather than the right answer by luck.
+	"switch_stmt.xql.json": {"alpha", "beta", "other"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

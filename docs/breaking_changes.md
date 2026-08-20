@@ -447,3 +447,32 @@ IO 上下文里的赋值照旧走 `IORef`，未受影响。
 **需要你做什么：** 不需要。之前这些产物要么编译不过，要么运行时报错，要么静默走错分支，没有可依赖的行为。
 
 **规范：** 变体引用的唯一 AST 形式写在 `docs/adr_enum_ref.md` 里。
+
+---
+
+## 25 个后端此前直接拒绝 `switch`，现在都能编译它
+
+**改成什么：** `SwitchStmt` 在 codegen 入口被改写成 `MatchExpr`，凡是自己没有 switch 发射器的目标都走这条路。
+语料里新增了 `examples/switch_stmt.xql.json`——三个 case 各给一个先声明好的 String 变量赋一个不同的值，
+外加一个 default——它是语料里的第一个 switch。
+
+**这些后端此前生成的是什么：** 什么也没生成，它们**拒绝**编译。
+
+| 后端 | 之前 |
+|---|---|
+| `lua` `ruby` `php` `nim` `julia` | 走到语句发射器的 default 分支，`XQL_E401: unsupported node SwitchStmt` |
+| `awk` `bash` `bat` `c` `chrome` `cpp` `crystal` `d` `elixir` `fortran` `groovy` `haskell` `ocaml` `pascal` `perl` `powershell` `shortcut` `tcl` `tccli` `vala` | 被 `validateNodesForTarget` 的节点白名单挡下，同样是 `XQL_E401` |
+
+**为什么之前没发现：** 语料里从来没有一个 switch。和 `MatchExpr`、`EnumDecl` 那两次不同的是，
+这一次编译器是响亮地失败的，没有静默降级——所以这不是错译，是 25 个目标的能力缺口，
+而缺口的大小要等到有人写出第一个 switch 才知道。
+
+**为什么不各写一份发射器：** 那是再造 25 个「写过、没跑过」的盲点。这 25 个目标每一个都已经有
+`MatchExpr` 发射器，且被 `match_arms.xql.json`、`enum_match.xql.json` 每轮 conformance 验着。
+理由与取舍写在 `docs/adr_switch_lowering.md`。
+
+**仍然拒绝的两个：** `haskell`（纯函数里没有可变绑定）和 `tccli`（没有任何分支结构）。
+两者对 `match_arms.xql.json` 的拒绝理由与此完全相同。
+
+**需要你做什么：** 不需要。之前这些目标对含 switch 的程序不产出任何东西。
+唯一的行为变化方向是「原本报错、现在能编译」。
