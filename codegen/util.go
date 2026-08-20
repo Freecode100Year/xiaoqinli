@@ -18,6 +18,7 @@ func GenerateProject(root ast.Node, target string) (*ProjectOutput, error) {
 	if err != nil {
 		return nil, err
 	}
+	root = lowerSwitchForTarget(root, target)
 	if target == "android" || target == "apk" {
 		return GenerateAndroidProject(root)
 	}
@@ -39,6 +40,7 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	root = lowerSwitchForTarget(root, target)
 	if err := validateNodesForTarget(root, target); err != nil {
 		return nil, err
 	}
@@ -576,7 +578,10 @@ func validateNodesForTarget(root ast.Node, target string) error {
 			return
 		}
 		switch n.(type) {
-		case *ast.ClassDecl, *ast.SwitchStmt, *ast.MapLiteral, *ast.ArrayLiteral, *ast.ImportDecl:
+		// SwitchStmt is not in this list: lowerSwitchForTarget has already
+		// rewritten it to a MatchExpr for every target that is not in the
+		// early return above, so by here there is none left to refuse.
+		case *ast.ClassDecl, *ast.MapLiteral, *ast.ArrayLiteral, *ast.ImportDecl:
 			err = fmt.Errorf("XQL_E401: target %q does not implement node kind %s", target, n.Kind())
 		}
 	})
