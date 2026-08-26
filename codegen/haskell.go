@@ -200,7 +200,17 @@ func (g *hsGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
 			g.write(" = ")
 			return g.emitPureExprBody(fd.Body[0])
 		} else {
-			g.writeln(" =")
+			// A pure function whose body is several statements is a let with
+			// a body, and emitPureBranch is where that is already spelled
+			// correctly. Emitting the statements one after another instead
+			// wrote `let x = ...` and then the result expression under it,
+			// with no `in` between them — no corpus program had a pure
+			// function with a local binding until examples/reserved_names.xql.json,
+			// so GHC had never been shown the output.
+			g.write(" =")
+			err := g.emitPureBranch(fd.Body)
+			g.inIO = false
+			return err
 		}
 	}
 
@@ -401,18 +411,24 @@ func (g *hsGen) emitPureBranch(body []ast.Node) error {
 	lets := body[:len(body)-1]
 	last := body[len(body)-1]
 	for _, s := range lets {
-		if vd, ok := s.(*ast.VarDecl); ok {
-			g.writeIndent()
-			g.write("let " + vd.Name + " = ")
-			if vd.Value != nil {
-				if err := g.emitExpr(vd.Value); err != nil {
-					return err
-				}
-			} else {
-				g.write("undefined")
-			}
-			g.writeln("")
+		vd, ok := s.(*ast.VarDecl)
+		if !ok {
+			// Anything that is not a binding was being dropped here without a
+			// word, which turns a statement the program wrote into a program
+			// that silently does less. A pure let has room for bindings and a
+			// result and nothing else, so say so.
+			return fmt.Errorf("XQL_E402: Haskell has no statement sequence outside IO, so %s before the result of a pure function cannot be expressed", s.Kind())
 		}
+		g.writeIndent()
+		g.write("let " + vd.Name + " = ")
+		if vd.Value != nil {
+			if err := g.emitExpr(vd.Value); err != nil {
+				return err
+			}
+		} else {
+			g.write("undefined")
+		}
+		g.writeln("")
 	}
 	g.writeIndent()
 	g.write("in ")

@@ -94,6 +94,11 @@ var expectedRejections = map[string][]string{
 	// is the one target that can compile this example and not that one.
 	"switch_stmt.xql.json": {"haskell", "tccli"},
 
+	// Names that collide with target keywords. Only tccli declines, and not
+	// over a name: it has no comparison operator, so the `>` in the example is
+	// what it refuses.
+	"reserved_names.xql.json": {"tccli"},
+
 	// The same match over an enum, which is what finally asked whether the
 	// declaration side and the reference side of an EnumDecl agree. They did
 	// not, in twenty-two targets. bat is the fourth decline here and not in

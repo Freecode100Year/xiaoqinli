@@ -476,3 +476,26 @@ IO 上下文里的赋值照旧走 `IORef`，未受影响。
 
 **需要你做什么：** 不需要。之前这些目标对含 switch 的程序不产出任何东西。
 唯一的行为变化方向是「原本报错、现在能编译」。
+
+---
+
+## 与目标语言关键字冲突的标识符会被改名
+
+**改成什么：** codegen 入口多了一个改写 pass。程序自己声明的名字，凡是与目标语言的关键字冲突的，
+连同它的每一处引用一起加上 `_` 后缀。语料里新增 `examples/reserved_names.xql.json`——函数 `end`、
+参数 `in`、变量 `class`，三个在 XQL 里普通、在某些目标语言里保留的名字。
+
+**这些后端此前生成的是什么：** 一个解析不了的文件。38 个后端全都把标识符原样写出去，
+所以 `examples/switch_stmt.xql.json` 里那个叫 `label` 的函数让 fpc 在第 3 行就整份放弃：
+`Syntax error, "identifier" expected but "LABEL" found`。`validate` 对这份 AST 说 ok，因为 AST 确实没问题。
+
+**为什么之前没发现：** 要等到语料里恰好出现那一个词。上一次撞上是 `enum_match.xql.json` 里的变量 `out`
+（nim、crystal、d、csharp 四个目标拒绝，nim 的编译器直接段错误），当时的处置是把语料里的变量改名，
+并把这条缺口记在这份文档里——那是回避，不是修复。
+
+**行为变化：** 产物里的标识符可能与源 AST 里的写法不同。`class` 编译到 Python 是 `class_`，
+编译到 Go 仍然是 `class`（Go 不保留这个词）。不改 `extern` 声明的名字（那是宿主提供的符号）
+和后端自己发射的内置名（`println` 之类）。
+
+**需要你做什么：** 如果你的工具链按名字去抓产物里的符号，注意这一层。取舍与边界写在
+`docs/adr_reserved_names.md`。
