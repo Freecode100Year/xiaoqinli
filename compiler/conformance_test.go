@@ -199,6 +199,15 @@ var conformanceExpect = map[string][]string{
 	// strings so that a C-family backend which forgot its `break` prints
 	// "other" three times rather than the right answer by luck.
 	"switch_stmt.xql.json": {"alpha", "beta", "other"},
+
+	// A program whose names are other languages' keywords: a function called
+	// `end`, a parameter called `in`, a variable called `class`. Every one of
+	// them is an ordinary identifier in the language this AST is written in, and
+	// a reserved word in some of the languages it compiles to — fpc rejected
+	// switch_stmt.xql.json outright over its `label`. Nothing here tests a
+	// construct; it tests that thirty-seven backends can still be handed a name
+	// they cannot spell.
+	"reserved_names.xql.json": {"small", "big"},
 }
 
 // conformanceRunner says how to turn one target's output into a running

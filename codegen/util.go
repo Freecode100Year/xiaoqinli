@@ -19,6 +19,7 @@ func GenerateProject(root ast.Node, target string) (*ProjectOutput, error) {
 		return nil, err
 	}
 	root = lowerSwitchForTarget(root, target)
+	root = renameReservedForTarget(root, target)
 	if target == "android" || target == "apk" {
 		return GenerateAndroidProject(root)
 	}
@@ -41,6 +42,7 @@ func Generate(root ast.Node, target string) ([]byte, error) {
 		return nil, err
 	}
 	root = lowerSwitchForTarget(root, target)
+	root = renameReservedForTarget(root, target)
 	if err := validateNodesForTarget(root, target); err != nil {
 		return nil, err
 	}
