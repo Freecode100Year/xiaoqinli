@@ -17,11 +17,11 @@ import (
 // that declares nothing called `class` gets no rename even if it calls
 // something that is.
 func renameReservedForTarget(root ast.Node, target string) ast.Node {
-	reserved, foldCase, ok := reservedFor(target)
+	reserved, suffix, foldCase, ok := reservedFor(target)
 	if !ok {
 		return root
 	}
-	renames := collectReservedRenames(root, reserved, foldCase)
+	renames := collectReservedRenames(root, reserved, suffix, foldCase)
 	if len(renames) == 0 {
 		return root
 	}
@@ -42,7 +42,7 @@ type declaredNames struct {
 	externs map[string]bool
 }
 
-func collectReservedRenames(root ast.Node, reserved map[string]bool, foldCase bool) map[string]string {
+func collectReservedRenames(root ast.Node, reserved map[string]bool, suffix string, foldCase bool) map[string]string {
 	decls := declaredNames{
 		values:  map[string]bool{},
 		members: map[string]bool{},
@@ -79,12 +79,12 @@ func collectReservedRenames(root ast.Node, reserved map[string]bool, foldCase bo
 			if !isReserved(name) || decls.externs[name] {
 				continue
 			}
-			// A trailing underscore is a legal identifier character in every
-			// language with a table here, and it is what a person writing the
-			// program by hand would have reached for.
-			candidate := name + "_"
+			// A trailing underscore is what a person writing the program by
+			// hand would have reached for, and it is what every language here
+			// takes except the ones renameSuffixByLanguage names.
+			candidate := name + suffix
 			for taken[candidate] || isReserved(candidate) {
-				candidate += "_"
+				candidate += suffix
 			}
 			taken[candidate] = true
 			renames[name] = candidate

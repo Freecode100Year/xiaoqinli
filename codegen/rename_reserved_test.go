@@ -134,7 +134,7 @@ func TestRenameLeavesExternsAlone(t *testing.T) {
 		},
 	}}
 
-	renames := collectReservedRenames(root, reservedByLanguage["py"], false)
+	renames := collectReservedRenames(root, reservedByLanguage["py"], "_", false)
 	if to, ok := renames["class"]; ok {
 		t.Fatalf("an extern was renamed to %q", to)
 	}
@@ -207,8 +207,41 @@ func TestRenameAvoidsCollidingWithAnExistingName(t *testing.T) {
 		},
 	}}
 
-	renames := collectReservedRenames(root, reservedByLanguage["py"], false)
+	renames := collectReservedRenames(root, reservedByLanguage["py"], "_", false)
 	if renames["class"] != "class__" {
 		t.Fatalf("rename picked %q, which the program already uses", renames["class"])
+	}
+}
+
+// Nim rejects a trailing underscore and compares identifiers ignoring the
+// underscores it does accept, so the default suffix is both illegal and
+// pointless there. CI found this one: "invalid token: trailing underscore".
+func TestRenameSuffixFollowsTheLanguage(t *testing.T) {
+	root := loadReservedExample(t)
+
+	code, err := Generate(root, "nim")
+	if err != nil {
+		t.Fatalf("nim: %v", err)
+	}
+	out := string(code)
+	if strings.Contains(out, "_(") || strings.Contains(out, "_:") {
+		t.Fatalf("nim output renamed something to a trailing underscore:\n%s", out)
+	}
+	if !strings.Contains(out, "endX") {
+		t.Fatalf("nim output never renamed `end`, which is a keyword there:\n%s", out)
+	}
+}
+
+// PHP is the case where a name is taken without being reserved: `end` is a
+// builtin, and redeclaring one is a fatal error rather than a parse error.
+func TestRenameCoversPHPBuiltins(t *testing.T) {
+	root := loadReservedExample(t)
+
+	code, err := Generate(root, "php")
+	if err != nil {
+		t.Fatalf("php: %v", err)
+	}
+	if strings.Contains(string(code), "function end(") {
+		t.Fatalf("php redeclares the builtin end():\n%s", code)
 	}
 }
