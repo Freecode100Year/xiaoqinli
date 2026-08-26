@@ -57,6 +57,13 @@ Python/Rust/Kotlin/Swift/Lua/PHP 等。
 ## 已知边界
 
 - 关键字表是人写的，不是从各语言 grammar 自动导出的。漏一个词，症状仍然是「产物不解析」，
-  修法是往表里补一个词——而不是再去改某个后端。
+  修法是往表里补一个词——而不是再去改某个后端。第一轮 CI 就补了三条：
+  - `crystal` 的 `in` 不能作参数名（表里漏了）。
+  - `php` 的名字可以「被占用而不被保留」——内置函数住在全局函数命名空间，`function end()` 是
+    `Cannot redeclare end()` 这种 fatal 而非解析错误。PHP 内置函数上千个，表里只收了那些
+    程序有可能拿来当自己名字的常见词。
+  - `nim` 拒绝尾随下划线（`invalid token: trailing underscore`），而且它比较标识符时会忽略
+    下划线与非首字母大小写——`end_` 在 Nim 眼里就是 `end`，加了等于没加。改名后缀因此按语言可配
+    （`renameSuffixByLanguage`），Nim 用 `X`。
 - 一个用户函数与某个 `extern` 同名、且该名字又是关键字时，改名会让两者不再一致。这种冲突是程序自己的问题，
   这个 pass 不去猜。

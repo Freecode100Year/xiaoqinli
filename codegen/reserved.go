@@ -106,13 +106,24 @@ var reservedByLanguage = map[string]map[string]bool{
 		rescue retry return self super then true undef unless until when while
 		yield`),
 
+	// PHP is the one language here where a name can be taken without being
+	// reserved: its builtins live in the global function namespace, and
+	// `function end()` is a fatal "Cannot redeclare end()" rather than a parse
+	// error. There are thousands of them, so the second half of this list is
+	// the ones a program is plausibly going to reach for as a name of its own.
 	"php": words(`abstract and array as break callable case catch class clone
 		const continue declare default do echo else elseif empty enddeclare
 		endfor endforeach endif endswitch endwhile enum extends final finally
 		fn for foreach function global goto if implements include include_once
 		instanceof insteadof interface isset list match namespace new or print
 		private protected public readonly require require_once return static
-		switch throw trait try unset use var while xor yield`),
+		switch throw trait try unset use var while xor yield
+
+		end next prev reset current key count sort rsort usort min max round
+		floor ceil sqrt pow exp log log10 rand join implode explode trim strlen
+		substr range compact extract date time sleep define constant serialize
+		unserialize header link dir file copy rename unlink flush printf
+		sprintf`),
 
 	"zig": words(`addrspace align allowzero and anyframe anytype asm async
 		await break callconv catch comptime const continue defer else enum
@@ -166,10 +177,10 @@ var reservedByLanguage = map[string]map[string]bool{
 		function select time coproc`),
 
 	"crystal": words(`abstract alias as asm begin break case class def do else
-		elsif end ensure enum extend false for fun if include lib macro module
-		next nil of out private protected require rescue return select self
-		sizeof struct super then true type typeof union uninitialized unless
-		until when while with yield`),
+		elsif end ensure enum extend false for fun if in include lib macro
+		module next nil of out private protected require rescue return select
+		self sizeof struct super then true type typeof union uninitialized
+		unless until when while with yield`),
 
 	"d": words(`abstract alias align asm assert auto body bool break byte case
 		cast catch cdouble cent cfloat char class const continue creal dchar
@@ -259,9 +270,20 @@ var caseInsensitiveLanguages = map[string]bool{
 	"pascal": true, "fortran": true, "bat": true, "powershell": true,
 }
 
-// reservedFor returns the keyword set for a target, whether case matters when
-// comparing against it, and whether the target has a table at all.
-func reservedFor(target string) (set map[string]bool, foldCase bool, ok bool) {
+// renameSuffixByLanguage overrides the `_` a renamed identifier normally gets.
+// Nim rejects a trailing underscore outright — "invalid token: trailing
+// underscore" — and would not have been helped by one anyway: it compares
+// identifiers ignoring underscores and inner case, so `end_` and `end` are the
+// same name there. A suffix that is a letter is both legal and actually
+// different.
+var renameSuffixByLanguage = map[string]string{
+	"nim": "X",
+}
+
+// reservedFor returns the keyword set for a target, the suffix a renamed
+// identifier takes there, whether case matters when comparing against the
+// table, and whether the target has a table at all.
+func reservedFor(target string) (set map[string]bool, suffix string, foldCase bool, ok bool) {
 	lang := targetAlias(target)
 	if mapped, found := reservedLanguage[target]; found {
 		lang = mapped
@@ -270,7 +292,11 @@ func reservedFor(target string) (set map[string]bool, foldCase bool, ok bool) {
 	}
 	set, ok = reservedByLanguage[lang]
 	if !ok {
-		return nil, false, false
+		return nil, "", false, false
 	}
-	return set, caseInsensitiveLanguages[lang], true
+	suffix = renameSuffixByLanguage[lang]
+	if suffix == "" {
+		suffix = "_"
+	}
+	return set, suffix, caseInsensitiveLanguages[lang], true
 }
