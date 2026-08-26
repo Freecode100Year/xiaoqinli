@@ -271,7 +271,11 @@ func (g *javaGen) emitEnumDecl(ed *ast.EnumDecl) error {
 // if/else-if chain; a match over an enum stays a switch, which is where the
 // unqualified case label matters.
 //
-// emitSwitchStmt has the same defect and no corpus program behind it yet.
+// emitSwitchStmt had the same defect until examples/switch_stmt.xql.json put a
+// program behind it: javac rejected the generated switch over an Int twice
+// over. It now hands the switch to emitMatchExpr, so the Int/enum decision is
+// made in one place rather than two that can drift apart.
+//
 // emitMatchAsIfChain is the lowering for a match Java's switch cannot take.
 // The wildcard becomes the else, and a match that is only a wildcard emits its
 // body with no `if` around it.
@@ -433,38 +437,12 @@ func (g *javaGen) emitClassDecl(cd *ast.ClassDecl) error {
 }
 
 func (g *javaGen) emitSwitchStmt(ss *ast.SwitchStmt) error {
-	g.writeIndent()
-	g.write("switch (")
-	if err := g.emitExpr(ss.Value); err != nil {
-		return err
-	}
-	g.writeln(") {")
-	g.indent++
-	for _, c := range ss.Cases {
-		g.writeIndent()
-		if c.Value != nil {
-			g.write("case ")
-			if err := g.emitExpr(c.Value); err != nil {
-				return err
-			}
-			g.writeln(":")
-		} else {
-			g.writeln("default:")
-		}
-		g.indent++
-		for _, stmt := range c.Body {
-			if err := g.emitNode(stmt); err != nil {
-				return err
-			}
-		}
-		g.writeIndent()
-		g.writeln("break;")
-		g.indent--
-	}
-	g.indent--
-	g.writeIndent()
-	g.writeln("}")
-	return nil
+	// A switch and a match hold the same three things, and Java can only spell
+	// one of them as a `switch` — the one whose labels are enum constants.
+	// switchToMatch is the same rewrite lowerSwitchForTarget gives the
+	// twenty-five backends that have no switch at all; here it is applied one
+	// backend deep so that emitMatchExpr's Int check covers both nodes.
+	return g.emitMatchExpr(switchToMatch(ss))
 }
 
 func (g *javaGen) emitFunctionDecl(fd *ast.FunctionDecl) error {
