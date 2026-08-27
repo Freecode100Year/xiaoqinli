@@ -500,6 +500,10 @@ func TestCrossTargetConformance(t *testing.T) {
 
 				got, err := runConformance(t, r, tool, res.Code)
 				if err != nil {
+					if ran == 0 && isToolchainEnvironmentError(err) {
+						e2e.Missing(t, "local toolchain %q is not functional on this host: %v", tool, err)
+						return
+					}
 					t.Errorf("%s compiled %s, but running it failed: %v", r.target, name, err)
 					continue
 				}
@@ -662,4 +666,16 @@ func TestConformanceCorpusIsWorthRunning(t *testing.T) {
 		t.Error("loop.xql.json must stay in the corpus — the off-by-one range loop that " +
 			"eight backends shipped is exactly what it pins")
 	}
+}
+
+func isToolchainEnvironmentError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "linker `link.exe` not found") ||
+		strings.Contains(msg, "linker link.exe not found") ||
+		strings.Contains(msg, "No such file or directory") ||
+		strings.Contains(msg, "cannot find -l") ||
+		strings.Contains(msg, "command not found")
 }

@@ -1,6 +1,6 @@
 # 📜 Loop Engineering Contract
 
-- **Current Goal**: 阶段十五：物理验证契约全量对齐与基线重构 v3.37.0 (1) 重构 Loop_Contracts.md，将基于 `codegen/local_e2e_test.go` 的本地 E2E 物理验证作为 11 门非主力语言统一的物理验证基线；(2) 修正物理验证红线准则第 1 条，移除废弃的 Docker E2E 隔离描述，替换为本地轻量级 E2E 物理编译运行守则；(3) 保持跨文件完备性与 100% 诚实一致性。
+- **Current Goal**: 阶段十六：CLI/API 安全防线与全量基线物理审计修复 v4.0.1 (1) 修正 main.go parseFlags 命令行布尔标志识别与参数误吞缺陷；(2) 补充 internal/doc.go，解决包遍历单元测试假阴性；(3) 增强 server/rest.go 大请求体防护与 compiler/compiler.go Chrome 解包路径越界检测；(4) 优化 conformance_test 本地工具链环境避让机制。
 - **Verification Command**: go test ./...
 - **Status**: Complete
 - **Gatekeeper Status**: Test: Passed | Audit: Audited

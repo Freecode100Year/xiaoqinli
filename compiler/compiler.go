@@ -440,7 +440,7 @@ func unpackChromeBundle(data []byte, dir string) error {
 	}
 	for name, content := range bundle {
 		clean := filepath.Clean(name)
-		if strings.Contains(clean, "..") || filepath.IsAbs(clean) {
+		if strings.Contains(clean, "..") || strings.HasPrefix(clean, "..") || filepath.IsAbs(clean) || filepath.VolumeName(clean) != "" {
 			return fmt.Errorf("XQL_E403: path escape in bundle: %s", name)
 		}
 		var fileData []byte

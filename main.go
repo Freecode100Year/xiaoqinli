@@ -60,6 +60,16 @@ func main() {
 	}
 }
 
+// isBoolFlag returns true if the flag is a known boolean flag that doesn't consume an argument value.
+func isBoolFlag(name string) bool {
+	switch name {
+	case "strict-caps", "no-strict-caps", "help":
+		return true
+	default:
+		return false
+	}
+}
+
 // parseFlags extracts --key value, --key=value, or --key boolean flags from args.
 func parseFlags(args []string) map[string]string {
 	flags := make(map[string]string)
@@ -68,6 +78,8 @@ func parseFlags(args []string) map[string]string {
 			rest := args[i][2:]
 			if eqIdx := strings.IndexByte(rest, '='); eqIdx >= 0 {
 				flags[rest[:eqIdx]] = rest[eqIdx+1:]
+			} else if isBoolFlag(rest) {
+				flags[rest] = "true"
 			} else if i+1 < len(args) && !strings.HasPrefix(args[i+1], "--") {
 				flags[rest] = args[i+1]
 				i++

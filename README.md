@@ -8,6 +8,14 @@
 
 *[中文文档](README.zh-CN.md)*
 
+> [!NOTE]
+> **📢 Latest Release Notes (2026-08-27 v4.0.1)**
+> - **🚀 Fixes & Enhancements**:
+>   1. **CLI Flag Parsing Fix** (`main.go`): Added boolean flag recognition (e.g., `--strict-caps` / `--no-strict-caps`) to prevent non-flag arguments from being swallowed; added `main_test.go` unit tests.
+>   2. **Internal Package Doc Addition** (`internal/doc.go`): Added `internal` package documentation file to prevent test package discovery failures (`setup failed`).
+>   3. **REST HTTP Security Reinforcement** (`server/rest.go`): Applied `http.MaxBytesReader` payload limits to `/specs`, `/codegen/strategy`, and `/evolution/diagnostics` POST endpoints to mitigate DoS vulnerabilities.
+>   4. **Chrome Bundle Unpack Escape Guard** (`compiler/compiler.go`): Strengthened directory traversal and drive-letter path escape protection.
+
 ---
 
 ## What is AST-First?

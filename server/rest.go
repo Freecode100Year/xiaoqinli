@@ -187,6 +187,7 @@ func (s *RESTServer) handleSpecs(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == http.MethodPost {
 		defer r.Body.Close()
+		r.Body = http.MaxBytesReader(w, r.Body, MaxMCPMessageBytes)
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad request"})
@@ -232,6 +233,7 @@ func (s *RESTServer) handleEvolutionDiagnostics(w http.ResponseWriter, r *http.R
 
 	if r.Method == http.MethodPost {
 		defer r.Body.Close()
+		r.Body = http.MaxBytesReader(w, r.Body, MaxMCPMessageBytes)
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "bad request"})
@@ -295,6 +297,8 @@ func (s *RESTServer) handleCodegenStrategy(w http.ResponseWriter, r *http.Reques
 	}
 
 	if r.Method == http.MethodPost {
+		defer r.Body.Close()
+		r.Body = http.MaxBytesReader(w, r.Body, MaxMCPMessageBytes)
 		var input compiler.CodegenStrategyConfig
 		if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
 			http.Error(w, "invalid request body", http.StatusBadRequest)

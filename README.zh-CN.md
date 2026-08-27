@@ -8,6 +8,14 @@
 
 *[English](README.md)*
 
+> [!NOTE]
+> **📢 最新更新日志 (2026-08-27 v4.0.1)**
+> - **🚀 修正与优化**:
+>   1. **CLI 命令行标志解析优化** (`main.go`): 补齐布尔类型 Flag 识别（如 `--strict-caps` / `--no-strict-caps`），解决位置参数误被 Flag 吞噬导致验证/编译报错问题；添加 `main_test.go` 单元测试覆盖。
+>   2. **目录包结构补齐** (`internal/doc.go`): 添加 `internal` 包说明文件，避免包遍历与单元测试出现 setup failed。
+>   3. **REST HTTP 安全防护强化** (`server/rest.go`): 为 `/specs`、`/codegen/strategy` 和 `/evolution/diagnostics` POST 接口补充 `http.MaxBytesReader` 限制，防御恶意大 Payload 造成的 DoS 攻击。
+>   4. **Chrome 扩展解包安全强化** (`compiler/compiler.go`): 增强解包时的相对路径/跨平台盘符越界检测。
+
 ---
 
 ## 什么是 AST-First
