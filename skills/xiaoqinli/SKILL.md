@@ -27,7 +27,7 @@ metadata:
 2. **AST-First 强约束**：
    - AI Agent 必须直接输出 `.xql.json` 格式的结构化 JSON AST，从物理根源上消灭排版错乱与词法解析错误。
 3. **生成前最新语言特性检索与本地自我更新协议 (Pre-Retrieval & Self-Updating Spec Protocol)**：
-   - 在为目标语言（Python 3.12+/3.13+ 及其他 42+ 语言）生成代码前，Agent 必须通过 MCP `specs_inspect` 或 REST `/specs` 检索最新语言特性 Profile。
+   - 在为目标语言（Python 3.12+/3.13+ 及其他 38 种语言）生成代码前，Agent 必须通过 MCP `specs_inspect` 或 REST `/specs` 检索最新语言特性 Profile。
    - 若检测到新语法/新规范，Agent 可主动调用 `specs_update` 或更新本地 Profile JSON 实现动态自我演进，确保生成的代码始终适用于最新的语言版本与特性。
 4. **零崩溃与死循环物理拦截宪法 (Zero-Crash & Deadloop Boundary Protocol)**：
    - 所有的自我更新、动态演化与语法树解析必须封装 `SafeExecute` (Panic Shield)，出现非预期异常时优雅降级并输出结构化错误，保证程序 0 Panic Crash。
@@ -40,7 +40,7 @@ metadata:
 7. **目标后端 Tier 级治理分工**：
    - **Tier A (核心主力)**：`Go` | `Rust` | `TypeScript` | `Python` | `C++` | `Java` | `C#` | `Zig` | `Tencent Cloud CLI (tccli)` (保证 100% 物理跑通)
    - **Tier B (主流扩展)**：`Swift` | `Kotlin` | `Dart` | `PHP` | `Ruby` | `Lua` | `Shell/Bash` | `PowerShell`
-   - **Tier C (长尾小众)**：`Ada` | `Bat` | `Tcl` | `Fortran` | `Pascal` 等 (稳态 Freeze)
+   - **Tier C (长尾小众)**：`Bat` | `Tcl` | `Fortran` | `Pascal` 等 (稳态 Freeze)
 
 ---
 
@@ -98,7 +98,7 @@ Xiaoqinli 是一个极简、安全、高性能的 **AST-First 转译器**。
    * *全部通过才进入下一层*
 3. **层 2：代码生成**
    * AST 直接遍历 → 目标语言源码字符串
-4. **输出**：42+ 种目标语言/平台源码（Go / Rust / TS / Python / C++ / Java / C# / Zig / Kotlin / Swift / Dart / Lua / Ruby / PHP / Nim / Julia / Scala / Haskell / Bash / PowerShell / Chrome Extension 等）
+4. **输出**：38 种目标语言/平台源码（Go / Rust / TS / Python / C++ / Java / C# / Zig / Kotlin / Swift / Dart / Lua / Ruby / PHP / Nim / Julia / Haskell / Bash / PowerShell / Chrome Extension 等）
 
 > **对比 v1.4**：删除了 IR DAG、字节码、VM 三层。中间不落任何中间表示，AST 检查通过后直接 codegen，走最快路径。
 

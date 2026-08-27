@@ -1835,8 +1835,6 @@ func TestGenerateCStruct(t *testing.T) {
 	}
 }
 
-// --- Scala codegen ---
-
 // --- Haskell codegen ---
 
 func TestGenerateHaskell(t *testing.T) {
@@ -2335,10 +2333,10 @@ func TestLanguageProfileSelfUpdate(t *testing.T) {
 		t.Errorf("expected re-inspected version 3.13+, got %s", reInspected.LatestVersion)
 	}
 
-	// 4. Ensure all 42+ targets are available in ListAllLanguageProfiles
+	// 4. Ensure all 38 targets are available in ListAllLanguageProfiles
 	all := ListAllLanguageProfiles()
-	if len(all) < 42 {
-		t.Errorf("expected at least 42 target profiles, got %d", len(all))
+	if len(all) < 38 {
+		t.Errorf("expected at least 38 target profiles, got %d", len(all))
 	}
 }
 

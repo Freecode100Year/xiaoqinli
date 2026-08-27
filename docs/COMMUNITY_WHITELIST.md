@@ -16,7 +16,7 @@
 
 - **Name**: Xiaoqinli (xql)
 - **Repository**: https://github.com/Freecode100Year/xiaoqinli
-- **Description**: An AST-First, zero-runtime transpiler that converts `.xql.json` ASTs into source code across 42+ languages with deterministic compiler-level verification. Supports both stdio and HTTP MCP modes.
+- **Description**: An AST-First, zero-runtime transpiler that converts `.xql.json` ASTs into source code across 38 languages with deterministic compiler-level verification. Supports both stdio and HTTP MCP modes.
 - **Language**: Go
 - **License**: MIT
 ```
@@ -24,7 +24,7 @@
 ### README.md 填入项 (Markdown snippet)
 
 ```markdown
-- [Xiaoqinli (xql)](https://github.com/Freecode100Year/xiaoqinli) - AST-First transpiler for AI Agents supporting 42+ target languages with deterministic type, effect, and capability checks (`stdio` & `HTTP`).
+- [Xiaoqinli (xql)](https://github.com/Freecode100Year/xiaoqinli) - AST-First transpiler for AI Agents supporting 38 target languages with deterministic type, effect, and capability checks (`stdio` & `HTTP`).
 ```
 
 ---
@@ -39,7 +39,7 @@
 ```markdown
 ### Add Xiaoqinli (xql) to Compilers section
 
-* [xiaoqinli](https://github.com/Freecode100Year/xiaoqinli) - AST-First, zero-runtime security transpiler for AI Agents supporting 42+ target languages with deterministic static verification.
+* [xiaoqinli](https://github.com/Freecode100Year/xiaoqinli) - AST-First, zero-runtime security transpiler for AI Agents supporting 38 target languages with deterministic static verification.
 
 **Checks:**
 - [x] Go module enabled
@@ -58,7 +58,7 @@
 ### Markdown Snippet
 
 ```markdown
-- [Xiaoqinli](https://github.com/Freecode100Year/xiaoqinli) - Deterministic AST-First transpiler infrastructure built for AI Agents to produce verified, error-free code in 42+ targets.
+- [Xiaoqinli](https://github.com/Freecode100Year/xiaoqinli) - Deterministic AST-First transpiler infrastructure built for AI Agents to produce verified, error-free code in 38 targets.
 ```
 
 ---

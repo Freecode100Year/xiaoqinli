@@ -222,7 +222,7 @@ func resetDefaultProfiles() {
 		profiles[p.Target] = p
 	}
 
-	// Add basic profiles for long-tail 42+ target backends
+	// Add basic profiles for long-tail 38 target backends
 	allTargets := []string{
 		"js", "c", "haskell", "ocaml", "elixir", "lua", "ruby", "php",
 		"nim", "julia", "awk", "bash", "bat", "crystal", "d", "fortran",
@@ -258,7 +258,7 @@ func InspectLanguageProfile(target string) (*LanguageProfile, error) {
 	return &cp, nil
 }
 
-// ListAllLanguageProfiles returns all registered 42+ target language profiles.
+// ListAllLanguageProfiles returns all registered 38 target language profiles.
 func ListAllLanguageProfiles() map[string]*LanguageProfile {
 	profileMutex.RLock()
 	defer profileMutex.RUnlock()
@@ -319,7 +319,7 @@ func LoadProfilesFromFile(filePath string) error {
 	return nil
 }
 
-// SaveProfilesToFile persists current 42+ language profiles to a local JSON file.
+// SaveProfilesToFile persists current 38 language profiles to a local JSON file.
 func SaveProfilesToFile(filePath string) error {
 	profileMutex.RLock()
 	defer profileMutex.RUnlock()

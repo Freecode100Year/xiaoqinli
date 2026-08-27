@@ -556,7 +556,7 @@ func SaveLocalState(dirPath string) error {
 	return nil
 }
 
-// GetAllSpecs returns all 42+ registered target language profiles.
+// GetAllSpecs returns all 38 registered target language profiles.
 func GetAllSpecs() map[string]*codegen.LanguageProfile {
 	return codegen.ListAllLanguageProfiles()
 }

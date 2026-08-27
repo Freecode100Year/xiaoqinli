@@ -1,6 +1,6 @@
 // Package compiler exports xiaoqinli's compile pipeline as a reusable library.
 //
-// xiaoqinli is an AST-First transpiler supporting 42+ target languages.
+// xiaoqinli is an AST-First transpiler supporting 38 target languages.
 // This package wraps the internal ast → check → codegen pipeline into
 // clean public functions that external projects (e.g. AgentCLI) can import.
 //

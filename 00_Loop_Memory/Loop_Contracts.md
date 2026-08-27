@@ -1,6 +1,6 @@
 # 📜 Loop Engineering Contract
 
-- **Current Goal**: 阶段十六：CLI/API 安全防线与全量基线物理审计修复 v4.0.1 (1) 修正 main.go parseFlags 命令行布尔标志识别与参数误吞缺陷；(2) 补充 internal/doc.go，解决包遍历单元测试假阴性；(3) 增强 server/rest.go 大请求体防护与 compiler/compiler.go Chrome 解包路径越界检测；(4) 优化 conformance_test 本地工具链环境避让机制。
+- **Current Goal**: 阶段十七：功能精简后全量重新审计与全矩阵一致性对齐 v4.0.2 (1) 彻底清扫与更正所有包注释、技能文档、白名单及快速参考卡片中脱节的废弃语言数量标示，统一精确至 38 种目标后端；(2) 修正 codegen_test profile 校验断言并清理多余死注释；(3) 全量跑通 go vet 与单元测试，完成全局部署与 GitHub 交付。
 - **Verification Command**: go test ./...
 - **Status**: Complete
 - **Gatekeeper Status**: Test: Passed | Audit: Audited

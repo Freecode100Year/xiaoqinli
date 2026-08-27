@@ -9,12 +9,11 @@
 *[中文文档](README.zh-CN.md)*
 
 > [!NOTE]
-> **📢 Latest Release Notes (2026-08-27 v4.0.1)**
-> - **🚀 Fixes & Enhancements**:
->   1. **CLI Flag Parsing Fix** (`main.go`): Added boolean flag recognition (e.g., `--strict-caps` / `--no-strict-caps`) to prevent non-flag arguments from being swallowed; added `main_test.go` unit tests.
->   2. **Internal Package Doc Addition** (`internal/doc.go`): Added `internal` package documentation file to prevent test package discovery failures (`setup failed`).
->   3. **REST HTTP Security Reinforcement** (`server/rest.go`): Applied `http.MaxBytesReader` payload limits to `/specs`, `/codegen/strategy`, and `/evolution/diagnostics` POST endpoints to mitigate DoS vulnerabilities.
->   4. **Chrome Bundle Unpack Escape Guard** (`compiler/compiler.go`): Strengthened directory traversal and drive-letter path escape protection.
+> **📢 Latest Release Notes (2026-08-27 v4.0.2)**
+> - **🚀 Comprehensive Re-audit & Alignment**:
+>   1. **Legacy Reference Cleanup**: Thoroughly updated target count references across `codegen/profile.go`, `compiler/doc.go`, `compiler/compiler.go`, `QUICK_REFERENCE.txt`, `skills/xiaoqinli/SKILL.md`, and `docs/COMMUNITY_WHITELIST.md` (aligned exactly to 38 backends).
+>   2. **Test Assertion & Dead Code Cleanup**: Fixed profile count assertion in `codegen/codegen_test.go` (aligned to 38) and cleaned up leftover comment headers for removed backends.
+>   3. **100% Verification**: `go vet ./...` and package tests verified 100% green; recompiled and deployed binary to `C:\Users\sj929\go\bin\xql.exe`.
 
 ---
 
