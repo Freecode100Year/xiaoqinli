@@ -1,0 +1,60 @@
+{
+  "kind": "Program",
+  "declarations": [
+    {
+      "kind": "FunctionDecl",
+      "name": "main",
+      "params": [],
+      "returnType": {
+        "kind": "Void"
+      },
+      "effects": [
+        "io"
+      ],
+      "grant": [
+        "io"
+      ],
+      "body": [
+        {
+          "kind": "VarDecl",
+          "name": "s",
+          "type": {
+            "kind": "String"
+          },
+          "value": {
+            "kind": "Literal",
+            "valueType": "String",
+            "value": "cost $5 #{x} @a ${y} [z] $(w) `v` %p% !q!"
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "Ident",
+                "name": "s"
+              }
+            ]
+          }
+        },
+        {
+          "kind": "ExprStmt",
+          "expr": {
+            "kind": "CallExpr",
+            "callee": "println",
+            "args": [
+              {
+                "kind": "Literal",
+                "valueType": "String",
+                "value": "quote \" and ' and \\ end"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

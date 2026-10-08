@@ -672,7 +672,7 @@ func (g *groovyGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("%q", s))
+		g.write(quoteDollar(s))
 	case "Int":
 		// `def` takes its type from the value, so a bare 2147483647 makes an
 		// Integer and `big + 1` wrapped to -2147483648. The L suffix is the only

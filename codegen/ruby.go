@@ -25,7 +25,7 @@ func GenerateRuby(root ast.Node) ([]byte, error) {
 		if tag == "" {
 			tag = fmt.Sprintf("PreferComprehension=%v, InlineThreshold=%d, Score=%.1f", strat.PreferComprehension, strat.InlineThreshold, strat.BenchmarkScore)
 		}
-		g.writeln("# Codegen Strategy: " + tag)
+		g.writeln("# Codegen Strategy: " + commentLine(tag))
 		g.writeln("")
 	}
 
@@ -728,7 +728,7 @@ func (g *rbGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("%q", s))
+		g.write(quoteRuby(s))
 	case "Int":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%d", int64(f)))

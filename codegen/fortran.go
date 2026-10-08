@@ -774,7 +774,7 @@ func (g *fortranGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write("'" + strings.ReplaceAll(s, "'", "''") + "'")
+		g.write(quoteFortran(s))
 	case "Int":
 		// `_8` is the kind suffix, and it is required rather than tidy: Fortran
 		// checks argument kinds exactly, so `add(3, 5)` against a dummy declared

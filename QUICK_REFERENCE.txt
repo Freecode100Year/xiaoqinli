@@ -81,7 +81,7 @@
     xql stdio
 
   HTTP 服务:
-    xql http [:port] [--mode rest]
+    xql http [[host]:port] [--mode rest]   (bare :port = 127.0.0.1; XQL_HTTP_TOKEN for remote writes)
 
 
 ══════════════════════════════════════════════════════════════════════

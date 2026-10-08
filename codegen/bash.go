@@ -939,7 +939,7 @@ func (g *bashGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("%q", s))
+		g.write(quoteShell(s))
 	case "Int":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%d", int64(f)))
@@ -963,7 +963,7 @@ func (g *bashGen) emitLiteralRaw(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("%q", s))
+		g.write(quoteShell(s))
 	case "Int":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%d", int64(f)))

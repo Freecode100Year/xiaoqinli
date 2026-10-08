@@ -21,11 +21,24 @@ import (
 const MaxMCPMessageBytes = 2 << 20 // 2 MB
 
 // MCPServer implements the Model Context Protocol over stdio and streamable HTTP.
-type MCPServer struct{}
+type MCPServer struct {
+	guard *guard // set by ServeHTTP; nil over stdio
+}
 
 // NewMCPServer creates a new MCPServer.
 func NewMCPServer() *MCPServer {
 	return &MCPServer{}
+}
+
+// mutatingTools change state that persists in .xql/ and shapes later output.
+var mutatingTools = map[string]bool{
+	"stdlib_matrix_update":      true,
+	"treesitter_mapping_update": true,
+	"specs_update":              true,
+	"diagnostic_memory_record":  true,
+	"skills_diagnose_and_fill":  true,
+	"agent_search_autoupdate":   true,
+	"codegen_strategy_update":   true,
 }
 
 // ---------------------------------------------------------------------------
@@ -109,8 +122,9 @@ func (s *MCPServer) safeHandleRequest(req *jsonRPCRequest) (resp jsonRPCResponse
 func (s *MCPServer) ServeHTTP(addr string) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/mcp", s.handleHTTPMCP)
+	s.guard = newGuard(addr)
 	fmt.Fprintf(os.Stderr, "MCP HTTP listening on %s\n", addr)
-	return http.ListenAndServe(addr, mux)
+	return serve(addr, s.guard, mux)
 }
 
 func (s *MCPServer) handleHTTPMCP(w http.ResponseWriter, r *http.Request) {
@@ -530,6 +544,14 @@ func (s *MCPServer) handleToolsCall(req *jsonRPCRequest) jsonRPCResponse {
 	}
 	if args.Target == "" {
 		args.Target = "go"
+	}
+
+	if mutatingTools[params.Name] && !s.guard.mutationAllowed() {
+		return jsonRPCResponse{
+			JSONRPC: "2.0",
+			ID:      req.ID,
+			Error:   &rpcError{Code: -32001, Message: params.Name + " changes compiler state and is disabled: set " + TokenEnv + " to enable it on a non-loopback address"},
+		}
 	}
 
 	switch params.Name {

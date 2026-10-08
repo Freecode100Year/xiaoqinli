@@ -666,7 +666,7 @@ func (g *jlGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("%q", s))
+		g.write(quoteDollar(s))
 	case "Int":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("Int64(%d)", int64(f)))

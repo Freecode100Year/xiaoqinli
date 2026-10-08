@@ -435,9 +435,9 @@ func (g *androidGen) emitExpr(n ast.Node) error {
 	case *ast.Literal:
 		if node.ValueType == "String" {
 			strVal, _ := node.Value.(string)
-			g.write(fmt.Sprintf("%q", strVal))
+			g.write(quoteDollar(strVal))
 		} else if strVal, ok := node.Value.(string); ok {
-			g.write(fmt.Sprintf("%q", strVal))
+			g.write(quoteDollar(strVal))
 		} else if f, ok := node.Value.(float64); ok && node.ValueType == "Int" {
 			g.write(fmt.Sprintf("%dL", int64(f)))
 		} else {

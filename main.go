@@ -21,7 +21,8 @@ Usage:
   xiaoqinli validate --file <path.xql.json>
   xiaoqinli targets                         List all supported target languages
   xiaoqinli stdio                           MCP stdio mode
-  xiaoqinli http [<:port>] [--mode rest]    MCP/REST HTTP mode (default :8080)
+  xiaoqinli http [<[host]:port>] [--mode rest]  MCP/REST HTTP mode (default 127.0.0.1:8080;
+                                            other hosts need XQL_HTTP_TOKEN for write tools)
 
 Targets: %s (default: go)
 
@@ -196,6 +197,7 @@ func cmdHTTP(args []string) {
 			addr = ":8080"
 		}
 	}
+	addr = server.ListenAddr(addr)
 	mode := flags["mode"]
 	if mode == "rest" {
 		rest := server.NewRESTServer()

@@ -99,6 +99,11 @@ var expectedRejections = map[string][]string{
 	// what it refuses.
 	"reserved_names.xql.json": {"tccli"},
 
+	// cmd expands %VAR% and !VAR! and ends a command at & | < >, with quoting
+	// rules that differ between `set` and `echo`, so batch refuses that text
+	// rather than escape it for one context and run it in the other.
+	"string_escape.xql.json": {"bat"},
+
 	// The same match over an enum, which is what finally asked whether the
 	// declaration side and the reference side of an EnumDecl agree. They did
 	// not, in twenty-two targets. bat is the fourth decline here and not in

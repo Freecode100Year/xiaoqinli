@@ -9,11 +9,11 @@
 *[English](README.md)*
 
 > [!NOTE]
-> **📢 最新更新日志 (2026-08-27 v4.0.2)**
-> - **🚀 全盘重新审计与精简对齐**:
->   1. **遗留剥离标示全面彻底清扫**: 全面排查并更正 `codegen/profile.go`、`compiler/doc.go`、`compiler/compiler.go`、`QUICK_REFERENCE.txt`、`skills/xiaoqinli/SKILL.md` 和 `docs/COMMUNITY_WHITELIST.md` 中脱节的废弃语言数量声明（统一精确为 38 种目标后端）。
->   2. **测试断言与死代码死注释清理**: 修正 `codegen/codegen_test.go` 中针对 profile 列表长度的断言（对齐为 38），并清理已经删除后端（如 Scala）的残留死注释。
->   3. **全量静态/动态测试 100% 验证**: 完成 `go vet ./...` 与包级单元测试 100% 全绿跑通；重新编译并同步覆盖 `C:\Users\sj929\go\bin\xql.exe`。
+> **📢 最新更新日志 (2026-10-08 v4.1.0) —— 安全更新，建议升级**
+> - **名字和运算符里能塞代码**：变量名写成 `x = __import__('os').system('id')\n    y` 的程序，标为 pure、没有任何权限也能通过全部检查，编译成 Python 后会执行系统命令。现在所有名字、运算符、权限名、导入路径和字面量在检查前都按语法校验（`XQL_E102`），缺少必需子节点的节点直接报错，不再让后端崩溃。
+> - **字符串常量没有按目标语言转义**：`"$(id)"` 在 bash/tccli 里会执行，`"#{...}"` 在 Ruby/Crystal/Elixir，`"[exec ...]"` 在 Tcl，`$`/`@` 在 Perl、PHP、Kotlin、Groovy、Dart、Julia、PowerShell 里都会被插值。现在每个后端按自己的语言转义；批处理遇到 `% ! & | < > ^ "` 直接拒绝。新增 `examples/string_escape.xql.json` 在全部后端上验证。
+> - **HTTP 模式加固**：`xql http :8080` 现在只监听 127.0.0.1，对外需写明 `0.0.0.0:8080`。设置 `XQL_HTTP_TOKEN` 后要求 `Authorization: Bearer`；对外监听又没设令牌时，会改动已保存状态的工具一律禁用。拒绝来自外站网页（Origin）的请求，加了超时，策略标签不能再跳出注释行。
+> - 新增模糊测试（`go test ./compiler -fuzz FuzzPipeline`），覆盖所有后端；它找到的两个崩溃已修复。
 
 ---
 
@@ -285,7 +285,7 @@ xql compile --file <path.xql.json> --target <lang> [--out <output>] [--no-strict
 xql validate --file <path.xql.json>
 xql targets                          列出所有支持的目标语言
 xql stdio                            MCP stdio 模式
-xql http [<:port>] [--mode rest]     MCP / REST HTTP 模式（默认 :8080）
+xql http [<[host]:port>] [--mode rest]  MCP / REST HTTP 模式（默认 127.0.0.1:8080）
 ```
 
 退出码：`0` 成功 · `1` 校验失败 · `2` 编译错误 · `3` 参数错误。
@@ -293,6 +293,8 @@ xql http [<:port>] [--mode rest]     MCP / REST HTTP 模式（默认 :8080）
 ### MCP 服务端
 
 `xql stdio` 通过 stdin/stdout 讲 Model Context Protocol，Agent 可以直接驱动编译器。`xql http` 以 HTTP 提供同一组工具。
+
+只写 `:port` 时只监听本机。要对外监听，需写明主机（`xql http 0.0.0.0:8080`）并设置 `XQL_HTTP_TOKEN`，客户端带 `Authorization: Bearer <令牌>`。对外监听又没设令牌时服务只读：`*_update`、`diagnostic_memory_record`、`skills_diagnose_and_fill`、`agent_search_autoupdate` 以及会写入的 REST 接口一律拒绝。Origin 不是本机的请求始终拒绝。
 
 已暴露的工具：`compile`、`validate`、`targets`、`specs_inspect`、`specs_update`、`stdlib_matrix_inspect`、`stdlib_matrix_update`、`treesitter_mapping_inspect`、`treesitter_mapping_update`、`diagnostic_memory_inspect`、`diagnostic_memory_record`、`security_policy_inspect`、`codegen_strategy_inspect`、`codegen_strategy_update`、`skills_diagnose_and_fill`、`agent_search_query`、`agent_search_autoupdate`。
 
@@ -323,7 +325,7 @@ xql http [<:port>] [--mode rest]     MCP / REST HTTP 模式（默认 :8080）
 docker compose up --build
 ```
 
-镜像会构建静态二进制，并随附 Python、Node.js、Go 工具链，使生成的代码可以在沙箱内直接执行。MCP HTTP 服务监听 `:8080`。
+镜像会构建静态二进制，并随附 Python、Node.js、Go 工具链，使生成的代码可以在沙箱内直接执行。容器内 MCP HTTP 服务监听 `0.0.0.0:8080`；需要改动状态的工具请设置 `XQL_HTTP_TOKEN`。
 
 ---
 

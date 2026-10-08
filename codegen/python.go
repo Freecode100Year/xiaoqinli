@@ -24,7 +24,7 @@ func GeneratePython(root ast.Node) ([]byte, error) {
 		if tag == "" {
 			tag = fmt.Sprintf("PreferComprehension=%v, InlineThreshold=%d, Score=%.1f", strat.PreferComprehension, strat.InlineThreshold, strat.BenchmarkScore)
 		}
-		g.writeln("# Codegen Strategy: " + tag)
+		g.writeln("# Codegen Strategy: " + commentLine(tag))
 		g.writeln("")
 	}
 

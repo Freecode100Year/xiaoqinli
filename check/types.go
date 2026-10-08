@@ -273,6 +273,9 @@ func (tc *TypeChecker) addError(msg string) {
 			}
 		}
 		fix = fmt.Sprintf("Add the missing capability name to the caller function's @grant list. Example: grant: [\"%s\"]", capName)
+	} else if strings.HasPrefix(msg, "invalid ") && strings.Contains(msg, " in ") {
+		code = "XQL_E102"
+		fix = "Names must be identifiers ([A-Za-z_][A-Za-z0-9_]*; host references may be dotted) and operators must be ones the language defines."
 	} else if strings.Contains(msg, "has inferred effect") {
 		code = "XQL_E203"
 		fix = "Remove the pure annotation or remove the side-effecting code."
