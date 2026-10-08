@@ -633,7 +633,7 @@ func (g *crystalGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
-		g.write(fmt.Sprintf("%q", s))
+		g.write(quoteRuby(s))
 	case "Int":
 		f, _ := lit.Value.(float64)
 		g.write(fmt.Sprintf("%d_i64", int64(f)))

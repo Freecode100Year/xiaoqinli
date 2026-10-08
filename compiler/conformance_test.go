@@ -208,6 +208,14 @@ var conformanceExpect = map[string][]string{
 	// construct; it tests that thirty-seven backends can still be handed a name
 	// they cannot spell.
 	"reserved_names.xql.json": {"small", "big"},
+
+	// Text that is code in somebody's string syntax: `$5` and `${y}` to
+	// php, perl, kotlin, groovy, dart and julia, `#{x}` to ruby, crystal and
+	// elixir, `@a` to perl, `[z]` to tcl, `$(w)` and backticks to bash and
+	// powershell. Every backend wrote string literals with Go's %q, which
+	// escapes none of it, so a pure program holding the string "$(id)"
+	// compiled to bash that ran id.
+	"string_escape.xql.json": {"cost $5 #{x} @a ${y} [z] $(w) `v` %p% !q!", `quote " and ' and \ end`},
 }
 
 // conformanceRunner says how to turn one target's output into a running

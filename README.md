@@ -9,11 +9,11 @@
 *[中文文档](README.zh-CN.md)*
 
 > [!NOTE]
-> **📢 Latest Release Notes (2026-08-27 v4.0.2)**
-> - **🚀 Comprehensive Re-audit & Alignment**:
->   1. **Legacy Reference Cleanup**: Thoroughly updated target count references across `codegen/profile.go`, `compiler/doc.go`, `compiler/compiler.go`, `QUICK_REFERENCE.txt`, `skills/xiaoqinli/SKILL.md`, and `docs/COMMUNITY_WHITELIST.md` (aligned exactly to 38 backends).
->   2. **Test Assertion & Dead Code Cleanup**: Fixed profile count assertion in `codegen/codegen_test.go` (aligned to 38) and cleaned up leftover comment headers for removed backends.
->   3. **100% Verification**: `go vet ./...` and package tests verified 100% green; recompiled and deployed binary to `C:\Users\sj929\go\bin\xql.exe`.
+> **📢 Latest Release Notes (2026-10-08 v4.1.0) — security release, upgrade recommended**
+> - **Names and operators could carry code.** A `VarDecl` named `x = __import__('os').system('id')\n    y` passed every check as a pure, ungranted program and compiled to Python that ran a shell command. Every name, operator, capability, import path and literal is now held to a grammar before checking (`XQL_E102`), and nodes missing a required child are rejected instead of crashing a backend.
+> - **String literals were not escaped for interpolating languages.** `"$(id)"` ran in bash and tccli, `"#{...}"` in Ruby/Crystal/Elixir, `"[exec ...]"` in Tcl, `$`/`@` in Perl, PHP, Kotlin, Groovy, Dart, Julia and PowerShell. Each backend now quotes for its own language; batch refuses `% ! & | < > ^ "` rather than guess. `examples/string_escape.xql.json` pins this across the matrix.
+> - **HTTP modes hardened.** `xql http :8080` now listens on 127.0.0.1 only; another host must be named (`0.0.0.0:8080`). Set `XQL_HTTP_TOKEN` to require `Authorization: Bearer`; on a non-loopback address without it, tools that change saved state are disabled. Requests from a foreign browser `Origin` are refused, servers have timeouts, and a strategy tag can no longer break out of its header comment.
+> - A fuzz test (`go test ./compiler -fuzz FuzzPipeline`) now runs every backend over arbitrary input; the two crashes it found are fixed.
 
 ---
 
@@ -315,7 +315,7 @@ xql compile --file <path.xql.json> --target <lang> [--out <output>] [--no-strict
 xql validate --file <path.xql.json>
 xql targets                          List all supported target languages
 xql stdio                            MCP stdio mode
-xql http [<:port>] [--mode rest]     MCP / REST HTTP mode (default :8080)
+xql http [<[host]:port>] [--mode rest]  MCP / REST HTTP mode (default 127.0.0.1:8080)
 ```
 
 Exit codes: `0` success · `1` validation failed · `2` compilation error · `3` argument error.
@@ -323,6 +323,8 @@ Exit codes: `0` success · `1` validation failed · `2` compilation error · `3`
 ### MCP server
 
 `xql stdio` speaks the Model Context Protocol over stdin/stdout, so an agent can drive the compiler directly. `xql http` serves the same tools over HTTP.
+
+A bare `:port` listens on loopback only. To listen elsewhere, name the host (`xql http 0.0.0.0:8080`) and set `XQL_HTTP_TOKEN`; clients then send `Authorization: Bearer <token>`. Without a token on a non-loopback address the server is read-only: `*_update`, `diagnostic_memory_record`, `skills_diagnose_and_fill` and `agent_search_autoupdate` (and the REST endpoints that write) are refused. Requests whose `Origin` is not localhost are always refused.
 
 Tools exposed: `compile`, `validate`, `targets`, `specs_inspect`, `specs_update`, `stdlib_matrix_inspect`, `stdlib_matrix_update`, `treesitter_mapping_inspect`, `treesitter_mapping_update`, `diagnostic_memory_inspect`, `diagnostic_memory_record`, `security_policy_inspect`, `codegen_strategy_inspect`, `codegen_strategy_update`, `skills_diagnose_and_fill`, `agent_search_query`, `agent_search_autoupdate`.
 
@@ -353,7 +355,7 @@ Tools exposed: `compile`, `validate`, `targets`, `specs_inspect`, `specs_update`
 docker compose up --build
 ```
 
-The image builds a static binary and ships it alongside Python, Node.js, and Go toolchains so generated code can be executed in the sandbox. The MCP HTTP server listens on `:8080`.
+The image builds a static binary and ships it alongside Python, Node.js, and Go toolchains so generated code can be executed in the sandbox. The MCP HTTP server listens on `0.0.0.0:8080` inside the container; set `XQL_HTTP_TOKEN` to enable the tools that change state.
 
 ---
 

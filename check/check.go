@@ -51,6 +51,13 @@ func RunAllWithOptions(root ast.Node, currentFile string, ws *vfs.Workspace, opt
 	tc.currentFile = currentFile
 	tc.workspace = ws
 
+	if errs := CheckIdentifiers(root); len(errs) > 0 {
+		for _, e := range errs {
+			tc.addError(e)
+		}
+		return WorkspaceError{Diagnostics: tc.Diagnostics}
+	}
+
 	_ = tc.Check(root)
 	_ = CheckEffectsWithTC(root, tc)
 	_ = CheckCapabilitiesWithOptions(root, tc, opts)

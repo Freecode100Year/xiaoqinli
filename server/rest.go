@@ -14,15 +14,25 @@ import (
 )
 
 // RESTServer serves a lightweight REST API for compile and validate.
-type RESTServer struct{}
+type RESTServer struct {
+	guard *guard // set by Serve
+}
 
 // NewRESTServer creates a new RESTServer.
 func NewRESTServer() *RESTServer { return &RESTServer{} }
 
 // Serve starts the REST API on the given address.
 func (s *RESTServer) Serve(addr string) error {
+	s.guard = newGuard(addr)
 	fmt.Fprintf(os.Stderr, "REST API listening on %s\n", addr)
-	return http.ListenAndServe(addr, s.Routes())
+	routes := s.Routes()
+	return serve(addr, s.guard, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if isMutatingRequest(r) && !s.guard.mutationAllowed() {
+			http.Error(w, "this endpoint changes compiler state and is disabled: set "+TokenEnv+" to enable it on a non-loopback address", http.StatusForbidden)
+			return
+		}
+		routes.ServeHTTP(w, r)
+	}))
 }
 
 // Routes builds the REST API route table. It is separate from Serve so tests
@@ -47,6 +57,19 @@ func (s *RESTServer) Routes() *http.ServeMux {
 	mux.Handle("/metrics", GlobalMetrics.PrometheusHandler())
 
 	return mux
+}
+
+// isMutatingRequest reports whether r changes state saved in .xql/. Compile,
+// validate and search are reads whatever their method.
+func isMutatingRequest(r *http.Request) bool {
+	if r.Method == http.MethodGet || r.Method == http.MethodHead {
+		return false
+	}
+	switch r.URL.Path {
+	case "/compile", "/validate", "/api/v1/search":
+		return false
+	}
+	return true
 }
 
 type compileRequest struct {

@@ -397,6 +397,10 @@ func (g *hsGen) emitIf(is *ast.IfStmt) error {
 }
 
 func (g *hsGen) emitPureBranch(body []ast.Node) error {
+	if len(body) == 0 {
+		// A pure Haskell definition is an expression, and an empty body has none.
+		return fmt.Errorf("XQL_E402: Haskell cannot express a pure function or branch with an empty body")
+	}
 	if len(body) == 1 {
 		if rs, ok := body[0].(*ast.ReturnStmt); ok && rs.Value != nil {
 			if err := g.emitExpr(rs.Value); err != nil {

@@ -41,4 +41,4 @@ EXPOSE 8080
 
 # Default cmd runs the HTTP MCP server
 ENTRYPOINT ["xql"]
-CMD ["http", ":8080"]
+CMD ["http", "0.0.0.0:8080"]

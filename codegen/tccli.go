@@ -212,7 +212,8 @@ func (g *tccliGen) emitExpr(e ast.Node) (string, error) {
 	switch expr := e.(type) {
 	case *ast.Literal:
 		if expr.ValueType == "String" {
-			return fmt.Sprintf("\"%v\"", expr.Value), nil
+			s, _ := expr.Value.(string)
+			return quoteShell(s), nil
 		}
 		return fmt.Sprintf("%v", expr.Value), nil
 	case *ast.Ident:

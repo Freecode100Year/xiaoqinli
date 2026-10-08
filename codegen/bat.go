@@ -958,6 +958,9 @@ func (g *batGen) emitLiteral(lit *ast.Literal) error {
 	switch lit.ValueType {
 	case "String":
 		s, _ := lit.Value.(string)
+		if err := batchSafe(s); err != nil {
+			return err
+		}
 		g.write(s)
 	case "Int":
 		// `set /a` is 32-bit signed and there is no wider arithmetic in cmd —
