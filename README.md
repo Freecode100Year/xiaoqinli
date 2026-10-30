@@ -8,6 +8,9 @@
 
 *[中文文档](README.zh-CN.md)*
 
+> [!IMPORTANT]
+> **CI maintenance (2026-10-30):** `main` is the primary branch and CI now follows it. Docker Hub publishing is blocked until the repository's expired `DOCKERHUB_TOKEN` secret is replaced in GitHub Actions settings.
+
 > [!NOTE]
 > **📢 Latest Release Notes (2026-10-08 v4.1.0) — security release, upgrade recommended**
 > - **Names and operators could carry code.** A `VarDecl` named `x = __import__('os').system('id')\n    y` passed every check as a pure, ungranted program and compiled to Python that ran a shell command. Every name, operator, capability, import path and literal is now held to a grammar before checking (`XQL_E102`), and nodes missing a required child are rejected instead of crashing a backend.

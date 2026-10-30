@@ -11,9 +11,9 @@ name: E2E Backends Verification
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   e2e-verify:

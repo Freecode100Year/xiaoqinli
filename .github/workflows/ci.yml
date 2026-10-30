@@ -2,14 +2,14 @@ name: CI
 
 # Fast checks. Anything that needs a language toolchain lives in
 # e2e-backends.yml — this file used to carry a second copy of that job, pinned
-# to a different Zig version, so the two could disagree about whether master was
+# to a different Zig version, so the two could disagree about whether main was
 # green.
 
 on:
   push:
-    branches: [ master ]
+    branches: [ main ]
   pull_request:
-    branches: [ master ]
+    branches: [ main ]
 
 jobs:
   test:
