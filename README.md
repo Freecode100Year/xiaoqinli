@@ -9,7 +9,7 @@
 *[中文文档](README.zh-CN.md)*
 
 > [!IMPORTANT]
-> **CI maintenance (2026-10-30):** `main` is the primary branch and CI now follows it. Docker Hub publishing is blocked until the repository's expired `DOCKERHUB_TOKEN` secret is replaced in GitHub Actions settings.
+> **CI maintenance (2026-10-30):** `main` is the primary branch and CI now follows it. CI and Docker images use Go 1.26.10 to pick up standard-library security fixes. Docker Hub publishing is blocked until the repository's expired `DOCKERHUB_TOKEN` secret is replaced in GitHub Actions settings.
 
 > [!NOTE]
 > **📢 Latest Release Notes (2026-10-08 v4.1.0) — security release, upgrade recommended**

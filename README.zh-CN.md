@@ -9,7 +9,7 @@
 *[English](README.md)*
 
 > [!IMPORTANT]
-> **CI 维护（2026-10-30）：** `main` 已设为主分支，CI 工作流已改为跟踪它。仓库中的 `DOCKERHUB_TOKEN` 已过期；在 GitHub Actions 设置中替换此 secret 后，Docker Hub 才能继续自动发布。
+> **CI 维护（2026-10-30）：** `main` 已设为主分支，CI 工作流已改为跟踪它。CI 和 Docker 镜像已升级到 Go 1.26.10，包含标准库安全修复。仓库中的 `DOCKERHUB_TOKEN` 已过期；替换此 secret 后，Docker Hub 才能继续自动发布。
 
 > [!NOTE]
 > **📢 最新更新日志 (2026-10-08 v4.1.0) —— 安全更新，建议升级**
